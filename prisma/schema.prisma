@@ -1,0 +1,220 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Transaction {
+  id            Int          @id @default(autoincrement())
+  date          DateTime
+  symbol        String
+  type          String
+  quantity      Float
+  price         Float
+  orderId       String?      @unique
+  createdAt     DateTime     @default(now())
+  splitRatio    Float?
+  newSymbol     String?
+  description   String?
+  importBatchId Int?
+  importBatch   ImportBatch? @relation(fields: [importBatchId], references: [id])
+  
+  @@index([date])
+  @@index([date, symbol])
+  @@index([type])
+}
+
+model ImportBatch {
+  id           Int           @id @default(autoincrement())
+  filename     String
+  timestamp    DateTime      @default(now())
+  count        Int
+  startDate    DateTime?
+  endDate      DateTime?
+  transactions Transaction[]
+}
+
+model DailyPortfolioSnapshot {
+  id                    Int      @id @default(autoincrement())
+  date                  DateTime @unique
+  totalEquity           Float
+  investedCapital       Float
+  portfolioNAV          Float
+  niftyNAV              Float?
+  units                 Float
+  cashflow              Float?
+  dailyPnL              Float?
+  dailyReturn           Float?
+  drawdown              Float?
+  navMA200              Float?
+  nifty500Momentum50NAV Float?
+  niftyMicrocap250NAV   Float?
+  niftyMidcap100NAV     Float?
+  niftySmallcap250NAV   Float?
+}
+
+model WeeklyPortfolioSnapshot {
+  id               Int      @id @default(autoincrement())
+  date             DateTime @unique
+  totalEquity      Float
+  nav              Float
+  weeklyReturn     Float?
+  largeCapPercent  Float?
+  midCapPercent    Float?
+  smallCapPercent  Float?
+  microCapPercent  Float?
+  marketCap        Float?
+  xirr             Float?
+  pnl              Float?
+  winPercent       Float?
+  lossPercent      Float?
+  avgHoldingPeriod Float?
+  avgWinnerGain    Float?
+  avgLoserLoss     Float?
+  sectorAllocation String? // JSON: SectorAllocation[]
+}
+
+model MonthlyPortfolioSnapshot {
+  id               Int      @id @default(autoincrement())
+  date             DateTime @unique
+  totalEquity      Float
+  nav              Float
+  monthlyReturn    Float?
+  largeCapPercent  Float?
+  midCapPercent    Float?
+  smallCapPercent  Float?
+  microCapPercent  Float?
+  marketCap        Float?
+  xirr             Float?
+  pnl              Float?
+  winPercent       Float?
+  lossPercent      Float?
+  avgHoldingPeriod Float?
+  avgWinnerGain    Float?
+  avgLoserLoss     Float?
+  exitCount        Int?     @default(0)
+  avgExitsPerMonth Float?   @default(0)
+  sectorAllocation String? // JSON: SectorAllocation[]
+}
+
+model StockHistory {
+  id     Int      @id @default(autoincrement())
+  date   DateTime
+  symbol String
+  close  Float
+
+  @@unique([date, symbol])
+  @@index([symbol])
+}
+
+model IndexHistory {
+  date   DateTime
+  symbol String
+  close  Float
+
+  @@id([date, symbol])
+}
+
+
+
+
+
+model SymbolMapping {
+  id        Int      @id @default(autoincrement())
+  oldSymbol String   @unique
+  newSymbol String
+  createdAt DateTime @default(now())
+}
+
+model Job {
+  id        String   @id @default(cuid())
+  type      String
+  status    String
+  progress  Int      @default(0)
+  message   String?
+  result    String?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AppConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model SectorMapping {
+  id        Int      @id @default(autoincrement())
+  symbol    String   @unique
+  sector    String
+  exchange  String   @default("NSE")
+  updatedAt DateTime @updatedAt
+
+  @@index([sector])
+}
+
+// Upstox API token storage for semi-automated authentication
+model UpstoxToken {
+  id          Int      @id @default(autoincrement())
+  accessToken String
+  expiresAt   DateTime
+  issuedAt    DateTime
+  userId      String?  // Upstox user ID (UCC)
+  createdAt   DateTime @default(now())
+  
+  @@index([expiresAt])
+}
+
+// AMFI Market Cap Classification
+// Stores stock classifications from AMFI (Large/Mid/Small Cap)
+// Updated every 6 months based on AMFI data releases
+model AMFIClassification {
+  id           Int      @id @default(autoincrement())
+  period       String   // Format: "2024_H1" or "2024_H2"
+  rank         Int      // Company rank by market cap
+  companyName  String
+  symbol       String   // NSE trading symbol
+  isin         String   // ISIN code for cross-reference
+  category     String   // "Large", "Mid", or "Small"
+  avgMarketCap Float    // Average market cap in Crores
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([period, symbol])
+  @@index([symbol])
+  @@index([period])
+  @@index([category])
+}
+
+// AMFI Import History
+// Tracks when AMFI classification data was imported
+model AMFIImportHistory {
+  id           Int      @id @default(autoincrement())
+  period       String   // Format: "2024_H1" or "2024_H2"
+  sourceFile   String   // Original PDF filename
+  stockCount   Int      // Number of stocks imported
+  largeCapCount Int     // Count of Large Cap stocks
+  midCapCount   Int     // Count of Mid Cap stocks
+  smallCapCount Int     // Count of Small Cap stocks
+  microCapCount Int     // Count of Micro Cap stocks (rank > 500)
+  importedAt   DateTime @default(now())
+  
+  @@index([period])
+}
+
+// Intraday P/L History
+// Stores P/L snapshots every 1 minute during market hours
+// Only keeps current day's data, previous days are auto-cleaned
+model IntradayPnL {
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now())
+  date      DateTime // Date only (for easy filtering/cleanup)
+  pnl       Float    // Absolute P/L value
+  percent   Float    // P/L percentage
+  
+  @@index([date])
+}

@@ -1,0 +1,10 @@
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+node_modules
+.env.local
+.env
+.DS_Store
+*.xlsx
+*.csv

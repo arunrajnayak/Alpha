@@ -1,0 +1,3 @@
+# This directory stores database backups
+# Backup files are excluded from git (see .gitignore)
+# Only .gitkeep is committed to preserve the directory structure

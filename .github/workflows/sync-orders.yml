@@ -1,0 +1,48 @@
+name: Zerodha Daily Sync
+
+on:
+  schedule:
+    # Run at 10:10 UTC (3:40 PM IST) every Monday through Friday
+    - cron: '10 10 * * 1-5'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Generate Prisma Client
+      run: npx prisma generate
+
+    - name: Run Sync Script
+      env:
+        # Database
+        # Database keys must match src/lib/db.ts expectation
+        TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL || secrets.DATABASE_URL }}
+        TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN || secrets.DATABASE_AUTH_TOKEN }}
+        # Support standard env var too just in case
+        DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL || secrets.DATABASE_URL }}
+        
+        # Zerodha Credentials
+        ZERODHA_USER_ID: ${{ secrets.ZERODHA_USER_ID }}
+        ZERODHA_PASSWORD: ${{ secrets.ZERODHA_PASSWORD }}
+        ZERODHA_TOTP_SECRET: ${{ secrets.ZERODHA_TOTP_SECRET }}
+        ZERODHA_API_KEY: ${{ secrets.ZERODHA_API_KEY }}
+        ZERODHA_API_SECRET: ${{ secrets.ZERODHA_API_SECRET }}
+        
+        # Next.js Revalidation
+        NEXT_APP_URL: ${{ secrets.NEXT_APP_URL }}
+      run: |
+        npx tsx src/scripts/zerodha-cron.ts
