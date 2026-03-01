@@ -9,7 +9,7 @@ TO_DATE=${2:-$(date +%Y-%m-%d)}
 
 echo "Syncing corporate actions from $FROM_DATE to $TO_DATE..."
 
-curl -s "https://alpha-velocity.vercel.app/api/admin/sync-corporate-actions?from=$FROM_DATE&to=$TO_DATE" | jq .
+curl -s "http://localhost:3000/api/admin/sync-corporate-actions?from=$FROM_DATE&to=$TO_DATE" | jq .
 
 echo ""
 echo "Done!"

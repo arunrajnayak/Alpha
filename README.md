@@ -1,8 +1,8 @@
 # Alpha Portfolio Tracker
 
 <div align="center">
-  <img src="public/screenshots/live-dashboard.png" alt="Live Dashboard" width="49%" />
-  <img src="public/screenshots/historical-dashboard.png" alt="Historical Dashboard" width="49%" />
+  <img src="public/screenshots/live.png" alt="Live" width="49%" />
+  <img src="public/screenshots/dashboard.png" alt="Dashboard" width="49%" />
 </div>
 
 A self-hosted portfolio tracking application for Indian stock markets with real-time market data, historical performance analysis, and comprehensive reporting. Built with Next.js and powered by Upstox API.

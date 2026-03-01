@@ -5,11 +5,6 @@ const config: CapacitorConfig = {
   appName: 'Alpha Portfolio',
   webDir: 'out',
   
-  // Hybrid approach - point to Vercel deployment
-  server: {
-    url: 'https://alpha-velocity.vercel.app',
-    cleartext: false
-  },
   
   android: {
     allowMixedContent: false,
