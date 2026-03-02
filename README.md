@@ -116,6 +116,16 @@ TURSO_AUTH_TOKEN=eyJhb...your-token
 UPSTOX_API_KEY=your-api-key-uuid
 UPSTOX_API_SECRET=your-api-secret
 UPSTOX_REDIRECT_URI=http://localhost:3000/api/upstox/callback
+UPSTOX_MOBILE_NUMBER=your-mobile-number
+UPSTOX_TOTP_SECRET=your-totp-secret
+UPSTOX_PIN=your-pin
+
+# Zerodha Kite Connect (Optional - for order sync)
+# ZERODHA_USER_ID=your-user-id
+# ZERODHA_PASSWORD=your-password
+# ZERODHA_TOTP_SECRET=your-totp-secret
+# ZERODHA_API_KEY=your-kite-api-key
+# ZERODHA_API_SECRET=your-kite-api-secret
 ```
 
 ---
@@ -199,7 +209,13 @@ git push -u origin main
 | `UPSTOX_API_KEY` | Your API key | From Step 1 |
 | `UPSTOX_API_SECRET` | Your API secret | Mark as **Sensitive** |
 | `UPSTOX_REDIRECT_URI` | `https://your-app.vercel.app/api/upstox/callback` | ⚠️ Use your Vercel URL |
+| `UPSTOX_MOBILE_NUMBER` | Your mobile number | Mark as **Sensitive** |
+| `UPSTOX_TOTP_SECRET` | Upstox TOTP Secret | Mark as **Sensitive** |
+| `UPSTOX_PIN` | Upstox PIN | Mark as **Sensitive** |
 | `CRON_SECRET` | A random string | Required for cron endpoint auth |
+
+> [!TIP]
+> If you are using the optional **Zerodha Order Sync**, you should also add the `ZERODHA_*` variables listed in the [Environment Variables Reference](#zerodha-kite-integration) below.
 
 4. Click **Deploy**
 
@@ -485,6 +501,9 @@ If you want to auto-sync orders from Zerodha Kite:
 | `UPSTOX_API_KEY` | Upstox API key (client_id) |
 | `UPSTOX_API_SECRET` | Upstox API secret |
 | `UPSTOX_REDIRECT_URI` | OAuth callback URL |
+| `UPSTOX_MOBILE_NUMBER` | Upstox mobile number for auto login |
+| `UPSTOX_TOTP_SECRET` | Upstox TOTP secret for auto login |
+| `UPSTOX_PIN` | Upstox PIN for auto login |
 
 ### Optional — Personalization
 
