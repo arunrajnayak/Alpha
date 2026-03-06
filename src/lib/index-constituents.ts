@@ -80,7 +80,7 @@ export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; s
   },
   'NIFTY Midcap150 Momentum 50': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap150momentum50_list.csv',
-    upstoxKey: 'NSE_INDEX|NifMidCMom50',
+    upstoxKey: 'NSE_INDEX|NiftyM150Momntm50',
     shortName: 'MidMom 50',
     category: 'momentum',
   },
@@ -185,6 +185,18 @@ export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; s
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyconsdurableslist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Cons Durable',
     shortName: 'Cons Durables',
+    category: 'sectoral',
+  },
+  'NIFTY Infrastructure': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyinfrastructurelist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Infra',
+    shortName: 'Infra',
+    category: 'sectoral',
+  },
+  'NIFTY Commodities': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftycommoditieslist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Commodities',
+    shortName: 'Commodities',
     category: 'sectoral',
   },
 };

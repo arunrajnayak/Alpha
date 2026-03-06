@@ -72,13 +72,18 @@ function IndexCardGrid({
   selectedIndex, 
   onSelectIndex, 
   isMobile,
+  clickable,
 }: { 
   indices: IndexSummary[]; 
   selectedIndex: string; 
   onSelectIndex: (name: string) => void; 
   isMobile: boolean;
+  clickable: boolean;
 }) {
   if (indices.length === 0) return null;
+
+  // Row-sequence layout: items fill left-to-right across rows
+  const cols = isMobile ? indices.length : Math.ceil(indices.length / 2);
 
   return (
     <div className="overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-700">
@@ -86,23 +91,24 @@ function IndexCardGrid({
         className="gap-2.5"
         style={{
           display: 'grid',
-          gridAutoFlow: 'column',
-          gridTemplateRows: isMobile ? '1fr' : (indices.length > 8 ? '1fr 1fr' : '1fr'),
-          gridAutoColumns: isMobile ? '115px' : 'minmax(120px, 1fr)',
+          gridTemplateRows: isMobile ? '1fr' : '1fr 1fr',
+          gridTemplateColumns: `repeat(${cols}, minmax(${isMobile ? '115px' : '120px'}, 1fr))`,
         }}
       >
         {indices.map((idx, i) => {
-          const isSelected = selectedIndex === idx.name;
+          const isSelected = clickable && selectedIndex === idx.name;
           const isPositive = idx.changePercent >= 0;
 
           return (
-            <motion.button
+            <motion.div
               key={idx.name}
-              onClick={() => onSelectIndex(idx.name)}
+              onClick={clickable ? () => onSelectIndex(idx.name) : undefined}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.015, duration: 0.2 }}
               className={`relative flex flex-col items-start px-3 py-2.5 rounded-xl border transition-all duration-200 text-left ${
+                clickable ? 'cursor-pointer' : ''
+              } ${
                 isSelected
                   ? 'bg-gradient-to-br from-blue-600/20 via-indigo-500/15 to-violet-500/10 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.12)]'
                   : 'bg-slate-900/50 border-white/5 hover:border-white/10 hover:bg-slate-800/40'
@@ -132,7 +138,7 @@ function IndexCardGrid({
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 />
               )}
-            </motion.button>
+            </motion.div>
           );
         })}
       </div>
@@ -155,15 +161,16 @@ export default function IndexSummaryCards({ indices, selectedIndex, onSelectInde
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Broad + Momentum Indices */}
+      {/* Broad + Momentum Indices — clickable */}
       <IndexCardGrid
         indices={groups.broad}
         selectedIndex={selectedIndex}
         onSelectIndex={onSelectIndex}
         isMobile={isMobile}
+        clickable={true}
       />
 
-      {/* Sectoral Indices */}
+      {/* Sectoral Indices — display only, not clickable */}
       {groups.sectoral.length > 0 && (
         <div>
           <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1.5 block pl-0.5">Sectoral</span>
@@ -172,6 +179,7 @@ export default function IndexSummaryCards({ indices, selectedIndex, onSelectInde
             selectedIndex={selectedIndex}
             onSelectIndex={onSelectIndex}
             isMobile={isMobile}
+            clickable={false}
           />
         </div>
       )}
