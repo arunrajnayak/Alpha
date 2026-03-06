@@ -12,7 +12,7 @@ import Image from 'next/image';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faChartLine, 
-
+  faChartBar,
   faBriefcase, 
   faBolt, 
   faRightFromBracket, 
@@ -26,6 +26,7 @@ import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMobile?: boolean }[] = [
   { text: 'Live', path: '/', icon: faSignal },
+  { text: 'Market', path: '/market', icon: faChartBar },
   { text: 'Dashboard', path: '/dashboard', icon: faChartLine },
 
   { text: 'Portfolio', path: '/portfolio', icon: faBriefcase },
