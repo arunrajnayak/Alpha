@@ -21,61 +21,171 @@ const CACHE_TTL = 90 * 24 * 60 * 60 * 1000; // 90 days — constituents rebalanc
 /**
  * Index definitions with their CSV download URLs and Upstox index instrument keys
  */
-export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; shortName: string }> = {
+export type IndexCategory = 'broad' | 'momentum' | 'sectoral';
+
+export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; shortName: string; category: IndexCategory }> = {
   'NIFTY 50': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty50list.csv',
     upstoxKey: 'NSE_INDEX|Nifty 50',
     shortName: 'Nifty 50',
+    category: 'broad',
   },
   'NIFTY Next 50': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftynext50list.csv',
     upstoxKey: 'NSE_INDEX|Nifty Next 50',
     shortName: 'Next 50',
+    category: 'broad',
   },
   'NIFTY Midcap 100': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap100list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MIDCAP 100',
     shortName: 'Midcap 100',
+    category: 'broad',
   },
   'NIFTY Midcap 150': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap150list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MID SELECT',
     shortName: 'Midcap 150',
+    category: 'broad',
   },
   'NIFTY Smallcap 250': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftysmallcap250list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY SMLCAP 250',
     shortName: 'Smallcap 250',
+    category: 'broad',
   },
   'NIFTY Microcap 250': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MICROCAP250',
     shortName: 'Microcap 250',
+    category: 'broad',
   },
   'NIFTY 500': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY 500',
     shortName: 'Nifty 500',
+    category: 'broad',
   },
   'NIFTY Total Market': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY TOTAL MKT',
     shortName: 'Total Market',
+    category: 'broad',
   },
   'NIFTY 200 Momentum 30': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty200momentum30_list.csv',
     upstoxKey: 'NSE_INDEX|Nifty200Momentm30',
     shortName: 'Mom 200/30',
+    category: 'momentum',
   },
   'NIFTY Midcap150 Momentum 50': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap150momentum50_list.csv',
     upstoxKey: 'NSE_INDEX|NifMidCMom50',
     shortName: 'MidMom 50',
+    category: 'momentum',
   },
   'NIFTY500 Momentum 50': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty500momentum50_list.csv',
     upstoxKey: 'NSE_INDEX|Nifty500Momentm50',
     shortName: 'Mom 500/50',
+    category: 'momentum',
+  },
+  // Sectoral Indices
+  'NIFTY Bank': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftybanklist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Bank',
+    shortName: 'Bank',
+    category: 'sectoral',
+  },
+  'NIFTY Financial Services': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyfinancelist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Fin Service',
+    shortName: 'Financial',
+    category: 'sectoral',
+  },
+  'NIFTY Private Bank': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyprivatebanklist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Pvt Bank',
+    shortName: 'Pvt Bank',
+    category: 'sectoral',
+  },
+  'NIFTY PSU Bank': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftypsubanklist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty PSU Bank',
+    shortName: 'PSU Bank',
+    category: 'sectoral',
+  },
+  'NIFTY IT': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyitlist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty IT',
+    shortName: 'IT',
+    category: 'sectoral',
+  },
+  'NIFTY Auto': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyautolist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Auto',
+    shortName: 'Auto',
+    category: 'sectoral',
+  },
+  'NIFTY FMCG': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyfmcglist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty FMCG',
+    shortName: 'FMCG',
+    category: 'sectoral',
+  },
+  'NIFTY Pharma': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftypharmalist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Pharma',
+    shortName: 'Pharma',
+    category: 'sectoral',
+  },
+  'NIFTY Healthcare': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyhealthcarelist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Healthcare',
+    shortName: 'Healthcare',
+    category: 'sectoral',
+  },
+  'NIFTY Metal': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymetallist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Metal',
+    shortName: 'Metal',
+    category: 'sectoral',
+  },
+  'NIFTY Energy': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyenergylist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Energy',
+    shortName: 'Energy',
+    category: 'sectoral',
+  },
+  'NIFTY Oil & Gas': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyoilgaslist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Oil and Gas',
+    shortName: 'Oil & Gas',
+    category: 'sectoral',
+  },
+  'NIFTY Realty': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyrealtylist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Realty',
+    shortName: 'Realty',
+    category: 'sectoral',
+  },
+  'NIFTY Media': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymedialist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Media',
+    shortName: 'Media',
+    category: 'sectoral',
+  },
+  'NIFTY Telecom': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftytelecomlist.csv',
+    upstoxKey: 'NSE_INDEX|NIFTY TELECOM',
+    shortName: 'Telecom',
+    category: 'sectoral',
+  },
+  'NIFTY Consumer Durables': {
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyconsdurableslist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty Cons Durable',
+    shortName: 'Cons Durables',
+    category: 'sectoral',
   },
 };
 

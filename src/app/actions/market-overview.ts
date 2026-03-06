@@ -186,6 +186,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
 export async function fetchAllIndexSummaries(): Promise<Array<{
   name: string;
   shortName: string;
+  category: string;
   value: number;
   change: number;
   changePercent: number;
@@ -197,6 +198,7 @@ export async function fetchAllIndexSummaries(): Promise<Array<{
     const indexKeys = Object.entries(INDEX_CONFIG).map(([name, config]) => ({
       name,
       shortName: config.shortName,
+      category: config.category,
       key: config.upstoxKey,
     }));
 
@@ -205,6 +207,7 @@ export async function fetchAllIndexSummaries(): Promise<Array<{
     const summaries: Array<{
       name: string;
       shortName: string;
+      category: string;
       value: number;
       change: number;
       changePercent: number;
@@ -220,6 +223,7 @@ export async function fetchAllIndexSummaries(): Promise<Array<{
         summaries.push({
           name: idx.name,
           shortName: idx.shortName,
+          category: idx.category,
           value: quote.last_price,
           change,
           changePercent,

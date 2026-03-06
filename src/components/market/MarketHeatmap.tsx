@@ -32,9 +32,8 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
 
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height: isMobile ? '350px' : '500px' }}>
-      <div className="px-5 pt-5 pb-2 flex items-center justify-between shrink-0">
+      <div className="px-5 pt-5 pb-2 shrink-0">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Market Heatmap</h3>
-        <span className="text-[10px] text-gray-500">{constituents.length} stocks · sized by index weight</span>
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
         <ResponsiveTreeMap

@@ -27,7 +27,7 @@ const itemVariants = {
   }),
 };
 
-function MoverRow({ stock, index, type }: { stock: { symbol: string; lastPrice: number; changePercent: number; change: number }; index: number; type: 'gain' | 'loss' }) {
+function MoverRow({ stock, index, type }: { stock: { symbol: string; changePercent: number }; index: number; type: 'gain' | 'loss' }) {
   const isGain = type === 'gain';
   return (
     <motion.div
@@ -41,18 +41,13 @@ function MoverRow({ stock, index, type }: { stock: { symbol: string; lastPrice: 
         <span className="text-[10px] font-medium text-gray-600 w-5 text-right">{index + 1}</span>
         <span className="font-semibold text-sm text-gray-200 truncate">{stock.symbol}</span>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="text-xs text-gray-400 font-mono">
-          ₹{stock.lastPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-        </span>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-md min-w-[60px] text-right ${
-          isGain
-            ? 'text-emerald-400 bg-emerald-500/10'
-            : 'text-red-400 bg-red-500/10'
-        }`}>
-          {isGain ? '+' : ''}{stock.changePercent.toFixed(2)}%
-        </span>
-      </div>
+      <span className={`text-xs font-bold px-2 py-0.5 rounded-md min-w-[60px] text-right ${
+        isGain
+          ? 'text-emerald-400 bg-emerald-500/10'
+          : 'text-red-400 bg-red-500/10'
+      }`}>
+        {isGain ? '+' : ''}{stock.changePercent.toFixed(2)}%
+      </span>
     </motion.div>
   );
 }

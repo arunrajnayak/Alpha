@@ -28,6 +28,7 @@ const itemVariants = {
 interface IndexSummary {
   name: string;
   shortName: string;
+  category: string;
   value: number;
   change: number;
   changePercent: number;
@@ -41,7 +42,8 @@ export default function MarketOverviewPage() {
   const [summariesLoading, setSummariesLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const dataRefreshRef = useRef<NodeJS.Timeout | null>(null);
+  const summaryRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
   // Responsive check
   useEffect(() => {
@@ -51,10 +53,10 @@ export default function MarketOverviewPage() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Fetch index summaries
-  const loadSummaries = useCallback(async () => {
+  // Fetch index summaries (lightweight — just LTP for each index)
+  const loadSummaries = useCallback(async (showLoading = true) => {
     try {
-      setSummariesLoading(true);
+      if (showLoading) setSummariesLoading(true);
       const summaries = await fetchAllIndexSummaries();
       if (summaries.length > 0) {
         setIndexSummaries(summaries);
@@ -62,7 +64,7 @@ export default function MarketOverviewPage() {
     } catch (err) {
       console.error('Failed to load index summaries:', err);
     } finally {
-      setSummariesLoading(false);
+      if (showLoading) setSummariesLoading(false);
     }
   }, []);
 
@@ -98,22 +100,25 @@ export default function MarketOverviewPage() {
     loadData(selectedIndex);
   }, [selectedIndex, loadData]);
 
-  // Auto-refresh every 30s during market hours
+  // Auto-refresh: summaries every 1s, full data every 30s (during market hours)
   useEffect(() => {
-    const startRefresh = () => {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-      
-      refreshTimerRef.current = setInterval(() => {
-        if (isMarketOpen()) {
-          loadData(selectedIndex);
-          loadSummaries();
-        }
-      }, 30000);
-    };
+    // Summary refresh — lightweight, every 1s
+    summaryRefreshRef.current = setInterval(() => {
+      if (isMarketOpen()) {
+        loadSummaries(false); // false = no loading indicator
+      }
+    }, 1000);
 
-    startRefresh();
+    // Full data refresh — heavier, every 30s
+    dataRefreshRef.current = setInterval(() => {
+      if (isMarketOpen()) {
+        loadData(selectedIndex);
+      }
+    }, 30000);
+
     return () => {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      if (summaryRefreshRef.current) clearInterval(summaryRefreshRef.current);
+      if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
     };
   }, [selectedIndex, loadData, loadSummaries]);
 
