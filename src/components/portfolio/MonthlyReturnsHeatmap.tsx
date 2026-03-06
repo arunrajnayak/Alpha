@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { getYear, getMonth } from 'date-fns';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCalendarDays } from '@fortawesome/free-solid-svg-icons';
+import { faCalendarDays, faTable } from '@fortawesome/free-solid-svg-icons';
 import { MonthlyPortfolioSnapshot } from '@prisma/client';
 
 type SnapshotDataPoint = {
@@ -12,12 +12,28 @@ type SnapshotDataPoint = {
   dailyReturn?: number | null;
 };
 
+type ChartDataPoint = {
+  date: Date | string;
+  portfolioNAV: number;
+  niftyNAV?: number | null;
+  nifty500Momentum50NAV?: number | null;
+};
+
+type ViewMode = 'returns' | 'alpha-nifty' | 'alpha-momentum';
+
 interface MonthlyReturnsHeatmapProps {
   data: SnapshotDataPoint[];
   monthlySnapshots?: MonthlyPortfolioSnapshot[];
+  chartData?: ChartDataPoint[];
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
+  { key: 'returns', label: 'Monthly Returns' },
+  { key: 'alpha-nifty', label: 'α vs Nifty' },
+  { key: 'alpha-momentum', label: 'α vs N500 Mom50' },
+];
 
 // Helper to format percentage
 function formatPercentage(val: number): string {
@@ -26,11 +42,48 @@ function formatPercentage(val: number): string {
   return `${sign}${percentage.toFixed(1)}%`;
 }
 
+/**
+ * Compute monthly returns from daily NAV data.
+ * For each year-month, find the first and last NAV and compute (last/first) - 1.
+ */
+function computeMonthlyReturnsFromNAV(
+  chartData: ChartDataPoint[],
+  navKey: 'portfolioNAV' | 'niftyNAV' | 'nifty500Momentum50NAV'
+): Map<string, number> {
+  // Group by year-month, keeping first and last NAV per month
+  const monthBounds = new Map<string, { firstNAV: number; lastNAV: number }>();
 
+  // chartData is already sorted by date ascending
+  chartData.forEach(d => {
+    const date = new Date(d.date);
+    const year = getYear(date);
+    const month = getMonth(date);
+    const key = `${year}-${month}`;
+    const nav = d[navKey];
+    if (nav == null || nav === 0) return;
 
-export default function MonthlyReturnsHeatmap({ data, monthlySnapshots }: MonthlyReturnsHeatmapProps) {
-  
-  const heatmapData = useMemo(() => {
+    const existing = monthBounds.get(key);
+    if (!existing) {
+      monthBounds.set(key, { firstNAV: nav, lastNAV: nav });
+    } else {
+      existing.lastNAV = nav; // keep updating to get the last value
+    }
+  });
+
+  const returns = new Map<string, number>();
+  monthBounds.forEach((bounds, key) => {
+    if (bounds.firstNAV !== 0) {
+      returns.set(key, (bounds.lastNAV / bounds.firstNAV) - 1);
+    }
+  });
+  return returns;
+}
+
+export default function MonthlyReturnsHeatmap({ data, monthlySnapshots, chartData }: MonthlyReturnsHeatmapProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>('returns');
+
+  // Compute portfolio monthly returns (original logic)
+  const portfolioHeatmapData = useMemo(() => {
     // 1. Create a map from monthlySnapshots (Source of Truth)
     const snapshotMap = new Map<string, number>();
     if (monthlySnapshots) {
@@ -69,11 +122,10 @@ export default function MonthlyReturnsHeatmap({ data, monthlySnapshots }: Monthl
         years: [] as number[],
         monthlyReturns: new Map<string, number>(), // "year-month" -> return
         yearlyReturns: new Map<number, number>(), // year -> return
-        maxGain: 0.05, // Default min threshold of 5%
-        maxLoss: -0.05 // Default min threshold of -5%
+        maxGain: 0.05,
+        maxLoss: -0.05
     };
 
-    // Combine all years from both sources
     const allYears = new Set([...Array.from(yearsMap.keys())]);
     if (monthlySnapshots) {
         monthlySnapshots.forEach(s => allYears.add(getYear(new Date(s.date))));
@@ -89,20 +141,17 @@ export default function MonthlyReturnsHeatmap({ data, monthlySnapshots }: Monthl
         let yearlyCompounded = 1.0;
         let hasYearlyData = false;
 
-        // Iterate all months 0-11
         for (let m = 0; m < 12; m++) {
             const key = `${year}-${m}`;
             let finalRet = 0;
             let hasMonthVal = false;
             
-            // Check Source of Truth first
             if (snapshotMap.has(key)) {
                 finalRet = snapshotMap.get(key)!;
                 hasMonthVal = true;
                 yearlyCompounded *= (1 + finalRet);
                 hasYearlyData = true;
             } else {
-                // Fallback to daily compounding
                 const monthMap = yearsMap.get(year);
                 const dailyReturns = monthMap?.get(m);
                 if (dailyReturns && dailyReturns.length > 0) {
@@ -126,123 +175,203 @@ export default function MonthlyReturnsHeatmap({ data, monthlySnapshots }: Monthl
         }
     });
 
-    // Ensure we have at least some range to avoid division by zero
-    // and to keep colors reasonable for small variance portfolios
     result.maxGain = Math.max(maxGain, 0.05);
     result.maxLoss = Math.min(maxLoss, -0.05);
 
     return result;
-
   }, [data, monthlySnapshots]);
 
-    // Interpolate color based on value relative to min/max
-    const getDynamicColor = (value: number) => {
-        const { maxGain, maxLoss } = heatmapData || { maxGain: 0.05, maxLoss: -0.05 };
-        
-        if (value >= 0) {
-            // Gains: Interpolate between Emerald 200 and Emerald 700
-            // Emerald 200: 167, 243, 208
-            // Emerald 700: 4, 120, 87
-            const intensity = Math.min(value / maxGain, 1.0);
-            
-            const r = Math.round(167 + (4 - 167) * intensity);
-            const g = Math.round(243 + (120 - 243) * intensity);
-            const b = Math.round(208 + (87 - 208) * intensity);
-            
-            return `rgb(${r}, ${g}, ${b})`;
-        } else {
-            // Losses: Interpolate between Red 200 and Red 700
-            // Red 200: 254, 202, 202
-            // Red 700: 185, 28, 28
-            const intensity = Math.min(Math.abs(value) / Math.abs(maxLoss), 1.0);
-            
-            const r = Math.round(254 + (185 - 254) * intensity);
-            const g = Math.round(202 + (28 - 202) * intensity);
-            const b = Math.round(202 + (28 - 202) * intensity);
-            
-            return `rgb(${r}, ${g}, ${b})`;
+  // Compute index monthly returns from NAV data
+  const indexReturnsMap = useMemo(() => {
+    if (!chartData || chartData.length === 0) return { nifty: new Map<string, number>(), momentum: new Map<string, number>() };
+    return {
+      nifty: computeMonthlyReturnsFromNAV(chartData, 'niftyNAV'),
+      momentum: computeMonthlyReturnsFromNAV(chartData, 'nifty500Momentum50NAV'),
+    };
+  }, [chartData]);
+
+  // Compute alpha heatmap data
+  const alphaHeatmapData = useMemo(() => {
+    if (!portfolioHeatmapData) return null;
+    if (viewMode === 'returns') return portfolioHeatmapData;
+
+    const indexMap = viewMode === 'alpha-nifty' ? indexReturnsMap.nifty : indexReturnsMap.momentum;
+
+    const result = {
+      years: portfolioHeatmapData.years,
+      monthlyReturns: new Map<string, number>(),
+      yearlyReturns: new Map<number, number>(),
+      maxGain: 0.05,
+      maxLoss: -0.05,
+    };
+
+    let maxGain = 0;
+    let maxLoss = 0;
+
+    result.years.forEach(year => {
+      let yearlyPortfolio = 1.0;
+      let yearlyIndex = 1.0;
+      let hasYearlyData = false;
+
+      for (let m = 0; m < 12; m++) {
+        const key = `${year}-${m}`;
+        const portfolioRet = portfolioHeatmapData.monthlyReturns.get(key);
+        const indexRet = indexMap.get(key);
+
+        if (portfolioRet !== undefined) {
+          // Alpha = portfolio return - index return
+          const alpha = portfolioRet - (indexRet ?? 0);
+          result.monthlyReturns.set(key, alpha);
+
+          yearlyPortfolio *= (1 + portfolioRet);
+          yearlyIndex *= (1 + (indexRet ?? 0));
+          hasYearlyData = true;
+
+          if (alpha > maxGain) maxGain = alpha;
+          if (alpha < maxLoss) maxLoss = alpha;
         }
-    };
+      }
 
-    // Text color contrast helper
-    const getTextColor = (value: number) => {
-        const { maxGain, maxLoss } = heatmapData || { maxGain: 0.05, maxLoss: -0.05 };
-        const absVal = Math.abs(value);
-        const max = value >= 0 ? maxGain : Math.abs(maxLoss);
-        
-        // If intensity is high (> 60%), use light text, otherwise dark
-        return (absVal / max) > 0.6 ? 'text-white' : 'text-slate-900';
-    };
+      if (hasYearlyData) {
+        // Yearly alpha = compounded portfolio return - compounded index return
+        result.yearlyReturns.set(year, (yearlyPortfolio - 1) - (yearlyIndex - 1));
+      }
+    });
 
-    if (!data || data.length === 0 || !heatmapData) {
-        return (
-            <div className="glass-card p-8 text-center animate-fade-in min-h-[200px] flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-4">
-                <FontAwesomeIcon icon={faCalendarDays} className="text-2xl text-gray-600" />
-            </div>
-            <p className="text-gray-300 font-medium">No performance data available</p>
-            </div>
-        );
+    result.maxGain = Math.max(maxGain, 0.05);
+    result.maxLoss = Math.min(maxLoss, -0.05);
+
+    return result;
+  }, [portfolioHeatmapData, indexReturnsMap, viewMode]);
+
+  const heatmapData = alphaHeatmapData;
+
+  // Interpolate color based on value relative to min/max
+  const getDynamicColor = (value: number) => {
+    const { maxGain, maxLoss } = heatmapData || { maxGain: 0.05, maxLoss: -0.05 };
+    
+    if (value >= 0) {
+      const intensity = Math.min(value / maxGain, 1.0);
+      const r = Math.round(167 + (4 - 167) * intensity);
+      const g = Math.round(243 + (120 - 243) * intensity);
+      const b = Math.round(208 + (87 - 208) * intensity);
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      const intensity = Math.min(Math.abs(value) / Math.abs(maxLoss), 1.0);
+      const r = Math.round(254 + (185 - 254) * intensity);
+      const g = Math.round(202 + (28 - 202) * intensity);
+      const b = Math.round(202 + (28 - 202) * intensity);
+      return `rgb(${r}, ${g}, ${b})`;
     }
+  };
+
+  // Text color contrast helper
+  const getTextColor = (value: number) => {
+    const { maxGain, maxLoss } = heatmapData || { maxGain: 0.05, maxLoss: -0.05 };
+    const absVal = Math.abs(value);
+    const max = value >= 0 ? maxGain : Math.abs(maxLoss);
+    return (absVal / max) > 0.6 ? 'text-white' : 'text-slate-900';
+  };
+
+  if (!data || data.length === 0 || !heatmapData) {
+    return (
+      <div className="glass-card p-8 text-center animate-fade-in min-h-[200px] flex flex-col items-center justify-center">
+        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-4">
+          <FontAwesomeIcon icon={faCalendarDays} className="text-2xl text-gray-600" />
+        </div>
+        <p className="text-gray-300 font-medium">No performance data available</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="animate-fade-in-up overflow-x-auto w-full">
+    <div className="animate-fade-in-up w-full">
+      {/* Header with toggle */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 flex items-center justify-center">
+            <FontAwesomeIcon icon={faTable} className="text-purple-400 text-lg" />
+          </div>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+            {viewMode === 'returns' ? 'Monthly Returns' : viewMode === 'alpha-nifty' ? 'Alpha vs Nifty 50' : 'Alpha vs N500 Momentum 50'}
+          </span>
+        </div>
+
+        {/* Toggle buttons */}
+        <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+          {VIEW_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setViewMode(opt.key)}
+              className={`px-3 py-1.5 text-[10px] md:text-xs font-semibold rounded-md transition-all duration-200 whitespace-nowrap ${
+                viewMode === opt.key
+                  ? 'bg-purple-500/30 text-purple-300 shadow-sm shadow-purple-500/10'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Heatmap table */}
+      <div className="overflow-x-auto w-full">
         <table className="w-full border-collapse min-w-[600px]">
-            <thead>
-                <tr>
-                    <th className="text-left py-2 md:py-3 px-1 md:px-2 text-[10px] md:text-xs font-semibold text-gray-400 w-12 md:w-16">Year</th>
-                    {MONTHS.map(m => (
-                        <th key={m} className="text-center py-2 md:py-3 px-1 text-[10px] md:text-xs font-semibold text-gray-400">{m}</th>
-                    ))}
-                    <th className="text-center py-2 md:py-3 px-1 md:px-2 text-[10px] md:text-xs font-bold text-white w-16 md:w-20">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {heatmapData.years.map(year => (
-                    <tr key={year} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-                        <td className="text-left py-4 px-2 text-sm font-bold text-gray-300">{year}</td>
-                        {MONTHS.map((_, index) => {
-                            const key = `${year}-${index}`;
-                            const hasValue = heatmapData.monthlyReturns.has(key);
-                            const val = heatmapData.monthlyReturns.get(key) ?? 0;
-                            
-                            return (
-                                <td key={key} className="p-1">
-                                    {hasValue ? (
-                                        <div 
-                                            className={`w-full h-10 rounded flex items-center justify-center text-xs font-bold cursor-default transition-transform hover:scale-105 ${getTextColor(val)}`}
-                                            style={{ 
-                                                backgroundColor: getDynamicColor(val),
-                                            }}
-                                            title={`${MONTHS[index]} ${year}: ${formatPercentage(val)}`}
-                                        >
-                                            <span style={{ textShadow: getTextColor(val) === 'text-white' ? '0 1px 2px rgba(0,0,0,0.3)' : 'none' }}>
-                                                {formatPercentage(val)}
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <div className="w-full h-10 rounded bg-white/5 flex items-center justify-center">
-                                            <span className="text-gray-600 text-[10px]">-</span>
-                                        </div>
-                                    )}
-                                </td>
-                            );
-                        })}
-                        <td className="p-1">
-                             {heatmapData.yearlyReturns.has(year) && (
-                                <div 
-                                    className={`w-full h-10 rounded flex items-center justify-center text-xs font-bold ${
-                                        (heatmapData.yearlyReturns.get(year) ?? 0) >= 0 ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
-                                    }`}
-                                >
-                                    {formatPercentage(heatmapData.yearlyReturns.get(year) ?? 0)}
-                                </div>
-                             )}
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
+          <thead>
+            <tr>
+              <th className="text-left py-2 md:py-3 px-1 md:px-2 text-[10px] md:text-xs font-semibold text-gray-400 w-12 md:w-16">Year</th>
+              {MONTHS.map(m => (
+                <th key={m} className="text-center py-2 md:py-3 px-1 text-[10px] md:text-xs font-semibold text-gray-400">{m}</th>
+              ))}
+              <th className="text-center py-2 md:py-3 px-1 md:px-2 text-[10px] md:text-xs font-bold text-white w-16 md:w-20">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {heatmapData.years.map(year => (
+              <tr key={year} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+                <td className="text-left py-4 px-2 text-sm font-bold text-gray-300">{year}</td>
+                {MONTHS.map((_, index) => {
+                  const key = `${year}-${index}`;
+                  const hasValue = heatmapData.monthlyReturns.has(key);
+                  const val = heatmapData.monthlyReturns.get(key) ?? 0;
+                  
+                  return (
+                    <td key={key} className="p-1">
+                      {hasValue ? (
+                        <div 
+                          className={`w-full h-10 rounded flex items-center justify-center text-xs font-bold cursor-default transition-transform hover:scale-105 ${getTextColor(val)}`}
+                          style={{ backgroundColor: getDynamicColor(val) }}
+                          title={`${MONTHS[index]} ${year}: ${formatPercentage(val)}`}
+                        >
+                          <span style={{ textShadow: getTextColor(val) === 'text-white' ? '0 1px 2px rgba(0,0,0,0.3)' : 'none' }}>
+                            {formatPercentage(val)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="w-full h-10 rounded bg-white/5 flex items-center justify-center">
+                          <span className="text-gray-600 text-[10px]">-</span>
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
+                <td className="p-1">
+                  {heatmapData.yearlyReturns.has(year) && (
+                    <div 
+                      className={`w-full h-10 rounded flex items-center justify-center text-xs font-bold ${
+                        (heatmapData.yearlyReturns.get(year) ?? 0) >= 0 ? 'text-emerald-400 bg-emerald-400/10' : 'text-red-400 bg-red-400/10'
+                      }`}
+                    >
+                      {formatPercentage(heatmapData.yearlyReturns.get(year) ?? 0)}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
+      </div>
     </div>
   );
 }

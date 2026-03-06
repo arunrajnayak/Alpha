@@ -6,8 +6,7 @@ import {
   faRocket,
   faArrowTrendDown,
   faChartPie,
-  faBullseye,
-  faTable
+  faBullseye
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { MainChartCards, PnLCard, XirrCard } from '@/components/portfolio/SummaryCards';
@@ -280,15 +279,9 @@ export default function DashboardPage() {
       {/* Row 8: Monthly Returns */}
       <div className="w-full h-auto flex-none">
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 flex items-center justify-center">
-                        <FontAwesomeIcon icon={faTable} className="text-purple-400 text-lg" />
-                    </div>
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Monthly Returns</span>
-                </div>
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Monthly Returns Heatmap">
-                       <MonthlyReturnsHeatmap data={chartData} monthlySnapshots={monthlySnapshots} />
+                       <MonthlyReturnsHeatmap data={chartData} monthlySnapshots={monthlySnapshots} chartData={chartData} />
                      </ChartErrorBoundary>
                 </div>
           </div>

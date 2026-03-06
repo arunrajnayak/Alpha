@@ -7,7 +7,7 @@
  * computes advance/decline, and returns structured data.
  */
 
-import { getIndexConstituents, INDEX_CONFIG } from '@/lib/index-constituents';
+import { getIndexConstituentData, INDEX_CONFIG } from '@/lib/index-constituents';
 import { getInstrumentKeys } from '@/lib/instrument-service';
 import { getFullQuotes, getLiveQuotes } from '@/lib/upstox/client';
 import { hasValidToken } from '@/lib/upstox-client';
@@ -27,6 +27,7 @@ export interface ConstituentQuote {
   low: number;
   prevClose: number;
   volume: number;
+  weight: number;
 }
 
 export interface MarketOverviewData {
@@ -65,8 +66,8 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       return null;
     }
 
-    // 1. Get constituent symbols
-    const symbols = await getIndexConstituents(indexName);
+    // 1. Get constituent symbols and weights
+    const { symbols, weights } = await getIndexConstituentData(indexName);
     if (symbols.length === 0) {
       console.warn(`[MarketOverview] No constituents found for ${indexName}`);
       return null;
@@ -97,17 +98,24 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       keyToSymbol.set(key.replace(/\|/g, ':'), sym);
     }
 
-    // 5. Build constituent list
+    // 5. Build constituent list using net_change from Full Quote API
     const constituents: ConstituentQuote[] = [];
+    
+    // Equal weight fallback: if no weights from CSV, use 1/N
+    const hasWeights = Object.keys(weights).length > 0;
+    const equalWeight = 100 / symbols.length;
     
     for (const [key, quote] of fullQuotesMap.entries()) {
       const symbol = keyToSymbol.get(key) || quote.symbol || key.split('|')[1] || key;
+      const sym = symbol.toUpperCase();
       const prevClose = quote.ohlc?.close || 0;
-      const change = prevClose > 0 ? quote.last_price - prevClose : 0;
+      
+      // Use net_change directly from API — it's the authoritative change value
+      const change = quote.net_change || 0;
       const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
       constituents.push({
-        symbol: symbol.toUpperCase(),
+        symbol: sym,
         name: quote.symbol || symbol,
         lastPrice: quote.last_price,
         change,
@@ -117,6 +125,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
         low: quote.ohlc?.low || 0,
         prevClose,
         volume: quote.volume || 0,
+        weight: hasWeights ? (weights[sym] || equalWeight) : equalWeight,
       });
     }
 

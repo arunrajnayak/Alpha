@@ -80,7 +80,7 @@ export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; s
 };
 
 // In-memory cache
-const memoryCache = new Map<string, { symbols: string[]; timestamp: number }>();
+const memoryCache = new Map<string, { symbols: string[]; weights: Record<string, number>; timestamp: number }>();
 
 // Browser-like headers for niftyindices.com
 const FETCH_HEADERS: Record<string, string> = {
@@ -109,10 +109,10 @@ function getCacheFilePath(indexName: string): string {
 }
 
 /**
- * Parse CSV content to extract trading symbols.
- * niftyindices.com CSVs typically have a "Symbol" column.
+ * Parse CSV content to extract trading symbols and weights.
+ * niftyindices.com CSVs typically have "Symbol" and "Weight(%)" columns.
  */
-function parseCSV(csvContent: string): string[] {
+function parseCSV(csvContent: string): { symbols: string[]; weights: Record<string, number> } {
   try {
     // Remove BOM if present
     const clean = csvContent.replace(/^\uFEFF/, '').trim();
@@ -125,18 +125,30 @@ function parseCSV(csvContent: string): string[] {
     });
 
     const symbols: string[] = [];
+    const weights: Record<string, number> = {};
+
     for (const record of records as Record<string, string>[]) {
-      // Try common column names
+      // Try common column names for symbol
       const symbol = record['Symbol'] || record['symbol'] || record['SYMBOL'] || record['Trading Symbol'];
       if (symbol && typeof symbol === 'string' && symbol.trim()) {
-        symbols.push(symbol.trim().toUpperCase());
+        const sym = symbol.trim().toUpperCase();
+        symbols.push(sym);
+        
+        // Try to parse weight
+        const weightStr = record['Weight(%)'] || record['Weightage(%)'] || record['Weight'] || record['weight'];
+        if (weightStr) {
+          const w = parseFloat(weightStr);
+          if (!isNaN(w) && w > 0) {
+            weights[sym] = w;
+          }
+        }
       }
     }
 
-    return symbols;
+    return { symbols, weights };
   } catch (error) {
     console.error('[IndexConstituents] CSV parse error:', error);
-    return [];
+    return { symbols: [], weights: {} };
   }
 }
 
@@ -167,16 +179,24 @@ async function fetchCSV(url: string): Promise<string | null> {
  * Uses multi-layer caching: memory → disk → fetch from niftyindices.com
  */
 export async function getIndexConstituents(indexName: string): Promise<string[]> {
+  const result = await getIndexConstituentData(indexName);
+  return result.symbols;
+}
+
+/**
+ * Get constituent symbols AND weights for an index.
+ */
+export async function getIndexConstituentData(indexName: string): Promise<{ symbols: string[]; weights: Record<string, number> }> {
   const config = INDEX_CONFIG[indexName];
   if (!config) {
     console.error(`[IndexConstituents] Unknown index: ${indexName}`);
-    return [];
+    return { symbols: [], weights: {} };
   }
 
   // 1. Check memory cache
   const memCached = memoryCache.get(indexName);
   if (memCached && (Date.now() - memCached.timestamp) < CACHE_TTL) {
-    return memCached.symbols;
+    return { symbols: memCached.symbols, weights: memCached.weights };
   }
 
   // 2. Check disk cache
@@ -186,9 +206,10 @@ export async function getIndexConstituents(indexName: string): Promise<string[]>
     if ((Date.now() - stat.mtimeMs) < CACHE_TTL) {
       const data = JSON.parse(await fs.readFile(cacheFile, 'utf-8'));
       if (data.symbols && data.symbols.length > 0) {
-        memoryCache.set(indexName, { symbols: data.symbols, timestamp: Date.now() });
+        const weights = data.weights || {};
+        memoryCache.set(indexName, { symbols: data.symbols, weights, timestamp: Date.now() });
         console.log(`[IndexConstituents] Loaded ${data.symbols.length} constituents for ${indexName} from disk cache`);
-        return data.symbols;
+        return { symbols: data.symbols, weights };
       }
     }
   } catch {
@@ -200,20 +221,20 @@ export async function getIndexConstituents(indexName: string): Promise<string[]>
   const csvContent = await fetchCSV(config.csvUrl);
   
   if (csvContent) {
-    const symbols = parseCSV(csvContent);
+    const { symbols, weights } = parseCSV(csvContent);
     if (symbols.length > 0) {
       // Save to disk cache
       try {
         await fs.mkdir(CACHE_DIR, { recursive: true });
-        await fs.writeFile(cacheFile, JSON.stringify({ symbols, fetchedAt: new Date().toISOString() }));
+        await fs.writeFile(cacheFile, JSON.stringify({ symbols, weights, fetchedAt: new Date().toISOString() }));
       } catch (err) {
         console.error('[IndexConstituents] Failed to write cache:', err);
       }
       
       // Save to memory cache
-      memoryCache.set(indexName, { symbols, timestamp: Date.now() });
-      console.log(`[IndexConstituents] Fetched ${symbols.length} constituents for ${indexName}`);
-      return symbols;
+      memoryCache.set(indexName, { symbols, weights, timestamp: Date.now() });
+      console.log(`[IndexConstituents] Fetched ${symbols.length} constituents for ${indexName} (${Object.keys(weights).length} with weights)`);
+      return { symbols, weights };
     }
   }
 
@@ -221,16 +242,17 @@ export async function getIndexConstituents(indexName: string): Promise<string[]>
   try {
     const data = JSON.parse(await fs.readFile(cacheFile, 'utf-8'));
     if (data.symbols && data.symbols.length > 0) {
+      const weights = data.weights || {};
       console.log(`[IndexConstituents] Using stale cache for ${indexName}: ${data.symbols.length} symbols`);
-      memoryCache.set(indexName, { symbols: data.symbols, timestamp: Date.now() });
-      return data.symbols;
+      memoryCache.set(indexName, { symbols: data.symbols, weights, timestamp: Date.now() });
+      return { symbols: data.symbols, weights };
     }
   } catch {
     // No cache available at all
   }
 
   console.error(`[IndexConstituents] No data available for ${indexName}`);
-  return [];
+  return { symbols: [], weights: {} };
 }
 
 /**

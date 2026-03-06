@@ -9,6 +9,7 @@ interface MarketHeatmapProps {
     lastPrice: number;
     changePercent: number;
     volume: number;
+    weight: number;
   }>;
   isMobile: boolean;
 }
@@ -16,13 +17,14 @@ interface MarketHeatmapProps {
 export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapProps) {
   if (!constituents || constituents.length === 0) return null;
 
-  // Use volume as size (gives meaningful weight), with a floor to avoid tiny tiles
+  // Use index weight for sizing (higher weight = bigger tile)
+  // Fall back to equal weight if no weight data
   const treeData = {
     name: 'Market',
     color: 'transparent',
     children: constituents.map(c => ({
       name: c.symbol,
-      value: Math.max(c.volume, 1000), // floor for visibility
+      value: Math.max(c.weight, 0.01), // floor for visibility
       changePercent: c.changePercent,
       lastPrice: c.lastPrice,
     })),
@@ -32,7 +34,7 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height: isMobile ? '350px' : '500px' }}>
       <div className="px-5 pt-5 pb-2 flex items-center justify-between shrink-0">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Market Heatmap</h3>
-        <span className="text-[10px] text-gray-500">{constituents.length} stocks · sized by volume</span>
+        <span className="text-[10px] text-gray-500">{constituents.length} stocks · sized by index weight</span>
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
         <ResponsiveTreeMap
