@@ -70,8 +70,8 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
             if (percent > 0 && percent < 5) textColor = '#0f172a';
             if (percent < 0 && percent > -5) textColor = '#0f172a';
 
-            const showSymbol = node.width > (isMobile ? 30 : 28) && node.height > (isMobile ? 24 : 22);
-            const showPercent = node.width > (isMobile ? 40 : 38) && node.height > (isMobile ? 38 : 35);
+            const showSymbol = node.width > 35 && node.height > 30;
+            const showPercent = node.width > 45 && node.height > 45;
 
             return (
               <motion.g
@@ -91,7 +91,7 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
                     <tspan
                       x={node.width / 2}
                       dy={showPercent ? '-0.7em' : '0.3em'}
-                      fontSize={Math.min(node.width / (isMobile ? 5 : 4.5), isMobile ? 8 : 11)}
+                      fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)}
                       fontWeight="700"
                       fill={textColor}
                       style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}
@@ -101,11 +101,11 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
                     {showPercent && typeof percent === 'number' && (
                       <tspan
                         x={node.width / 2}
-                        dy="1.4em"
-                        fontSize={Math.min(node.width / (isMobile ? 5.5 : 5), isMobile ? 7 : 10)}
+                        dy="1.5em"
+                        fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)}
                         fontWeight="600"
                         fill={textColor}
-                        fillOpacity={0.85}
+                        fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8}
                         style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}
                       >
                         {percent > 0 ? '+' : ''}{percent.toFixed(1)}%

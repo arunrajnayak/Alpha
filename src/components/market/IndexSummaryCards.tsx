@@ -83,12 +83,12 @@ function IndexCardGrid({
   return (
     <div className="overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-700">
       <div
-        className="gap-2"
+        className="gap-2.5"
         style={{
           display: 'grid',
           gridAutoFlow: 'column',
           gridTemplateRows: isMobile ? '1fr' : (indices.length > 8 ? '1fr 1fr' : '1fr'),
-          gridAutoColumns: isMobile ? '105px' : 'minmax(100px, 125px)',
+          gridAutoColumns: isMobile ? '115px' : 'minmax(120px, 1fr)',
         }}
       >
         {indices.map((idx, i) => {
@@ -102,29 +102,29 @@ function IndexCardGrid({
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.015, duration: 0.2 }}
-              className={`relative flex flex-col items-start px-2.5 py-2 rounded-lg border transition-all duration-200 text-left ${
+              className={`relative flex flex-col items-start px-3 py-2.5 rounded-xl border transition-all duration-200 text-left ${
                 isSelected
                   ? 'bg-gradient-to-br from-blue-600/20 via-indigo-500/15 to-violet-500/10 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.12)]'
                   : 'bg-slate-900/50 border-white/5 hover:border-white/10 hover:bg-slate-800/40'
               }`}
             >
-              <span className={`text-[10px] font-medium tracking-wide mb-0.5 truncate w-full ${
+              <span className={`text-[10px] font-medium tracking-wide mb-1 truncate w-full ${
                 isSelected ? 'text-blue-300' : 'text-gray-400'
               }`}>
                 {idx.shortName}
               </span>
-              <span className={`text-[13px] font-bold tabular-nums ${
-                isSelected ? 'text-white' : 'text-gray-200'
-              }`}>
-                {idx.value > 0 ? <AnimatedValue value={idx.value} /> : '—'}
-              </span>
               {idx.value > 0 && (
-                <span className={`text-[10px] font-bold tabular-nums mt-0.5 ${
+                <span className={`text-[15px] font-extrabold tabular-nums ${
                   isPositive ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
                   {isPositive ? '+' : ''}<AnimatedValue value={idx.changePercent} decimals={2} />%
                 </span>
               )}
+              <span className={`text-[11px] tabular-nums mt-0.5 ${
+                isSelected ? 'text-gray-300' : 'text-gray-500'
+              }`}>
+                {idx.value > 0 ? <AnimatedValue value={idx.value} /> : '—'}
+              </span>
               {isSelected && (
                 <motion.div
                   className="absolute bottom-0 left-2 right-2 h-0.5 bg-gradient-to-r from-blue-500 to-violet-500 rounded-full"
@@ -144,8 +144,12 @@ export default function IndexSummaryCards({ indices, selectedIndex, onSelectInde
   if (indices.length === 0) return null;
 
   const groups = useMemo(() => {
-    const broad = indices.filter(i => i.category === 'broad' || i.category === 'momentum');
-    const sectoral = indices.filter(i => i.category === 'sectoral');
+    const broad = indices
+      .filter(i => i.category === 'broad' || i.category === 'momentum')
+      .sort((a, b) => a.changePercent - b.changePercent);
+    const sectoral = indices
+      .filter(i => i.category === 'sectoral')
+      .sort((a, b) => a.changePercent - b.changePercent);
     return { broad, sectoral };
   }, [indices]);
 
