@@ -9,6 +9,7 @@ import { isMarketOpen } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSummaryCards from '@/components/market/IndexSummaryCards';
+import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 
 const MarketHeatmap = dynamic(() => import('@/components/market/MarketHeatmap'), {
   loading: () => <div className="h-[500px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -32,7 +33,10 @@ interface IndexSummary {
   value: number;
   change: number;
   changePercent: number;
+  instrumentKey: string;
 }
+
+const UPDATE_INTERVAL_MS = 1000; // Batch UI updates every 1 second
 
 export default function MarketOverviewPage() {
   const [selectedIndex, setSelectedIndex] = useState('NIFTY 50');
@@ -42,8 +46,16 @@ export default function MarketOverviewPage() {
   const [summariesLoading, setSummariesLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  
+  const [tokenStatus, setTokenStatus] = useState<{ hasToken: boolean; message?: string } | null>(null);
+  
+  // Refresh timers
   const dataRefreshRef = useRef<NodeJS.Timeout | null>(null);
-  const summaryRefreshRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Streaming buffers
+  const pendingUpdatesRef = useRef<Map<string, PriceUpdate>>(new Map());
+  const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastBatchAppliedRef = useRef<number>(0);
 
   // Responsive check
   useEffect(() => {
@@ -53,13 +65,23 @@ export default function MarketOverviewPage() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Fetch index summaries (lightweight — just LTP for each index)
+  // Set formatted last updated time
+  const updateTimestamp = useCallback(() => {
+    setLastUpdated(new Date().toLocaleTimeString('en-IN', { 
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
+    }));
+  }, []);
+
+  // Fetch index summaries (REST fallback)
   const loadSummaries = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) setSummariesLoading(true);
-      const summaries = await fetchAllIndexSummaries();
-      if (summaries.length > 0) {
-        setIndexSummaries(summaries);
+      const res = await fetchAllIndexSummaries();
+      if (res.summaries.length > 0) {
+        setIndexSummaries(res.summaries);
+      }
+      if (res.tokenStatus) {
+        setTokenStatus(res.tokenStatus);
       }
     } catch (err) {
       console.error('Failed to load index summaries:', err);
@@ -68,27 +90,24 @@ export default function MarketOverviewPage() {
     }
   }, []);
 
-  // Fetch data for selected index
+  // Fetch data for selected index (REST)
   const loadData = useCallback(async (indexName: string) => {
     try {
       setLoading(true);
       const result = await fetchMarketOverview(indexName);
       if (result) {
         setData(result);
-        setLastUpdated(new Date().toLocaleTimeString('en-IN', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit',
-          hour12: true,
-          timeZone: 'Asia/Kolkata',
-        }));
+        updateTimestamp();
+        if (result.tokenStatus) {
+          setTokenStatus(result.tokenStatus);
+        }
       }
     } catch (err) {
       console.error(`Failed to load market data for ${indexName}:`, err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateTimestamp]);
 
   // Initial load
   useEffect(() => {
@@ -100,33 +119,174 @@ export default function MarketOverviewPage() {
     loadData(selectedIndex);
   }, [selectedIndex, loadData]);
 
-  // Auto-refresh: summaries every 1s, full data every 30s (during market hours)
-  useEffect(() => {
-    // Summary refresh — lightweight, every 1s
-    summaryRefreshRef.current = setInterval(() => {
-      if (isMarketOpen()) {
-        loadSummaries(false); // false = no loading indicator
-      }
-    }, 1000);
+  // Handle batched streaming updates to avoid UI stutter
+  const applyBatchedUpdates = useCallback(() => {
+    const updates = pendingUpdatesRef.current;
+    if (updates.size === 0) return;
 
-    // Full data refresh — heavier, every 30s
+    pendingUpdatesRef.current = new Map();
+    lastBatchAppliedRef.current = Date.now();
+
+    const updateMap = new Map<string, PriceUpdate>();
+    for (const [, update] of updates) {
+      updateMap.set(update.symbol, update);
+    }
+
+    // 1. Update Index Summaries
+    setIndexSummaries(prev => prev.map(idx => {
+      const update = updateMap.get(idx.instrumentKey);
+      if (!update || !update.ltp || update.ltp <= 0) return idx;
+
+      const prevClose = update.previousClose || idx.value - idx.change;
+      const change = update.ltp - prevClose;
+      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+      return {
+        ...idx,
+        value: update.ltp,
+        change,
+        changePercent,
+      };
+    }));
+
+    // 2. Update Main Data (if available)
+    setData(currentData => {
+      if (!currentData) return currentData;
+
+      let anyConstituentChanged = false;
+
+      const updatedConstituents = currentData.constituents.map(c => {
+        const update = updateMap.get(c.instrumentKey);
+        if (!update || !update.ltp || update.ltp <= 0) return c;
+
+        anyConstituentChanged = true;
+        const prevClose = update.previousClose || c.prevClose;
+        const change = update.ltp - prevClose;
+        const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+        return {
+          ...c,
+          lastPrice: update.ltp,
+          change,
+          changePercent,
+          prevClose,
+        };
+      });
+
+      // Update index value if its update is in this batch
+      let newIndexValue = currentData.indexValue;
+      let newIndexChange = currentData.indexChange;
+      let newIndexChangePercent = currentData.indexChangePercent;
+
+      // Find the currently selected index in summaries to check if its value updated
+      const selectedIndexSummaryUpdate = Array.from(updateMap.values()).find(
+        u => indexSummaries.find(s => s.name === currentData.indexName && s.instrumentKey === u.symbol)
+      );
+
+      if (selectedIndexSummaryUpdate && selectedIndexSummaryUpdate.ltp && selectedIndexSummaryUpdate.ltp > 0) {
+        const prevClose = selectedIndexSummaryUpdate.previousClose || currentData.indexValue - currentData.indexChange;
+        newIndexValue = selectedIndexSummaryUpdate.ltp;
+        newIndexChange = newIndexValue - prevClose;
+        newIndexChangePercent = prevClose > 0 ? (newIndexChange / prevClose) * 100 : 0;
+      }
+
+      if (!anyConstituentChanged && newIndexValue === currentData.indexValue) {
+        return currentData; // No updates for this specific view
+      }
+
+      // Recalculate advance/decline
+      let advancing = 0;
+      let declining = 0;
+      let unchanged = 0;
+      for (const c of updatedConstituents) {
+        if (c.changePercent > 0.01) advancing++;
+        else if (c.changePercent < -0.01) declining++;
+        else unchanged++;
+      }
+
+      // Recalculate gainers/losers
+      const sorted = [...updatedConstituents].sort((a, b) => b.changePercent - a.changePercent);
+      const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
+      const topLosers = sorted.filter(c => c.changePercent < 0).reverse().slice(0, 10);
+
+      return {
+        ...currentData,
+        indexValue: newIndexValue,
+        indexChange: newIndexChange,
+        indexChangePercent: newIndexChangePercent,
+        constituents: sorted,
+        advancing,
+        declining,
+        unchanged,
+        topGainers,
+        topLosers,
+      };
+    });
+
+  }, [indexSummaries]);
+
+  // Buffer incoming WebSocket ticks
+  const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {
+    for (const update of updates) {
+      pendingUpdatesRef.current.set(update.symbol, update);
+    }
+    
+    const now = Date.now();
+    const timeSinceLastBatch = now - lastBatchAppliedRef.current;
+    
+    if (!updateTimerRef.current) {
+      const delay = timeSinceLastBatch >= UPDATE_INTERVAL_MS ? 0 : UPDATE_INTERVAL_MS - timeSinceLastBatch;
+      updateTimerRef.current = setTimeout(() => {
+        updateTimerRef.current = null;
+        applyBatchedUpdates();
+      }, delay);
+    }
+  }, [applyBatchedUpdates]);
+
+  // Stream Status
+  const handleStreamStatusChange = useCallback((status: StreamStatus) => {
+    console.log('[MarketOverview] Stream status:', status);
+  }, []);
+
+  // Web Socket Hook
+  const showStreaming = isMarketOpen() && !!tokenStatus?.hasToken;
+  const { status: streamStatus } = useUpstoxStream({
+    enabled: showStreaming,
+    onPriceUpdate: handlePriceUpdate,
+    onStatusChange: handleStreamStatusChange,
+  });
+
+  const isStreaming = streamStatus === 'connected';
+
+  // REST Refresh loop (fallback/sync)
+  useEffect(() => {
+    // Determine polling interval: 5 minutes if streaming is active, else 1 minute
+    const pollInterval = isStreaming ? 300000 : 60000;
+
     dataRefreshRef.current = setInterval(() => {
       if (isMarketOpen()) {
+        if (!isStreaming) loadSummaries(false);
         loadData(selectedIndex);
       }
-    }, 30000);
+    }, pollInterval);
 
     return () => {
-      if (summaryRefreshRef.current) clearInterval(summaryRefreshRef.current);
       if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
     };
-  }, [selectedIndex, loadData, loadSummaries]);
+  }, [isStreaming, selectedIndex, loadData, loadSummaries]);
+
+  // Cleanup update timer
+  useEffect(() => {
+    return () => {
+      if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
+    };
+  }, []);
 
   const handleSelectIndex = useCallback((name: string) => {
     setSelectedIndex(name);
   }, []);
 
-  // Loading skeleton
+  // ... Loading Skeleton ...
   if (summariesLoading && indexSummaries.length === 0) {
     return (
       <div className="flex flex-col gap-6 pb-8 min-h-screen pt-2 animate-pulse">
@@ -155,7 +315,21 @@ export default function MarketOverviewPage() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Market Overview</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">Market Overview</h1>
+            {isStreaming && (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-medium text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                LIVE
+              </span>
+            )}
+            {streamStatus === 'connecting' && (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                CONNECTING
+              </span>
+            )}
+          </div>
           {lastUpdated && (
             <p className="text-[11px] text-gray-500 mt-0.5">Last updated: {lastUpdated}</p>
           )}
@@ -246,7 +420,7 @@ export default function MarketOverviewPage() {
           <div className="bg-amber-500/10 text-amber-400 p-6 rounded-2xl border border-amber-500/20 max-w-md">
             <h3 className="font-semibold text-lg mb-2">No Data Available</h3>
             <p className="text-sm opacity-90">
-              Could not load market data. Please check your Upstox token and try again.
+              {tokenStatus?.message || 'Could not load market data. Please check your Upstox token and try again.'}
             </p>
             <button
               onClick={() => loadData(selectedIndex)}

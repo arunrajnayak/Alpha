@@ -117,7 +117,7 @@ function IndexCardGrid({
               <span className={`text-[10px] font-medium tracking-wide mb-1 truncate w-full ${
                 isSelected ? 'text-blue-300' : 'text-gray-400'
               }`}>
-                {idx.shortName}
+                {idx.name}
               </span>
               {idx.value > 0 && (
                 <span className={`text-[15px] font-extrabold tabular-nums ${

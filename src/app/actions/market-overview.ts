@@ -19,6 +19,7 @@ import { hasValidToken } from '@/lib/upstox-client';
 export interface ConstituentQuote {
   symbol: string;
   name: string;
+  instrumentKey: string;
   lastPrice: number;
   change: number;
   changePercent: number;
@@ -42,6 +43,10 @@ export interface MarketOverviewData {
   topGainers: ConstituentQuote[];
   topLosers: ConstituentQuote[];
   lastUpdated: string;
+  tokenStatus?: {
+    hasToken: boolean;
+    message?: string;
+  };
 }
 
 // ============================================================================
@@ -61,9 +66,27 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
 
     // Check token availability
     const hasToken = await hasValidToken();
+    const tokenStatus = {
+      hasToken,
+      message: hasToken ? undefined : 'No valid Upstox token. Please approve the token request on your phone.'
+    };
+    
     if (!hasToken) {
       console.warn('[MarketOverview] No valid Upstox token');
-      return null;
+      return {
+        indexName,
+        indexValue: 0,
+        indexChange: 0,
+        indexChangePercent: 0,
+        constituents: [],
+        advancing: 0,
+        declining: 0,
+        unchanged: 0,
+        topGainers: [],
+        topLosers: [],
+        lastUpdated: new Date().toISOString(),
+        tokenStatus
+      };
     }
 
     // 1. Get constituent symbols and weights
@@ -84,11 +107,25 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       return null;
     }
 
-    // 3. Fetch full quotes for constituents + index quote in parallel
-    const [fullQuotesMap, indexQuoteMap] = await Promise.all([
-      getFullQuotes(instrumentKeys),
+    // 3. Fetch full quotes in batches (Upstox URL length limit) + index quote in parallel
+    const BATCH_SIZE = 25;
+    const batches: string[][] = [];
+    for (let i = 0; i < instrumentKeys.length; i += BATCH_SIZE) {
+      batches.push(instrumentKeys.slice(i, i + BATCH_SIZE));
+    }
+
+    const [batchResults, indexQuoteMap] = await Promise.all([
+      Promise.all(batches.map(batch => getFullQuotes(batch))),
       getLiveQuotes([config.upstoxKey]),
     ]);
+
+    // Merge all batch results into single map
+    const fullQuotesMap = new Map<string, any>();
+    for (const batchMap of batchResults) {
+      for (const [key, value] of batchMap.entries()) {
+        fullQuotesMap.set(key, value);
+      }
+    }
 
     // 4. Build reverse lookup: key -> symbol
     const keyToSymbol = new Map<string, string>();
@@ -117,6 +154,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       constituents.push({
         symbol: sym,
         name: quote.symbol || symbol,
+        instrumentKey: key,
         lastPrice: quote.last_price,
         change,
         changePercent,
@@ -172,6 +210,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       topGainers,
       topLosers,
       lastUpdated: new Date().toISOString(),
+      tokenStatus,
     };
 
   } catch (error) {
@@ -183,17 +222,23 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
 /**
  * Fetch summary data for all indices (lightweight — just index quotes)
  */
-export async function fetchAllIndexSummaries(): Promise<Array<{
-  name: string;
-  shortName: string;
-  category: string;
-  value: number;
-  change: number;
-  changePercent: number;
-}>> {
+export async function fetchAllIndexSummaries(): Promise<{
+  summaries: Array<{
+    name: string;
+    shortName: string;
+    category: string;
+    value: number;
+    change: number;
+    changePercent: number;
+    instrumentKey: string;
+  }>;
+  tokenStatus?: { hasToken: boolean; message?: string };
+}> {
   try {
     const hasToken = await hasValidToken();
-    if (!hasToken) return [];
+    if (!hasToken) {
+      return { summaries: [], tokenStatus: { hasToken: false, message: 'No valid Upstox token.' } };
+    }
 
     const indexKeys = Object.entries(INDEX_CONFIG).map(([name, config]) => ({
       name,
@@ -211,6 +256,7 @@ export async function fetchAllIndexSummaries(): Promise<Array<{
       value: number;
       change: number;
       changePercent: number;
+      instrumentKey: string;
     }> = [];
 
     for (const idx of indexKeys) {
@@ -227,13 +273,14 @@ export async function fetchAllIndexSummaries(): Promise<Array<{
           value: quote.last_price,
           change,
           changePercent,
+          instrumentKey: idx.key,
         });
       }
     }
 
-    return summaries;
+    return { summaries, tokenStatus: { hasToken: true } };
   } catch (error) {
     console.error('[MarketOverview] Error fetching index summaries:', error);
-    return [];
+    return { summaries: [] };
   }
 }
