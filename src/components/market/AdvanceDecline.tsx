@@ -17,11 +17,7 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
   const unchPct = (unchanged / total) * 100;
 
   return (
-    <div className="flex items-center gap-3 w-full">
-      <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0">Advance / Decline</h3>
-      
-      {/* Bar — fills remaining space */}
-      <div className="relative h-6 rounded-full overflow-hidden bg-slate-800/50 flex flex-1 min-w-0 shadow-inner">
+    <div className="relative h-6 w-full rounded-full overflow-hidden bg-slate-800/50 flex shadow-inner">
           <motion.div
             className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500 flex items-center justify-center"
             initial={{ width: 0 }}
@@ -47,7 +43,7 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
           )}
           
           <motion.div
-            className="h-full bg-gradient-to-r from-rose-500/90 to-rose-600/90 flex items-center justify-center"
+            className="h-full bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center"
             initial={{ width: 0 }}
             animate={{ width: `${decPct}%` }}
             transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
@@ -56,7 +52,6 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
               <span className="text-xs font-bold text-white drop-shadow-sm">{declining}</span>
             )}
           </motion.div>
-    </div>
     </div>
   );
 }

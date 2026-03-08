@@ -23,7 +23,7 @@ const CACHE_TTL = 90 * 24 * 60 * 60 * 1000; // 90 days — constituents rebalanc
  */
 export type IndexCategory = 'broad' | 'momentum' | 'sectoral';
 
-export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; shortName: string; category: IndexCategory }> = {
+export const INDEX_CONFIG: Record<string, { csvUrl?: string; upstoxKey: string; shortName: string; category: IndexCategory }> = {
   'NIFTY 50': {
     csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty50list.csv',
     upstoxKey: 'NSE_INDEX|Nifty 50',
@@ -199,6 +199,12 @@ export const INDEX_CONFIG: Record<string, { csvUrl: string; upstoxKey: string; s
     shortName: 'Commodities',
     category: 'sectoral',
   },
+  'NIFTY CPSE': { upstoxKey: 'NSE_INDEX|Nifty CPSE', shortName: 'CPSE', category: 'sectoral', csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftycpselist.csv' },
+  'NIFTY Railways PSU': { upstoxKey: 'NSE_INDEX|Nifty RailwaysPSU', shortName: 'Railways PSU', category: 'sectoral' },
+  'NIFTY Chemicals': { upstoxKey: 'NSE_INDEX|Nifty Chemicals', shortName: 'Chemicals', category: 'sectoral' },
+  'NIFTY Capital Mkt': { upstoxKey: 'NSE_INDEX|Nifty Capital Mkt', shortName: 'Capital Mkt', category: 'sectoral' },
+  'NIFTY Ind Tourism': { upstoxKey: 'NSE_INDEX|Nifty Ind Tourism', shortName: 'Ind Tourism', category: 'sectoral' },
+  'NIFTY Ind Defence': { upstoxKey: 'NSE_INDEX|Nifty Ind Defence', shortName: 'Ind Defence', category: 'sectoral' },
 };
 
 // In-memory cache
@@ -339,6 +345,8 @@ export async function getIndexConstituentData(indexName: string): Promise<{ symb
   }
 
   // 3. Fetch from niftyindices.com
+  if (!config.csvUrl) return { symbols: [], weights: {} };
+  
   console.log(`[IndexConstituents] Fetching constituents for ${indexName} from ${config.csvUrl}`);
   const csvContent = await fetchCSV(config.csvUrl);
   

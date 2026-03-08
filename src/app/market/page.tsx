@@ -7,6 +7,7 @@ import { fetchMarketOverview, fetchAllIndexSummaries } from '@/app/actions/marke
 import type { MarketOverviewData, ConstituentQuote } from '@/app/actions/market-overview';
 import { isMarketOpen } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
+import SectoralHeatmap from '@/components/market/SectoralHeatmap';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSummaryCards from '@/components/market/IndexSummaryCards';
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
@@ -410,6 +411,16 @@ export default function MarketOverviewPage() {
           </motion.div>
 
 
+
+          {/* Sectoral Heatmap */}
+          {indexSummaries.length > 0 && selectedIndex === 'NIFTY 50' && ( // Only show on Nifty 50 initially to prevent clutter
+            <motion.div variants={itemVariants}>
+              <SectoralHeatmap
+                indices={indexSummaries}
+                isMobile={isMobile}
+              />
+            </motion.div>
+          )}
 
           {/* Top Movers */}
           <motion.div variants={itemVariants}>
