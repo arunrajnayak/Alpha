@@ -367,8 +367,8 @@ export default function MarketOverviewPage() {
       ) : data ? (
         <>
           {/* Index Header Stats */}
-          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-6 sm:py-4">
-            <div className="flex items-center gap-4 flex-wrap">
+          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-6 sm:py-4">
+            <div className="flex items-center gap-4 flex-wrap shrink-0">
               <div className="flex items-baseline gap-2.5">
                 <span className="text-xl font-bold text-white tracking-tight">{data.indexName}</span>
                 {data.indexValue > 0 && (
@@ -392,7 +392,7 @@ export default function MarketOverviewPage() {
               </div>
             </div>
 
-            <div className="w-full sm:w-1/2 shrink-0 max-w-[400px]">
+            <div className="w-full sm:flex-1 min-w-0 flex items-center justify-end">
               <AdvanceDecline
                 advancing={data.advancing}
                 declining={data.declining}
