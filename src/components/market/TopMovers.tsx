@@ -15,6 +15,7 @@ interface TopMoversProps {
     changePercent: number;
     change: number;
   }>;
+  totalConstituents: number;
   isMobile: boolean;
 }
 
@@ -52,18 +53,23 @@ function MoverRow({ stock, index, type }: { stock: { symbol: string; changePerce
   );
 }
 
-export default function TopMovers({ topGainers, topLosers, isMobile }: TopMoversProps) {
+export default function TopMovers({ topGainers, topLosers, totalConstituents, isMobile }: TopMoversProps) {
   if (topGainers.length === 0 && topLosers.length === 0) return null;
 
-  const display = isMobile ? 5 : 10;
+  const display = isMobile ? 5 : (totalConstituents < 200 ? 5 : 10);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Top Gainers */}
       <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1.5 h-4 rounded-full bg-emerald-500" />
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Top Gainers</h3>
+        <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+            <h3 className="text-sm font-semibold text-gray-200">Top Gainers</h3>
+          </div>
+          <span className="text-[10px] text-gray-500 font-medium px-2 py-0.5 bg-slate-800/50 rounded-md border border-white/5">
+            Showing {Math.min(display, topGainers.length)}
+          </span>
         </div>
         <div className="divide-y divide-white/[0.03]">
           {topGainers.slice(0, display).map((stock, i) => (
@@ -77,9 +83,14 @@ export default function TopMovers({ topGainers, topLosers, isMobile }: TopMovers
 
       {/* Top Losers */}
       <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-1.5 h-4 rounded-full bg-red-500" />
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Top Losers</h3>
+        <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+            <h3 className="text-sm font-semibold text-gray-200">Top Losers</h3>
+          </div>
+          <span className="text-[10px] text-gray-500 font-medium px-2 py-0.5 bg-slate-800/50 rounded-md border border-white/5">
+            Showing {Math.min(display, topLosers.length)}
+          </span>
         </div>
         <div className="divide-y divide-white/[0.03]">
           {topLosers.slice(0, display).map((stock, i) => (

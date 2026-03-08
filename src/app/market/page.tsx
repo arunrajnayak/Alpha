@@ -367,26 +367,38 @@ export default function MarketOverviewPage() {
       ) : data ? (
         <>
           {/* Index Header Stats */}
-          <motion.div variants={itemVariants} className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold text-white">{data.indexName}</span>
-              {data.indexValue > 0 && (
-                <>
-                  <span className="text-base font-bold text-gray-200 tabular-nums">
-                    {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </span>
-                  <span className={`text-sm font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
-                  </span>
-                </>
-              )}
+          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-6 sm:py-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-baseline gap-2.5">
+                <span className="text-xl font-bold text-white tracking-tight">{data.indexName}</span>
+                {data.indexValue > 0 && (
+                  <>
+                    <span className="text-lg font-bold text-gray-200 tabular-nums">
+                      {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </span>
+                    <span className={`text-sm font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-gray-500 px-2 py-1 rounded-md bg-slate-800/40 border border-white/5">
+                  {data.constituents.length} stocks
+                </span>
+                {loading && (
+                  <span className="w-3.5 h-3.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
             </div>
-            <span className="text-xs text-gray-500">
-              {data.constituents.length} stocks
-            </span>
-            {loading && (
-              <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            )}
+
+            <div className="w-full sm:w-[320px] shrink-0">
+              <AdvanceDecline
+                advancing={data.advancing}
+                declining={data.declining}
+                unchanged={data.unchanged}
+              />
+            </div>
           </motion.div>
 
           {/* Heatmap */}
@@ -397,20 +409,14 @@ export default function MarketOverviewPage() {
             />
           </motion.div>
 
-          {/* Advance/Decline */}
-          <motion.div variants={itemVariants}>
-            <AdvanceDecline
-              advancing={data.advancing}
-              declining={data.declining}
-              unchanged={data.unchanged}
-            />
-          </motion.div>
+
 
           {/* Top Movers */}
           <motion.div variants={itemVariants}>
             <TopMovers
               topGainers={data.topGainers}
               topLosers={data.topLosers}
+              totalConstituents={data.constituents.length}
               isMobile={isMobile}
             />
           </motion.div>

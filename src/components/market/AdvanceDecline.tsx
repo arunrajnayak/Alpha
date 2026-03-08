@@ -17,12 +17,11 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
   const unchPct = (unchanged / total) * 100;
 
   return (
-    <div className="bg-slate-900/50 rounded-2xl border border-white/5 px-5 py-4">
-      <div className="flex items-center gap-4">
-        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap shrink-0">Advance / Decline</h3>
-        
-        {/* Bar — fills remaining space */}
-        <div className="relative h-7 rounded-full overflow-hidden bg-slate-800/50 flex flex-1 min-w-0">
+    <div className="flex items-center gap-3 w-full">
+      <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest whitespace-nowrap shrink-0">Advance / Decline</h3>
+      
+      {/* Bar — fills remaining space */}
+      <div className="relative h-6 rounded-full overflow-hidden bg-slate-800/50 flex flex-1 min-w-0 shadow-inner">
           <motion.div
             className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500 flex items-center justify-center"
             initial={{ width: 0 }}
@@ -57,8 +56,7 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
               <span className="text-xs font-bold text-white drop-shadow-sm">{declining}</span>
             )}
           </motion.div>
-        </div>
-      </div>
+    </div>
     </div>
   );
 }
