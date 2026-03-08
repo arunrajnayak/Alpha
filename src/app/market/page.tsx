@@ -392,7 +392,7 @@ export default function MarketOverviewPage() {
               </div>
             </div>
 
-            <div className="w-full sm:w-[320px] shrink-0">
+            <div className="w-full sm:w-1/2 shrink-0 max-w-[400px]">
               <AdvanceDecline
                 advancing={data.advancing}
                 declining={data.declining}

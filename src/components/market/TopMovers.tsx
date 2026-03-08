@@ -67,9 +67,6 @@ export default function TopMovers({ topGainers, topLosers, totalConstituents, is
             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
             <h3 className="text-sm font-semibold text-gray-200">Top Gainers</h3>
           </div>
-          <span className="text-[10px] text-gray-500 font-medium px-2 py-0.5 bg-slate-800/50 rounded-md border border-white/5">
-            Showing {Math.min(display, topGainers.length)}
-          </span>
         </div>
         <div className="divide-y divide-white/[0.03]">
           {topGainers.slice(0, display).map((stock, i) => (
@@ -88,9 +85,6 @@ export default function TopMovers({ topGainers, topLosers, totalConstituents, is
             <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
             <h3 className="text-sm font-semibold text-gray-200">Top Losers</h3>
           </div>
-          <span className="text-[10px] text-gray-500 font-medium px-2 py-0.5 bg-slate-800/50 rounded-md border border-white/5">
-            Showing {Math.min(display, topLosers.length)}
-          </span>
         </div>
         <div className="divide-y divide-white/[0.03]">
           {topLosers.slice(0, display).map((stock, i) => (
