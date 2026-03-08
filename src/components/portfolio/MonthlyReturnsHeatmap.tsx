@@ -31,8 +31,8 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
   { key: 'returns', label: 'Monthly Returns' },
-  { key: 'alpha-nifty', label: 'α vs Nifty' },
-  { key: 'alpha-momentum', label: 'α vs N500 Mom50' },
+  { key: 'alpha-nifty', label: 'vs Nifty' },
+  { key: 'alpha-momentum', label: 'vs N500M50' },
 ];
 
 // Helper to format percentage
@@ -44,38 +44,39 @@ function formatPercentage(val: number): string {
 
 /**
  * Compute monthly returns from daily NAV data.
- * For each year-month, find the first and last NAV and compute (last/first) - 1.
+ * Compounds daily returns (NAV_t / NAV_{t-1} - 1) to accurately capture
+ * month-over-month performance, including the first day of each month.
  */
 function computeMonthlyReturnsFromNAV(
   chartData: ChartDataPoint[],
   navKey: 'portfolioNAV' | 'niftyNAV' | 'nifty500Momentum50NAV'
 ): Map<string, number> {
-  // Group by year-month, keeping first and last NAV per month
-  const monthBounds = new Map<string, { firstNAV: number; lastNAV: number }>();
+  const returns = new Map<string, number>();
+  const monthlyCompounded = new Map<string, number>();
 
-  // chartData is already sorted by date ascending
+  let prevNav: number | null = null;
+  
+  // chartData is assumed to be sorted by date ascending
   chartData.forEach(d => {
-    const date = new Date(d.date);
-    const year = getYear(date);
-    const month = getMonth(date);
-    const key = `${year}-${month}`;
     const nav = d[navKey];
     if (nav == null || nav === 0) return;
 
-    const existing = monthBounds.get(key);
-    if (!existing) {
-      monthBounds.set(key, { firstNAV: nav, lastNAV: nav });
-    } else {
-      existing.lastNAV = nav; // keep updating to get the last value
+    if (prevNav !== null && prevNav !== 0) {
+      const dailyReturn = (nav / prevNav) - 1;
+      const date = new Date(d.date);
+      const key = `${getYear(date)}-${getMonth(date)}`;
+      
+      const current = monthlyCompounded.get(key) ?? 1.0;
+      monthlyCompounded.set(key, current * (1 + dailyReturn));
     }
+    
+    prevNav = nav;
   });
 
-  const returns = new Map<string, number>();
-  monthBounds.forEach((bounds, key) => {
-    if (bounds.firstNAV !== 0) {
-      returns.set(key, (bounds.lastNAV / bounds.firstNAV) - 1);
-    }
+  monthlyCompounded.forEach((compounded, key) => {
+    returns.set(key, compounded - 1);
   });
+
   return returns;
 }
 

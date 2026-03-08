@@ -152,10 +152,10 @@ export default function IndexSummaryCards({ indices, selectedIndex, onSelectInde
   const groups = useMemo(() => {
     const broad = indices
       .filter(i => i.category === 'broad' || i.category === 'momentum')
-      .sort((a, b) => a.changePercent - b.changePercent);
+      .sort((a, b) => b.changePercent - a.changePercent);
     const sectoral = indices
       .filter(i => i.category === 'sectoral')
-      .sort((a, b) => a.changePercent - b.changePercent);
+      .sort((a, b) => b.changePercent - a.changePercent);
     return { broad, sectoral };
   }, [indices]);
 
