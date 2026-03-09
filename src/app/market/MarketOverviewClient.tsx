@@ -9,7 +9,8 @@ import { isMarketOpen } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSummaryCards from '@/components/market/IndexSummaryCards';
-import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
+import { useLiveData } from '@/context/LiveDataContext';
+import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 
 const SectoralHeatmap = dynamic(() => import('@/components/market/SectoralHeatmap'), {
   loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -280,13 +281,15 @@ export default function MarketOverviewClient({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Web Socket Hook
+  // Web Socket Hook - use the shared stream from LiveDataContext
+  const { streamStatus, subscribeToPrices } = useLiveData();
   const showStreaming = isVisible && isMarketOpen() && !!tokenStatus?.hasToken;
-  const { status: streamStatus } = useUpstoxStream({
-    enabled: showStreaming,
-    onPriceUpdate: handlePriceUpdate,
-    onStatusChange: handleStreamStatusChange,
-  });
+
+  useEffect(() => {
+    if (showStreaming) {
+      return subscribeToPrices(handlePriceUpdate);
+    }
+  }, [showStreaming, subscribeToPrices, handlePriceUpdate]);
 
   const isStreaming = streamStatus === 'connected';
 

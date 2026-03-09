@@ -36,6 +36,8 @@ interface LiveDataContextType {
   clearConnectionError: () => void;
   // Intraday P/L history
   pnlHistory: PnLHistoryPoint[];
+  // Shared WebSocket subscription
+  subscribeToPrices: (callback: (updates: PriceUpdate[]) => void) => () => void;
 }
 
 const LiveDataContext = createContext<LiveDataContextType | undefined>(undefined);
@@ -58,6 +60,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastBatchAppliedRef = useRef<number>(0);
   const lastPnLSaveRef = useRef<number>(0);
+  
+  // Shared subscribers for other components (like MarketOverview)
+  const priceSubscribersRef = useRef<Set<(updates: PriceUpdate[]) => void>>(new Set());
 
   const clearConnectionError = useCallback(() => {
     setConnectionError(null);
@@ -346,6 +351,15 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         applyBatchedUpdates();
       }, delay);
     }
+    
+    // Also notify any registered external subscribers immediately (or let them batch themselves)
+    priceSubscribersRef.current.forEach(callback => {
+      try {
+        callback(updates);
+      } catch (err) {
+        console.error('[LiveData] Error in price subscriber:', err);
+      }
+    });
   }, [applyBatchedUpdates]);
   
   // Cleanup timer on unmount
@@ -550,6 +564,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [refresh, isStreaming]);
 
+  const subscribeToPrices = useCallback((callback: (updates: PriceUpdate[]) => void) => {
+    priceSubscribersRef.current.add(callback);
+    return () => {
+      priceSubscribersRef.current.delete(callback);
+    };
+  }, []);
+
   return (
     <LiveDataContext.Provider value={{ 
       data, 
@@ -568,6 +589,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       connectionError,
       clearConnectionError,
       pnlHistory,
+      subscribeToPrices,
     }}>
       {children}
     </LiveDataContext.Provider>
