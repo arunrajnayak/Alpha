@@ -406,9 +406,20 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // Use Upstox stream hook for direct WebSocket connection
   const { status: streamStatus } = useUpstoxStream({
-    enabled: streamingEnabled && isMarketHours && !!data?.tokenStatus?.hasToken,
+    enabled: isVisible && streamingEnabled && isMarketHours && !!data?.tokenStatus?.hasToken,
     onPriceUpdate: handlePriceUpdate,
     onStatusChange: handleStreamStatusChange,
     onError: handleStreamError,

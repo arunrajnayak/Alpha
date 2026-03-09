@@ -26,7 +26,7 @@ export default function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapPr
       // Remove NIFTY prefix for cleaner labels
       .map((c) => ({
         name: c.shortName || c.name.replace(/^NIFTY\s+/i, ''),
-        value: Math.max(1, Math.abs(c.changePercent)), // Provide a default positive area weight. We can also use index value if preferred, but abs(changePercent) or equal weight are common. Fall back to 1 if change is 0.
+        value: 1, // Equal weight for all sectors
         changePercent: c.changePercent,
         lastPrice: c.value,
       }))

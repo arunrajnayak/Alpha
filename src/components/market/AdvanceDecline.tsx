@@ -18,13 +18,13 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
 
   return (
     <div className="flex flex-col w-full min-w-[280px] sm:min-w-[340px] max-w-[450px] gap-2.5">
-      {/* Top Row: Percentages */}
+      {/* Top Row: Counts */}
       <div className="flex justify-between items-end px-1 font-mono tracking-tight">
         <span className="text-[15px] sm:text-[17px] font-bold text-emerald-400">
-          {advPct.toFixed(2)}%
+          {advancing}
         </span>
         <span className="text-[15px] sm:text-[17px] font-bold text-rose-500">
-          {decPct.toFixed(2)}%
+          {declining}
         </span>
       </div>
       
@@ -52,12 +52,6 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
           animate={{ width: `${decPct}%` }}
           transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
         />
-      </div>
-
-      {/* Bottom Row: Labels */}
-      <div className="flex justify-between items-start px-1">
-        <span className="text-sm font-semibold text-slate-400">Winners</span>
-        <span className="text-sm font-semibold text-slate-400">Losers</span>
       </div>
     </div>
   );
