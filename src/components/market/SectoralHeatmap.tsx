@@ -60,63 +60,90 @@ export default function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapPr
             const d = node.data as { changePercent?: number };
             const p = d.changePercent;
             if (p === undefined) return 'rgba(0,0,0,0)';
-            if (p >= 3) return '#059669';
-            if (p >= 1.5) return '#10b981';
-            if (p > 0) return '#34d399';
-            if (p === 0) return '#64748b';
-            if (p > -1.5) return '#fca5a5';
-            if (p > -3) return '#f87171';
-            return '#ef4444';
+            if (p >= 10) return '#059669'; // Emerald 600
+            if (p >= 5) return '#10b981';  // Emerald 500
+            if (p >= 3) return '#34d399';  // Emerald 400
+            if (p >= 1.5) return '#6ee7b7'; // Emerald 300
+            if (p > 0) return '#d1fae5';   // Emerald 100
+            
+            if (p === 0) return '#64748b'; // Slate 500
+            
+            // Loss colors (matching PortfolioHeatmap)
+            if (p > -1.5) return '#fee2e2'; // Red 100
+            if (p > -3) return '#fca5a5';   // Red 300
+            if (p > -5) return '#f87171';   // Red 400
+            if (p > -10) return '#ef4444';  // Red 500
+            return '#b91c1c';                     // Red 700
           }}
           nodeOpacity={1}
-          borderWidth={0}
-          label={(node) => {
-            const d = node.data as any as { name: string; changePercent?: number };
-            if (d.changePercent === undefined) return d.name;
-            const sign = d.changePercent >= 0 ? '+' : '';
-            return `${d.name}\n${sign}${d.changePercent.toFixed(2)}%`;
+          nodeComponent={({ node }) => {
+            const percent = (node.data as { changePercent?: number }).changePercent;
+            if (percent === undefined) return null;
+            
+            // Determine text color based on background brightness
+            let textColor = '#ffffff';
+            if (percent > 0 && percent < 5) textColor = '#0f172a'; // Dark text for < 5% gain
+            if (percent < 0 && percent > -5) textColor = '#0f172a'; // Dark text for < 5% loss
+            const showSymbol = node.width > 35 && node.height > 30;
+            const showPercent = node.width > 45 && node.height > 45;
+            
+            return (
+              <motion.g 
+                key={node.id}
+                initial={{ opacity: 0, scale: 0.9, x: node.x, y: node.y }}
+                animate={{ opacity: 1, scale: 1, x: node.x, y: node.y }}
+                transition={{ 
+                  type: "spring", 
+                  damping: 20, 
+                  stiffness: 300, 
+                  delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100 
+                }}
+                style={{ cursor: 'pointer' }} 
+                onMouseEnter={node.onMouseEnter} 
+                onMouseMove={node.onMouseMove} 
+                onMouseLeave={node.onMouseLeave} 
+                onClick={node.onClick}
+              >
+                <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={3} rx={4} ry={4} />
+                {showSymbol && (
+                  <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" style={{ pointerEvents: 'none' }}>
+                    <tspan x={node.width / 2} dy={showPercent ? "-0.7em" : "0.3em"} fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id}</tspan>
+                    {showPercent && typeof percent === 'number' && (
+                      <tspan x={node.width / 2} dy="1.5em" fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{percent > 0 ? '+' : ''}{percent.toFixed(2)}%</tspan>
+                    )}
+                  </text>
+                )}
+              </motion.g>
+            );
           }}
-          labelTextColor="#ffffff"
-          orientLabel={false}
-          theme={{
-            labels: {
-              text: {
-                fontSize: isMobile ? 10 : 12,
-                fontWeight: 600,
-                fontFamily: 'inherit',
-                whiteSpace: 'pre-wrap',
-                textShadow: '0px 1px 2px rgba(0,0,0,0.6)',
-              },
-            },
-            tooltip: {
-              container: {
-                background: 'rgba(15, 23, 42, 0.9)',
-                color: '#fff',
-                fontSize: '12px',
-                borderRadius: '8px',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(8px)',
-              },
-            },
-          }}
+          enableLabel={false}
+          theme={{ tooltip: { container: { background: 'transparent', color: '#fff', padding: 0, borderRadius: '8px', boxShadow: 'none' } } }}
           tooltip={({ node }) => {
             const d = node.data as any as { name: string; changePercent?: number; lastPrice?: number };
             const p = d.changePercent;
             
             if (p === undefined || d.lastPrice === undefined) return null;
 
-            const sign = p >= 0 ? '+' : '';
-            const color = p >= 0 ? 'text-emerald-400' : 'text-rose-400';
+            const isPositive = p >= 0;
             return (
-              <div className="px-3 py-2 flex flex-col gap-1">
-                <span className="font-bold text-gray-200">{d.name}</span>
-                <span className="text-gray-400">
-                  Val: <span className="text-white font-medium">{d.lastPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                </span>
-                <span className={color}>
-                  {sign}{p.toFixed(2)}%
-                </span>
+              <div className="backdrop-blur-md bg-slate-900/90 border border-white/10 p-3 rounded-xl shadow-2xl min-w-[160px]">
+                 <div className="flex items-center gap-4 mb-2">
+                    <span className="font-bold text-white text-sm tracking-wide">{d.name}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-slate-700/50 text-gray-400">Sector</span>
+                 </div>
+                 
+                 <div className="flex items-baseline gap-1 mt-1">
+                    <span className={`text-lg font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {isPositive ? '+' : ''}{p.toFixed(2)}%
+                    </span>
+                 </div>
+                 
+                 <div className="mt-2 pt-2 border-t border-white/5 flex flex-col gap-0.5">
+                    <div className="flex justify-between text-[10px] text-gray-400">
+                        <span>Value</span>
+                        <span className="text-gray-200 font-mono">{d.lastPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                 </div>
               </div>
             );
           }}
