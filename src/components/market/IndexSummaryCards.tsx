@@ -170,19 +170,7 @@ export default function IndexSummaryCards({ indices, selectedIndex, onSelectInde
         clickable={true}
       />
 
-      {/* Sectoral Indices — display only, not clickable */}
-      {groups.sectoral.length > 0 && (
-        <div>
-          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider mb-1.5 block pl-0.5">Sectoral</span>
-          <IndexCardGrid
-            indices={groups.sectoral}
-            selectedIndex={selectedIndex}
-            onSelectIndex={onSelectIndex}
-            isMobile={isMobile}
-            clickable={false}
-          />
-        </div>
-      )}
+      {/* Sectoral Indices are no longer rendered as cards, replaced by the Sectoral Heatmap at the top */}
     </div>
   );
 }
