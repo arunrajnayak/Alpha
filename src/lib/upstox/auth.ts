@@ -206,6 +206,7 @@ export async function getWebSocketAuthUrl(): Promise<string> {
   const accessToken = await getAccessToken();
   
   const response = await fetch('https://api.upstox.com/v3/feed/market-data-feed/authorize', {
+    cache: 'no-store',
     headers: {
       'Accept': 'application/json',
       'Authorization': `Bearer ${accessToken}`,

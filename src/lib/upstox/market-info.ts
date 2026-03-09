@@ -44,6 +44,7 @@ export async function getMarketHolidays(date?: string): Promise<MarketHoliday[]>
     : `${BASE_URL}/market/holidays`;
 
   const response = await fetch(url, {
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -205,6 +206,7 @@ export async function getMarketTimings(date: string): Promise<MarketTiming[]> {
   const url = `${BASE_URL}/market/timings/${date}`;
 
   const response = await fetch(url, {
+    cache: 'no-store',
     headers: {
       'Accept': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
