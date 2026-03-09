@@ -106,6 +106,7 @@ export async function getHistoricalCandles(
   const url = `${BASE_URL_V3}/historical-candle/${encodedKey}/${unit}/${intervalValue}/${toDate}/${fromDate}`;
 
   const response = await fetch(url, {
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -166,6 +167,7 @@ export async function getLiveQuotes(
 
     try {
       const response = await fetch(url, {
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -248,6 +250,7 @@ export async function getFullQuotes(
     .join(',')}`;
 
   const response = await fetch(url, {
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -296,6 +299,7 @@ export async function getOHLC(
     .join(',')}&interval=${interval}`;
 
   const response = await fetch(url, {
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
