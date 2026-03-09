@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TopMoversProps {
   topGainers: Array<{
@@ -32,10 +32,12 @@ function MoverRow({ stock, index, type }: { stock: { symbol: string; changePerce
   const isGain = type === 'gain';
   return (
     <motion.div
+      layout
       className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-white/[0.03] transition-colors"
       variants={itemVariants}
       initial="hidden"
       animate="visible"
+      exit="hidden"
       custom={index}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -69,9 +71,11 @@ export default function TopMovers({ topGainers, topLosers, totalConstituents, is
           </div>
         </div>
         <div className="divide-y divide-white/[0.03]">
-          {topGainers.slice(0, display).map((stock, i) => (
-            <MoverRow key={stock.symbol} stock={stock} index={i} type="gain" />
-          ))}
+          <AnimatePresence mode="popLayout">
+            {topGainers.slice(0, display).map((stock, i) => (
+              <MoverRow key={stock.symbol} stock={stock} index={i} type="gain" />
+            ))}
+          </AnimatePresence>
           {topGainers.length === 0 && (
             <p className="text-gray-500 text-sm py-4 text-center">No gainers</p>
           )}
@@ -87,9 +91,11 @@ export default function TopMovers({ topGainers, topLosers, totalConstituents, is
           </div>
         </div>
         <div className="divide-y divide-white/[0.03]">
-          {topLosers.slice(0, display).map((stock, i) => (
-            <MoverRow key={stock.symbol} stock={stock} index={i} type="loss" />
-          ))}
+          <AnimatePresence mode="popLayout">
+            {topLosers.slice(0, display).map((stock, i) => (
+              <MoverRow key={stock.symbol} stock={stock} index={i} type="loss" />
+            ))}
+          </AnimatePresence>
           {topLosers.length === 0 && (
             <p className="text-gray-500 text-sm py-4 text-center">No losers</p>
           )}

@@ -85,9 +85,27 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
                 onMouseLeave={node.onMouseLeave}
                 onClick={node.onClick}
               >
-                <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={2} rx={3} ry={3} />
+                <motion.rect 
+                  initial={{ width: node.width, height: node.height }}
+                  animate={{ width: node.width, height: node.height }} 
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                  fill={node.color} 
+                  stroke="#0f172a" 
+                  strokeWidth={2} 
+                  rx={3} 
+                  ry={3} 
+                />
                 {showSymbol && (
-                  <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" style={{ pointerEvents: 'none' }}>
+                  <motion.text 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1 }}
+                    x={node.width / 2} 
+                    y={node.height / 2} 
+                    textAnchor="middle" 
+                    dominantBaseline="middle" 
+                    style={{ pointerEvents: 'none' }}
+                  >
                     <tspan
                       x={node.width / 2}
                       dy={showPercent ? '-0.7em' : '0.3em'}
@@ -111,7 +129,7 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
                         {percent > 0 ? '+' : ''}{percent.toFixed(1)}%
                       </tspan>
                     )}
-                  </text>
+                  </motion.text>
                 )}
               </motion.g>
             );

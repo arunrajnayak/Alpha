@@ -31,6 +31,7 @@ interface UseUpstoxStreamReturn {
   priceMap: Map<string, PriceUpdate>;
   reconnect: () => void;
   disconnect: () => void;
+  subscribeToInstruments: (instruments: {instrumentKey: string, symbol: string}[]) => void;
 }
 
 interface AuthResponse {
@@ -226,6 +227,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
   const enabledRef = useRef(enabled);
   const symbolMapRef = useRef<Record<string, string>>({});
   const instrumentKeysRef = useRef<string[]>([]);
+  const dynamicKeysRef = useRef<Set<string>>(new Set());
   const protoRootRef = useRef<protobuf.Root | null>(null);
 
   // Callback refs
@@ -332,22 +334,44 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
   }, []);
 
   const subscribe = useCallback((ws: WebSocket) => {
-    if (instrumentKeysRef.current.length === 0) return;
+    // Combine base keys and dynamic keys, filter out empty strings
+    const allKeys = Array.from(new Set([
+      ...instrumentKeysRef.current,
+      ...Array.from(dynamicKeysRef.current)
+    ])).filter(Boolean);
+
+    if (allKeys.length === 0) return;
 
     const subscribeMessage = {
       guid: `portfolio-${Date.now()}`,
       method: 'sub',
       data: {
         mode: 'ltpc',
-        instrumentKeys: instrumentKeysRef.current,
+        instrumentKeys: allKeys,
       },
     };
 
     // Send as binary (required by Upstox V3)
     const encoder = new TextEncoder();
     ws.send(encoder.encode(JSON.stringify(subscribeMessage)));
-    console.log(`[UpstoxStream] Subscribed to ${instrumentKeysRef.current.length} instruments`);
+    console.log(`[UpstoxStream] Subscribed to ${allKeys.length} instruments`);
   }, []);
+
+  const subscribeToInstruments = useCallback((instruments: {instrumentKey: string, symbol: string}[]) => {
+    let addedNew = false;
+    for (const inst of instruments) {
+      if (inst.instrumentKey && !dynamicKeysRef.current.has(inst.instrumentKey)) {
+        dynamicKeysRef.current.add(inst.instrumentKey);
+        symbolMapRef.current[inst.instrumentKey] = inst.symbol;
+        addedNew = true;
+      }
+    }
+
+    // Only resubscribe if actual new keys were added and connection is open
+    if (addedNew && wsRef.current?.readyState === WebSocket.OPEN) {
+      subscribe(wsRef.current);
+    }
+  }, [subscribe]);
 
   const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -480,6 +504,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
     priceMap,
     reconnect,
     disconnect,
+    subscribeToInstruments,
   };
 }
 

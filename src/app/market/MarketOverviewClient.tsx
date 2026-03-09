@@ -11,6 +11,7 @@ import TopMovers from '@/components/market/TopMovers';
 import IndexSummaryCards from '@/components/market/IndexSummaryCards';
 import { useLiveData } from '@/context/LiveDataContext';
 import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
+import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 const SectoralHeatmap = dynamic(() => import('@/components/market/SectoralHeatmap'), {
   loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -42,7 +43,7 @@ interface IndexSummary {
   instrumentKey: string;
 }
 
-const UPDATE_INTERVAL_MS = 1000; // Batch UI updates every 1 second
+const UPDATE_INTERVAL_MS = 5000; // Batch UI updates every 5 seconds
 
 interface MarketOverviewClientProps {
   initialSummaries: IndexSummary[];
@@ -285,7 +286,7 @@ export default function MarketOverviewClient({
   }, []);
 
   // Web Socket Hook - use the shared stream from LiveDataContext
-  const { streamStatus, subscribeToPrices } = useLiveData();
+  const { streamStatus, subscribeToPrices, subscribeToInstruments } = useLiveData();
   const showStreaming = isVisible && isMarketOpen() && !!tokenStatus?.hasToken;
 
   useEffect(() => {
@@ -293,6 +294,18 @@ export default function MarketOverviewClient({
       return subscribeToPrices(handlePriceUpdate);
     }
   }, [showStreaming, subscribeToPrices, handlePriceUpdate]);
+
+  // Subscribe dynamic index constituents to the WebSocket
+  useEffect(() => {
+    if (showStreaming && data && data.constituents.length > 0) {
+      subscribeToInstruments(
+        data.constituents.map(c => ({
+          instrumentKey: c.instrumentKey,
+          symbol: c.symbol,
+        }))
+      );
+    }
+  }, [showStreaming, data?.constituents, subscribeToInstruments]);
 
   const isStreaming = streamStatus === 'connected';
 
@@ -420,12 +433,13 @@ export default function MarketOverviewClient({
               <span className="text-lg sm:text-[19px] font-extrabold text-white tracking-tight">{data.indexName}</span>
               {data.indexValue > 0 && (
                 <span className="text-lg sm:text-[19px] font-bold text-gray-100 tabular-nums">
-                  {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  <AnimatedNumber value={data.indexValue} formatOptions={{ maximumFractionDigits: 0 }} />
                 </span>
               )}
               {data.indexValue > 0 && (
-                <span className={`text-sm sm:text-[15px] font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                  {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
+                <span className={`text-sm sm:text-[15px] font-bold tabular-nums flex items-center ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                  {data.indexChangePercent >= 0 ? '+' : ''}
+                  <AnimatedNumber value={data.indexChangePercent} decimals={2} />%
                 </span>
               )}
               <span className="text-[11px] font-medium text-gray-400 px-2 py-0.5 rounded flex items-center bg-slate-800/80 border border-white/5 ml-1">

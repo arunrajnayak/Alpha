@@ -38,6 +38,7 @@ interface LiveDataContextType {
   pnlHistory: PnLHistoryPoint[];
   // Shared WebSocket subscription
   subscribeToPrices: (callback: (updates: PriceUpdate[]) => void) => () => void;
+  subscribeToInstruments: (instruments: {instrumentKey: string, symbol: string}[]) => void;
 }
 
 const LiveDataContext = createContext<LiveDataContextType | undefined>(undefined);
@@ -425,17 +426,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   const [isVisible, setIsVisible] = useState(true);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsVisible(!document.hidden);
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
-
   // Use Upstox stream hook for direct WebSocket connection
-  const { status: streamStatus } = useUpstoxStream({
+  const { status: streamStatus, subscribeToInstruments } = useUpstoxStream({
     enabled: isVisible && streamingEnabled && isMarketHours && !!data?.tokenStatus?.hasToken,
     onPriceUpdate: handlePriceUpdate,
     onStatusChange: handleStreamStatusChange,
@@ -575,7 +567,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <LiveDataContext.Provider value={{ 
+    <LiveDataContext.Provider value={{
       data, 
       prevData, 
       loading, 
@@ -593,6 +585,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       clearConnectionError,
       pnlHistory,
       subscribeToPrices,
+      subscribeToInstruments,
     }}>
       {children}
     </LiveDataContext.Provider>
