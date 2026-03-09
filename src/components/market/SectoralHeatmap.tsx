@@ -71,7 +71,8 @@ export default function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapPr
           nodeOpacity={1}
           borderWidth={0}
           label={(node) => {
-            const d = node.data as any as { name: string; changePercent: number };
+            const d = node.data as any as { name: string; changePercent?: number };
+            if (d.changePercent === undefined) return d.name;
             const sign = d.changePercent >= 0 ? '+' : '';
             return `${d.name}\n${sign}${d.changePercent.toFixed(2)}%`;
           }}
@@ -100,8 +101,11 @@ export default function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapPr
             },
           }}
           tooltip={({ node }) => {
-            const d = node.data as any as { name: string; changePercent: number; lastPrice: number };
+            const d = node.data as any as { name: string; changePercent?: number; lastPrice?: number };
             const p = d.changePercent;
+            
+            if (p === undefined || d.lastPrice === undefined) return null;
+
             const sign = p >= 0 ? '+' : '';
             const color = p >= 0 ? 'text-emerald-400' : 'text-rose-400';
             return (
