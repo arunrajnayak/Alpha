@@ -149,8 +149,8 @@ export default function MarketOverviewClient({
     lastBatchAppliedRef.current = Date.now();
 
     const updateMap = new Map<string, PriceUpdate>();
-    for (const [, update] of updates) {
-      updateMap.set(update.symbol, update);
+    for (const [key, update] of updates) {
+      updateMap.set(key, update);
     }
 
     // 1. Update Index Summaries
@@ -250,6 +250,9 @@ export default function MarketOverviewClient({
   const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {
     for (const update of updates) {
       pendingUpdatesRef.current.set(update.symbol, update);
+      if (update.instrumentKey) {
+        pendingUpdatesRef.current.set(update.instrumentKey, update);
+      }
     }
     
     const now = Date.now();

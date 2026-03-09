@@ -4,8 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { getLiveDashboardData, LiveDashboardData, LiveStockData, BreadthByCategory, saveIntradayPnL, getIntradayPnLHistory, IntradayPnLPoint } from '@/app/actions/live';
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 
-// Update interval in milliseconds (5 seconds)
-const UPDATE_INTERVAL_MS = 5000;
+// Update interval in milliseconds (1 second)
+const UPDATE_INTERVAL_MS = 1000;
 
 // Re-export for component use
 export type PnLHistoryPoint = IntradayPnLPoint;
@@ -160,8 +160,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
       // Create a map of updates for quick lookup (by symbol)
       const updateMap = new Map<string, PriceUpdate>();
-      for (const [, update] of updates) {
-        updateMap.set(update.symbol, update);
+      for (const [key, update] of updates) {
+        updateMap.set(key, update);
       }
       
       // Update allHoldings with new prices
@@ -336,6 +336,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     // Accumulate updates in the pending map (latest update wins for each symbol)
     for (const update of updates) {
       pendingUpdatesRef.current.set(update.symbol, update);
+      if (update.instrumentKey) {
+        pendingUpdatesRef.current.set(update.instrumentKey, update);
+      }
     }
     
     // Schedule batch application if not already scheduled
