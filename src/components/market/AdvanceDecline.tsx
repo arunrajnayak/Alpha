@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 
 interface AdvanceDeclineProps {
@@ -8,7 +9,7 @@ interface AdvanceDeclineProps {
   unchanged: number;
 }
 
-export default function AdvanceDecline({ advancing, declining, unchanged }: AdvanceDeclineProps) {
+export default memo(function AdvanceDecline({ advancing, declining, unchanged }: AdvanceDeclineProps) {
   const total = advancing + declining + unchanged;
   if (total === 0) return null;
 
@@ -55,4 +56,4 @@ export default function AdvanceDecline({ advancing, declining, unchanged }: Adva
       </div>
     </div>
   );
-}
+});

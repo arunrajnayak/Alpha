@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TopMoversProps {
@@ -55,7 +56,7 @@ function MoverRow({ stock, index, type }: { stock: { symbol: string; changePerce
   );
 }
 
-export default function TopMovers({ topGainers, topLosers, totalConstituents, isMobile }: TopMoversProps) {
+export default memo(function TopMovers({ topGainers, topLosers, totalConstituents, isMobile }: TopMoversProps) {
   if (topGainers.length === 0 && topLosers.length === 0) return null;
 
   const display = isMobile ? 5 : (totalConstituents < 200 ? 5 : 10);
@@ -103,4 +104,4 @@ export default function TopMovers({ topGainers, topLosers, totalConstituents, is
       </div>
     </div>
   );
-}
+});

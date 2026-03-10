@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { fetchMarketOverview, fetchAllIndexSummaries } from '@/app/actions/market-overview';
@@ -72,6 +72,11 @@ export default function MarketOverviewClient({
   const pendingUpdatesRef = useRef<Map<string, PriceUpdate>>(new Map());
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastBatchAppliedRef = useRef<number>(0);
+
+  // Refs for avoiding stale closures and unnecessary effect restarts
+  const isVisibleRef = useRef(true);
+  const selectedIndexRef = useRef(selectedIndex);
+  useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
 
   // Responsive check
   useEffect(() => {
@@ -151,13 +156,10 @@ export default function MarketOverviewClient({
     const updates = pendingUpdatesRef.current;
     if (updates.size === 0) return;
 
+    // Swap out pending map atomically — no need to copy
+    const updateMap = updates;
     pendingUpdatesRef.current = new Map();
     lastBatchAppliedRef.current = Date.now();
-
-    const updateMap = new Map<string, PriceUpdate>();
-    for (const [key, update] of updates) {
-      updateMap.set(key, update);
-    }
 
     // 1. Update Index Summaries
     setIndexSummaries(prev => prev.map(idx => {
@@ -255,8 +257,10 @@ export default function MarketOverviewClient({
 
   }, [updateTimestamp]); // No stale dependencies — uses refs for external state
 
-  // Buffer incoming WebSocket ticks
+  // Buffer incoming WebSocket ticks — skip when tab is hidden
   const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {
+    if (!isVisibleRef.current) return; // Don't buffer when tab is hidden
+
     for (const update of updates) {
       pendingUpdatesRef.current.set(update.symbol, update);
       if (update.instrumentKey) {
@@ -283,15 +287,21 @@ export default function MarketOverviewClient({
 
   const [isVisible, setIsVisible] = useState(true);
 
-  // Monitor tab visibility
+  // Monitor tab visibility — flush pending updates when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
-      setIsVisible(!document.hidden);
+      const visible = !document.hidden;
+      setIsVisible(visible);
+      isVisibleRef.current = visible;
+      // Flush any pending updates when tab becomes visible again
+      if (visible && pendingUpdatesRef.current.size > 0) {
+        applyBatchedUpdates();
+      }
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+  }, [applyBatchedUpdates]);
 
   // Web Socket Hook - use the shared stream from LiveDataContext
   const { streamStatus, subscribeToPrices, subscribeToInstruments } = useLiveData();
@@ -303,7 +313,13 @@ export default function MarketOverviewClient({
     }
   }, [showStreaming, subscribeToPrices, handlePriceUpdate]);
 
-  // Subscribe dynamic index constituents to the WebSocket
+  // Stable subscription key — only changes when the actual set of instruments changes
+  // (i.e. on index switch), NOT on every streaming price update
+  const constituentSubscriptionKey = useMemo(() => {
+    if (!data?.constituents) return '';
+    return data.constituents.map(c => c.instrumentKey).sort().join(',');
+  }, [data?.constituents]);
+
   useEffect(() => {
     if (showStreaming && data && data.constituents.length > 0) {
       subscribeToInstruments(
@@ -313,18 +329,20 @@ export default function MarketOverviewClient({
         }))
       );
     }
-  }, [showStreaming, data?.constituents, subscribeToInstruments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showStreaming, constituentSubscriptionKey, subscribeToInstruments]);
 
   const isStreaming = streamStatus === 'connected';
 
   // REST Refresh loop (fallback/sync)
+  // Uses refs for selectedIndex so the interval doesn't restart on every index switch
   useEffect(() => {
     if (isStreaming) {
-      // When streaming, only do a full REST sync every 5 minutes for data consistency
+      // When streaming, only sync summaries every 5 min (lightweight)
+      // Full constituent data comes from WebSocket — no need for loadData
       dataRefreshRef.current = setInterval(() => {
         if (isMarketOpen()) {
           loadSummaries(false);
-          loadData(selectedIndex);
         }
       }, 300000);
     } else {
@@ -332,7 +350,7 @@ export default function MarketOverviewClient({
       dataRefreshRef.current = setInterval(() => {
         if (isMarketOpen()) {
           loadSummaries(false);
-          loadData(selectedIndex);
+          loadData(selectedIndexRef.current);
         }
       }, 30000);
     }
@@ -340,7 +358,7 @@ export default function MarketOverviewClient({
     return () => {
       if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
     };
-  }, [isStreaming, selectedIndex, loadData, loadSummaries]);
+  }, [isStreaming, loadData, loadSummaries]);
 
   // Cleanup update timer
   useEffect(() => {
