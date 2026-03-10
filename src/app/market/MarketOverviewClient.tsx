@@ -353,20 +353,55 @@ export default function MarketOverviewClient({
     setSelectedIndex(name);
   }, []);
 
-  // ... Loading Skeleton ...
+  // ... Loading Skeleton (full page initial load) ...
   if (summariesLoading && indexSummaries.length === 0) {
     return (
-      <div className="flex flex-col gap-6 pb-8 min-h-screen pt-2 animate-pulse">
-        <div className="flex gap-3 overflow-hidden">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-[80px] w-[140px] bg-slate-800/50 rounded-xl shrink-0" />
+      <div className="flex flex-col gap-4 md:gap-6 pb-8 min-h-screen pt-2 animate-pulse">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-7 w-44 bg-slate-800/60 rounded-lg" />
+            <div className="h-3 w-28 bg-slate-800/40 rounded mt-1.5" />
+          </div>
+          <div className="h-8 w-20 bg-slate-800/50 rounded-lg" />
+        </div>
+        {/* Sectoral Heatmap Skeleton */}
+        <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
+          <div className="px-5 pt-5 pb-2">
+            <div className="h-3 w-32 bg-slate-800/50 rounded" />
+          </div>
+          <div className="h-[350px] md:h-[400px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+        </div>
+        {/* Index Card Grid Skeleton */}
+        <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+          {[...Array(12)].map((_, i) => (
+            <div key={i} className="h-[68px] bg-slate-800/50 rounded-xl border border-white/5" />
           ))}
         </div>
-        <div className="h-[500px] bg-slate-800/50 rounded-2xl" />
-        <div className="h-[80px] bg-slate-800/50 rounded-2xl" />
+        {/* Index Stats Bar Skeleton */}
+        <div className="h-[56px] bg-slate-900/40 rounded-2xl border border-white/5" />
+        {/* Heatmap Skeleton */}
+        <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
+          <div className="px-5 pt-5 pb-2">
+            <div className="h-3 w-28 bg-slate-800/50 rounded" />
+          </div>
+          <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+        </div>
+        {/* Top Movers Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="h-[400px] bg-slate-800/50 rounded-2xl" />
-          <div className="h-[400px] bg-slate-800/50 rounded-2xl" />
+          {[0, 1].map(i => (
+            <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
+              <div className="h-4 w-24 bg-slate-800/50 rounded mb-4" />
+              <div className="flex flex-col gap-3">
+                {[...Array(5)].map((_, j) => (
+                  <div key={j} className="flex justify-between items-center">
+                    <div className="h-3.5 w-20 bg-slate-800/40 rounded" />
+                    <div className="h-5 w-14 bg-slate-800/40 rounded-md" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -437,9 +472,41 @@ export default function MarketOverviewClient({
 
       {/* Content: loading state per-index */}
       {loading && !data ? (
-        <div className="flex flex-col gap-6 animate-pulse">
-          <div className="h-[500px] bg-slate-800/50 rounded-2xl" />
-          <div className="h-[80px] bg-slate-800/50 rounded-2xl" />
+        <div className="flex flex-col gap-4 md:gap-6 animate-pulse">
+          {/* Index Stats Bar Skeleton */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-5 sm:py-3.5">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-28 bg-slate-800/60 rounded" />
+              <div className="h-5 w-20 bg-slate-800/50 rounded" />
+              <div className="h-5 w-16 bg-slate-800/40 rounded" />
+            </div>
+            <div className="flex-1 flex justify-end">
+              <div className="h-4 w-48 bg-slate-800/40 rounded-full" />
+            </div>
+          </div>
+          {/* Heatmap Skeleton */}
+          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
+            <div className="px-5 pt-5 pb-2">
+              <div className="h-3 w-28 bg-slate-800/50 rounded" />
+            </div>
+            <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+          </div>
+          {/* Top Movers Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[0, 1].map(i => (
+              <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
+                <div className="h-4 w-24 bg-slate-800/50 rounded mb-4" />
+                <div className="flex flex-col gap-3">
+                  {[...Array(5)].map((_, j) => (
+                    <div key={j} className="flex justify-between items-center">
+                      <div className="h-3.5 w-20 bg-slate-800/40 rounded" />
+                      <div className="h-5 w-14 bg-slate-800/40 rounded-md" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : data ? (
         <>

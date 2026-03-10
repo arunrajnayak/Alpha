@@ -2,7 +2,6 @@
 
 import { memo, useMemo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
-import { motion } from 'framer-motion';
 
 interface MarketHeatmapProps {
   constituents: Array<{
@@ -18,22 +17,29 @@ interface MarketHeatmapProps {
 export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHeatmapProps) {
   if (!constituents || constituents.length === 0) return null;
 
-  // Use index weight for sizing (higher weight = bigger tile)
-  // Fall back to equal weight if no weight data
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const count = constituents.length;
+
+  // Dynamic height: scale up for indices with many constituents
+  const height = useMemo(() => {
+    if (isMobile) return count > 100 ? 500 : 350;
+    if (count > 200) return 700;
+    if (count > 100) return 600;
+    return 500;
+  }, [count, isMobile]);
+
   const treeData = useMemo(() => ({
     name: 'Market',
     color: 'transparent',
     children: constituents.map(c => ({
       name: c.symbol,
-      value: Math.max(c.weight, 0.01), // floor for visibility
+      value: Math.max(c.weight, 0.01),
       changePercent: c.changePercent,
       lastPrice: c.lastPrice,
     })),
   }), [constituents]);
 
   return (
-    <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height: isMobile ? '350px' : '500px' }}>
+    <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height }}>
       <div className="px-5 pt-5 pb-2 shrink-0">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Market Heatmap</h3>
       </div>
@@ -44,8 +50,8 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
           value="value"
           margin={{ top: 0, right: 4, bottom: 4, left: 4 }}
           labelSkipSize={isMobile ? 40 : 28}
-          innerPadding={2}
-          outerPadding={2}
+          innerPadding={count > 100 ? 1 : 2}
+          outerPadding={count > 100 ? 1 : 2}
           colors={(node) => {
             const d = node.data as { changePercent?: number };
             const p = d.changePercent;
@@ -72,46 +78,44 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
             if (percent > 0 && percent < 5) textColor = '#0f172a';
             if (percent < 0 && percent > -5) textColor = '#0f172a';
 
-            const showSymbol = node.width > 35 && node.height > 30;
-            const showPercent = node.width > 45 && node.height > 45;
+            // Use tile area to decide what to show — works for any index size
+            const area = node.width * node.height;
+            const showSymbol = area > 2500 && node.width > 30 && node.height > 18;
+            const showPercent = area > 5000 && node.width > 40 && node.height > 32;
+
+            // Scale font to tile size, with hard min/max
+            const fontSize = Math.max(6, Math.min(node.width / 6, node.height / 3, isMobile ? 9 : 11));
 
             return (
-              <motion.g
-                key={node.id}
-                initial={{ opacity: 0, scale: 0.9, x: node.x, y: node.y }}
-                animate={{ opacity: 1, scale: 1, x: node.x, y: node.y }}
-                transition={{ type: 'spring', damping: 20, stiffness: 300, delay: (node.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 20) / 100 }}
+              <g
                 style={{ cursor: 'pointer' }}
+                transform={`translate(${node.x},${node.y})`}
                 onMouseEnter={node.onMouseEnter}
                 onMouseMove={node.onMouseMove}
                 onMouseLeave={node.onMouseLeave}
                 onClick={node.onClick}
               >
-                <motion.rect 
-                  initial={{ width: node.width, height: node.height }}
-                  animate={{ width: node.width, height: node.height }} 
-                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                  fill={node.color} 
-                  stroke="#0f172a" 
-                  strokeWidth={2} 
-                  rx={3} 
-                  ry={3} 
+                <rect
+                  width={node.width}
+                  height={node.height}
+                  fill={node.color}
+                  stroke="#0f172a"
+                  strokeWidth={count > 100 ? 1 : 2}
+                  rx={count > 100 ? 1 : 3}
+                  ry={count > 100 ? 1 : 3}
                 />
                 {showSymbol && (
-                  <motion.text 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                    x={node.width / 2} 
-                    y={node.height / 2} 
-                    textAnchor="middle" 
-                    dominantBaseline="middle" 
+                  <text
+                    x={node.width / 2}
+                    y={node.height / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
                     style={{ pointerEvents: 'none' }}
                   >
                     <tspan
                       x={node.width / 2}
-                      dy={showPercent ? '-0.7em' : '0.3em'}
-                      fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)}
+                      dy={showPercent ? '-0.6em' : '0.3em'}
+                      fontSize={fontSize}
                       fontWeight="700"
                       fill={textColor}
                       style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}
@@ -121,8 +125,8 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
                     {showPercent && typeof percent === 'number' && (
                       <tspan
                         x={node.width / 2}
-                        dy="1.5em"
-                        fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)}
+                        dy="1.4em"
+                        fontSize={fontSize * 0.85}
                         fontWeight="600"
                         fill={textColor}
                         fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8}
@@ -131,9 +135,9 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
                         {percent > 0 ? '+' : ''}{percent.toFixed(1)}%
                       </tspan>
                     )}
-                  </motion.text>
+                  </text>
                 )}
-              </motion.g>
+              </g>
             );
           }}
           enableLabel={false}
@@ -162,3 +166,4 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
     </div>
   );
 });
+
