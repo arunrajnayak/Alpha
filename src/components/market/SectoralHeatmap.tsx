@@ -1,8 +1,8 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
 import { motion } from 'framer-motion';
-import { useMemo } from 'react';
 
 interface IndexSummary {
   name: string;
@@ -18,7 +18,7 @@ interface SectoralHeatmapProps {
   isMobile: boolean;
 }
 
-export default function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapProps) {
+export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapProps) {
   // Filter for sectoral indices that actually have data
   const sectoralIndices = useMemo(() => {
     return indices
@@ -151,4 +151,4 @@ export default function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapPr
       </div>
     </div>
   );
-}
+});

@@ -1,8 +1,8 @@
 import { fetchMarketOverview, fetchAllIndexSummaries } from '@/app/actions/market-overview';
 import MarketOverviewClient from './MarketOverviewClient';
 
-// Enable caching for the pre-fetched structural data
-export const revalidate = 60; // Cache responses for up to 60s at edge to prevent thrashing
+// No SSR caching — always fetch fresh data on page load
+export const dynamic = 'force-dynamic';
 
 export default async function MarketOverviewPage() {
   // Pre-fetch initial data on the server in parallel!

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
 import { motion } from 'framer-motion';
 
@@ -14,12 +15,13 @@ interface MarketHeatmapProps {
   isMobile: boolean;
 }
 
-export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapProps) {
+export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHeatmapProps) {
   if (!constituents || constituents.length === 0) return null;
 
   // Use index weight for sizing (higher weight = bigger tile)
   // Fall back to equal weight if no weight data
-  const treeData = {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const treeData = useMemo(() => ({
     name: 'Market',
     color: 'transparent',
     children: constituents.map(c => ({
@@ -28,7 +30,7 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
       changePercent: c.changePercent,
       lastPrice: c.lastPrice,
     })),
-  };
+  }), [constituents]);
 
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height: isMobile ? '350px' : '500px' }}>
@@ -159,4 +161,4 @@ export default function MarketHeatmap({ constituents, isMobile }: MarketHeatmapP
       </div>
     </div>
   );
-}
+});

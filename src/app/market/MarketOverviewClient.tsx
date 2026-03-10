@@ -11,7 +11,6 @@ import TopMovers from '@/components/market/TopMovers';
 import IndexSummaryCards from '@/components/market/IndexSummaryCards';
 import { useLiveData } from '@/context/LiveDataContext';
 import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
-import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 const SectoralHeatmap = dynamic(() => import('@/components/market/SectoralHeatmap'), {
   loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -43,7 +42,7 @@ interface IndexSummary {
   instrumentKey: string;
 }
 
-const UPDATE_INTERVAL_MS = 5000; // Batch UI updates every 5 seconds
+const UPDATE_INTERVAL_MS = 1000; // Batch UI updates every 1 second (matches Live page)
 
 interface MarketOverviewClientProps {
   initialSummaries: IndexSummary[];
@@ -141,6 +140,12 @@ export default function MarketOverviewClient({
     loadData(selectedIndex);
   }, [selectedIndex, loadData]);
 
+  // Keep a ref to indexSummaries to avoid stale closures in applyBatchedUpdates
+  const indexSummariesRef = useRef(indexSummaries);
+  useEffect(() => {
+    indexSummariesRef.current = indexSummaries;
+  }, [indexSummaries]);
+
   // Handle batched streaming updates to avoid UI stutter
   const applyBatchedUpdates = useCallback(() => {
     const updates = pendingUpdatesRef.current;
@@ -200,9 +205,10 @@ export default function MarketOverviewClient({
       let newIndexChange = currentData.indexChange;
       let newIndexChangePercent = currentData.indexChangePercent;
 
-      // Find the currently selected index in summaries to check if its value updated
+      // Use ref to avoid stale closure — read current summaries
+      const currentSummaries = indexSummariesRef.current;
       const selectedIndexSummaryUpdate = Array.from(updateMap.values()).find(
-        u => indexSummaries.find(s => s.name === currentData.indexName && s.instrumentKey === u.symbol)
+        u => currentSummaries.find(s => s.name === currentData.indexName && s.instrumentKey === u.symbol)
       );
 
       if (selectedIndexSummaryUpdate && selectedIndexSummaryUpdate.ltp && selectedIndexSummaryUpdate.ltp > 0) {
@@ -231,6 +237,8 @@ export default function MarketOverviewClient({
       const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
       const topLosers = sorted.filter(c => c.changePercent < 0).reverse().slice(0, 10);
 
+      updateTimestamp();
+
       return {
         ...currentData,
         indexValue: newIndexValue,
@@ -245,7 +253,7 @@ export default function MarketOverviewClient({
       };
     });
 
-  }, [indexSummaries]);
+  }, [updateTimestamp]); // No stale dependencies — uses refs for external state
 
   // Buffer incoming WebSocket ticks
   const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {
@@ -311,15 +319,23 @@ export default function MarketOverviewClient({
 
   // REST Refresh loop (fallback/sync)
   useEffect(() => {
-    // Determine polling interval: 5 minutes if streaming is active, else 1 minute
-    const pollInterval = isStreaming ? 300000 : 60000;
-
-    dataRefreshRef.current = setInterval(() => {
-      if (isMarketOpen()) {
-        if (!isStreaming) loadSummaries(false);
-        loadData(selectedIndex);
-      }
-    }, pollInterval);
+    if (isStreaming) {
+      // When streaming, only do a full REST sync every 5 minutes for data consistency
+      dataRefreshRef.current = setInterval(() => {
+        if (isMarketOpen()) {
+          loadSummaries(false);
+          loadData(selectedIndex);
+        }
+      }, 300000);
+    } else {
+      // When NOT streaming, poll every 30 seconds for fresh data
+      dataRefreshRef.current = setInterval(() => {
+        if (isMarketOpen()) {
+          loadSummaries(false);
+          loadData(selectedIndex);
+        }
+      }, 30000);
+    }
 
     return () => {
       if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
@@ -433,13 +449,12 @@ export default function MarketOverviewClient({
               <span className="text-lg sm:text-[19px] font-extrabold text-white tracking-tight">{data.indexName}</span>
               {data.indexValue > 0 && (
                 <span className="text-lg sm:text-[19px] font-bold text-gray-100 tabular-nums">
-                  <AnimatedNumber value={data.indexValue} formatOptions={{ maximumFractionDigits: 0 }} />
+                  {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                 </span>
               )}
               {data.indexValue > 0 && (
                 <span className={`text-sm sm:text-[15px] font-bold tabular-nums flex items-center ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                  {data.indexChangePercent >= 0 ? '+' : ''}
-                  <AnimatedNumber value={data.indexChangePercent} decimals={2} />%
+                  {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
                 </span>
               )}
               <span className="text-[11px] font-medium text-gray-400 px-2 py-0.5 rounded flex items-center bg-slate-800/80 border border-white/5 ml-1">

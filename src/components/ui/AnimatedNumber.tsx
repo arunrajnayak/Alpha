@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { formatNumber } from '@/lib/format';
 
 interface AnimatedNumberProps {
@@ -15,68 +15,61 @@ interface AnimatedNumberProps {
 
 export default function AnimatedNumber({
   value,
-  duration = 1500,
+  duration = 400,
   prefix = '',
   suffix = '',
   decimals = 0,
   className = '',
   formatOptions
 }: AnimatedNumberProps) {
-  const [displayValue, setDisplayValue] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
-  const elementRef = useRef<HTMLSpanElement>(null);
+  const displayRef = useRef<HTMLSpanElement>(null);
+  const prevValueRef = useRef(value);
+  const animationRef = useRef<number>(0);
 
-  const animateValue = useCallback(() => {
-    const startTime = Date.now();
-    const startValue = 0;
-    const endValue = value;
+  const format = (v: number) =>
+    formatOptions
+      ? v.toLocaleString('en-IN', formatOptions)
+      : formatNumber(v, decimals, decimals);
 
-    const animate = () => {
-      const now = Date.now();
-      const elapsed = now - startTime;
+  useEffect(() => {
+    const from = prevValueRef.current;
+    const to = value;
+
+    // Skip animation if no change or first render with same value
+    if (from === to) {
+      if (displayRef.current) {
+        displayRef.current.textContent = `${prefix}${format(to)}${suffix}`;
+      }
+      return;
+    }
+
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing function - easeOutExpo
-      const easeOutExpo = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      
-      const currentValue = startValue + (endValue - startValue) * easeOutExpo;
-      setDisplayValue(currentValue);
+      // Ease-out cubic for smooth deceleration
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = from + (to - from) * eased;
+
+      if (displayRef.current) {
+        displayRef.current.textContent = `${prefix}${format(current)}${suffix}`;
+      }
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        prevValueRef.current = to;
       }
     };
 
-    requestAnimationFrame(animate);
-  }, [value, duration]);
-
-  useEffect(() => {
-    const element = elementRef.current;
-    if (!element) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !hasAnimated) {
-            setHasAnimated(true);
-            animateValue();
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [hasAnimated, animateValue]);
-
-  const formattedValue = formatOptions
-    ? displayValue.toLocaleString('en-IN', formatOptions)
-    : formatNumber(displayValue, decimals, decimals);
+    animationRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationRef.current);
+  }, [value, duration, decimals, prefix, suffix, formatOptions]);
 
   return (
-    <span ref={elementRef} className={className}>
-      {prefix}{formattedValue}{suffix}
+    <span ref={displayRef} className={className}>
+      {prefix}{format(value)}{suffix}
     </span>
   );
 }
