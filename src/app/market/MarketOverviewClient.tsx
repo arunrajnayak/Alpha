@@ -529,24 +529,23 @@ export default function MarketOverviewClient({
       ) : data ? (
         <>
           {/* Index Header Stats */}
-          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-8 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-5 sm:py-3.5">
-            <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap shrink-0">
-              <span className="text-lg sm:text-[19px] font-extrabold text-white tracking-tight">{data.indexName}</span>
+          <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 bg-slate-900/40 border border-white/5 rounded-2xl p-4 sm:px-5 sm:py-3.5">
+            <div className="flex flex-col shrink-0 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-base sm:text-lg font-extrabold text-white tracking-tight truncate">{data.indexName}</span>
+                {loading && (
+                  <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
               {data.indexValue > 0 && (
-                <span className="text-lg sm:text-[19px] font-bold text-gray-100 tabular-nums">
-                  {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </span>
-              )}
-              {data.indexValue > 0 && (
-                <span className={`text-sm sm:text-[15px] font-bold tabular-nums flex items-center ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                  {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
-                </span>
-              )}
-              <span className="text-[11px] font-medium text-gray-400 px-2 py-0.5 rounded flex items-center bg-slate-800/80 border border-white/5 ml-1">
-                {data.constituents.length} stocks
-              </span>
-              {loading && (
-                <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin ml-1.5" />
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="text-xl sm:text-2xl font-bold text-gray-100 tabular-nums">
+                    {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </span>
+                  <span className={`text-sm sm:text-base font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                    {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
+                  </span>
+                </div>
               )}
             </div>
 
@@ -559,13 +558,15 @@ export default function MarketOverviewClient({
             </div>
           </motion.div>
 
-          {/* Heatmap */}
-          <motion.div variants={itemVariants}>
-            <MarketHeatmap
-              constituents={data.constituents}
-              isMobile={isMobile}
-            />
-          </motion.div>
+          {/* Heatmap — hidden on mobile */}
+          {!isMobile && (
+            <motion.div variants={itemVariants}>
+              <MarketHeatmap
+                constituents={data.constituents}
+                isMobile={isMobile}
+              />
+            </motion.div>
+          )}
 
           {/* Top Movers */}
           <motion.div variants={itemVariants}>
