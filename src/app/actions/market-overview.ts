@@ -114,17 +114,35 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       batches.push(instrumentKeys.slice(i, i + BATCH_SIZE));
     }
 
-    const [batchResults, indexQuoteMap] = await Promise.all([
-      Promise.all(batches.map(batch => getFullQuotes(batch))),
+    // Use allSettled so partial batch failures don't kill the entire request
+    // (critical for large indices like Microcap 250 with 10+ batches)
+    const [batchSettled, indexQuoteMap] = await Promise.all([
+      Promise.allSettled(batches.map(batch => getFullQuotes(batch))),
       getLiveQuotes([config.upstoxKey]),
     ]);
 
-    // Merge all batch results into single map
+    // Merge successful batch results, log failures
     const fullQuotesMap = new Map<string, any>();
-    for (const batchMap of batchResults) {
-      for (const [key, value] of batchMap.entries()) {
-        fullQuotesMap.set(key, value);
+    let failedBatches = 0;
+    for (let i = 0; i < batchSettled.length; i++) {
+      const result = batchSettled[i];
+      if (result.status === 'fulfilled') {
+        for (const [key, value] of result.value.entries()) {
+          fullQuotesMap.set(key, value);
+        }
+      } else {
+        failedBatches++;
+        console.error(`[MarketOverview] Batch ${i + 1}/${batches.length} failed for ${indexName}:`, result.reason);
       }
+    }
+
+    if (failedBatches > 0) {
+      console.warn(`[MarketOverview] ${failedBatches}/${batches.length} batches failed for ${indexName}. Got ${fullQuotesMap.size}/${instrumentKeys.length} quotes.`);
+    }
+
+    if (fullQuotesMap.size === 0) {
+      console.error(`[MarketOverview] All batches failed for ${indexName}`);
+      return null;
     }
 
     // 4. Build reverse lookup: key -> symbol

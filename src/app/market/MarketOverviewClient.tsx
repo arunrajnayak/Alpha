@@ -43,6 +43,7 @@ interface IndexSummary {
 }
 
 const UPDATE_INTERVAL_MS = 1000; // Batch UI updates every 1 second (matches Live page)
+const HEATMAP_THROTTLE_MS = 5000; // Throttle expensive heatmap re-renders to every 5 seconds
 
 interface MarketOverviewClientProps {
   initialSummaries: IndexSummary[];
@@ -64,6 +65,11 @@ export default function MarketOverviewClient({
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   
   const [tokenStatus, setTokenStatus] = useState<{ hasToken: boolean; message?: string } | null>(initialTokenStatus);
+  
+  // Throttled heatmap data — only updated every 5s to avoid expensive TreeMap re-renders
+  const [heatmapConstituents, setHeatmapConstituents] = useState(initialData?.constituents || []);
+  const lastHeatmapUpdateRef = useRef<number>(Date.now());
+  const heatmapTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Refresh timers
   const dataRefreshRef = useRef<NodeJS.Timeout | null>(null);
@@ -123,6 +129,9 @@ export default function MarketOverviewClient({
       const result = await fetchMarketOverview(indexName);
       if (result) {
         setData(result);
+        // Immediately update heatmap on REST load (index switch or refresh)
+        setHeatmapConstituents(result.constituents);
+        lastHeatmapUpdateRef.current = Date.now();
         updateTimestamp();
         if (result.tokenStatus) {
           setTokenStatus(result.tokenStatus);
@@ -257,6 +266,25 @@ export default function MarketOverviewClient({
 
   }, [updateTimestamp]); // No stale dependencies — uses refs for external state
 
+  // Throttled heatmap updates — only push new constituent data to heatmap every 5s
+  useEffect(() => {
+    if (!data?.constituents) return;
+    
+    const now = Date.now();
+    const timeSinceLastHeatmap = now - lastHeatmapUpdateRef.current;
+    
+    if (timeSinceLastHeatmap >= HEATMAP_THROTTLE_MS) {
+      setHeatmapConstituents(data.constituents);
+      lastHeatmapUpdateRef.current = now;
+    } else if (!heatmapTimerRef.current) {
+      heatmapTimerRef.current = setTimeout(() => {
+        heatmapTimerRef.current = null;
+        setHeatmapConstituents(data.constituents);
+        lastHeatmapUpdateRef.current = Date.now();
+      }, HEATMAP_THROTTLE_MS - timeSinceLastHeatmap);
+    }
+  }, [data?.constituents]);
+
   // Buffer incoming WebSocket ticks — skip when tab is hidden
   const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {
     if (!isVisibleRef.current) return; // Don't buffer when tab is hidden
@@ -360,10 +388,11 @@ export default function MarketOverviewClient({
     };
   }, [isStreaming, loadData, loadSummaries]);
 
-  // Cleanup update timer
+  // Cleanup timers
   useEffect(() => {
     return () => {
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
+      if (heatmapTimerRef.current) clearTimeout(heatmapTimerRef.current);
     };
   }, []);
 
@@ -558,11 +587,11 @@ export default function MarketOverviewClient({
             </div>
           </motion.div>
 
-          {/* Heatmap — hidden on mobile */}
+          {/* Heatmap — throttled to 5s updates for performance */}
           {!isMobile && (
             <motion.div variants={itemVariants}>
               <MarketHeatmap
-                constituents={data.constituents}
+                constituents={heatmapConstituents}
                 isMobile={isMobile}
               />
             </motion.div>
