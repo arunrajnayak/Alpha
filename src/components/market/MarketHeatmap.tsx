@@ -83,8 +83,11 @@ export default memo(function MarketHeatmap({ constituents, isMobile }: MarketHea
             const showSymbol = area > 2500 && node.width > 30 && node.height > 18;
             const showPercent = area > 5000 && node.width > 40 && node.height > 32;
 
-            // Scale font to tile size, with hard min/max
-            const fontSize = Math.max(6, Math.min(node.width / 6, node.height / 3, isMobile ? 9 : 11));
+            // Scale font to tile size AND symbol length, with hard min/max
+            const symbolLen = (node.id || '').length;
+            const maxByWidth = node.width / Math.max(symbolLen * 0.85, 1);
+            const maxByHeight = node.height / 3;
+            const fontSize = Math.max(5, Math.min(maxByWidth, maxByHeight, isMobile ? 9 : 11));
 
             return (
               <g
