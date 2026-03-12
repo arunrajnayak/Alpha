@@ -4,8 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { getLiveDashboardData, LiveDashboardData, LiveStockData, BreadthByCategory, saveIntradayPnL, getIntradayPnLHistory, IntradayPnLPoint } from '@/app/actions/live';
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 
-// Update interval in milliseconds (1 second)
-const UPDATE_INTERVAL_MS = 1000;
+// Update interval in milliseconds (5 seconds)
+const UPDATE_INTERVAL_MS = 5000;
 
 // Re-export for component use
 export type PnLHistoryPoint = IntradayPnLPoint;
