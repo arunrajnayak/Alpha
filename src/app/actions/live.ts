@@ -147,14 +147,15 @@ export interface LiveDashboardData {
 }
 
 export async function getLiveDashboardData(): Promise<LiveDashboardData> {
-  // 1. Get current holdings
-  const engine = await computePortfolioState(new Date()); // Today's state
-  const holdings = Array.from(engine.holdings.values()).filter(h => h.qty > 0.01);
-  console.log(`[LiveDashboard] computed ${holdings.length} holdings`);
+  try {
+    // 1. Get current holdings
+    const engine = await computePortfolioState(new Date()); // Today's state
+    const holdings = Array.from(engine.holdings.values()).filter(h => h.qty > 0.01);
+    console.log(`[LiveDashboard] computed ${holdings.length} holdings`);
 
-  // Check market status
-  const isMarketOpen = await isMarketOpenAsync();
-  const marketStatus: MarketStatus = isMarketOpen ? 'OPEN' : 'CLOSED';
+    // Check market status
+    const isMarketOpen = await isMarketOpenAsync();
+    const marketStatus: MarketStatus = isMarketOpen ? 'OPEN' : 'CLOSED';
   
   // Check if we should use historical data (market closed AND pre-market hours)
   const preMarket = isPreMarketHours();
@@ -466,7 +467,16 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     result.indices = [];
   }
 
-  return result;
+    return result;
+  } catch (error: any) {
+    const errorMessage = error?.message || '';
+    if (errorMessage.includes('no such table')) {
+        console.error('[LiveDashboard] Database initialization error: Missing tables. Run "npx prisma db push".');
+        throw new Error('DATABASE_NOT_INITIALIZED: Missing database tables. Please run "npx prisma db push" to initialize your database.');
+    }
+    console.error("[LiveDashboard] Error fetching dashboard data:", error);
+    throw error;
+  }
 }
 
 // ----- Intraday P/L History Functions -----
@@ -503,7 +513,12 @@ export async function saveIntradayPnL(pnl: number, percent: number): Promise<voi
         percent
       }
     });
-  } catch (error) {
+  } catch (error: any) {
+    const errorMessage = error?.message || '';
+    if (errorMessage.includes('no such table')) {
+        console.error('[IntradayPnL] Database initialization error: Missing tables. Run "npx prisma db push".');
+        return; // Silent fail for cron/background tasks but log is there
+    }
     console.error('[IntradayPnL] Error saving P/L point:', error);
   }
 }
@@ -537,7 +552,12 @@ export async function getIntradayPnLHistory(): Promise<IntradayPnLPoint[]> {
       pnl: r.pnl,
       percent: r.percent
     }));
-  } catch (error) {
+  } catch (error: any) {
+    const errorMessage = error?.message || '';
+    if (errorMessage.includes('no such table')) {
+        console.error('[IntradayPnL] Database initialization error: Missing tables. Run "npx prisma db push".');
+        return [];
+    }
     console.error('[IntradayPnL] Error fetching P/L history:', error);
     return [];
   }

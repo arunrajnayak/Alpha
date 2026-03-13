@@ -73,7 +73,18 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
           lastDataDate
       };
 
-  } catch (error) {
+  } catch (error: any) {
+      const errorMessage = error?.message || '';
+      if (errorMessage.includes('no such table')) {
+          console.error('[Market Status] Database initialization error: Missing tables. Run "npx prisma db push".');
+          return {
+              isOpen: false,
+              status: 'Database Not Initialized',
+              timings: [],
+              lastDataDate: null
+          };
+      }
+
       console.error('Failed to fetch market timings:', error);
       // Fallback
       return {

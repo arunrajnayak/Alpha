@@ -136,12 +136,15 @@ UPSTOX_PIN=your-pin
 # Install dependencies
 npm install
 
-# Generate Prisma client
-npx prisma generate
-
 # Push database schema to Turso
 npx prisma db push
+
+# Generate Prisma client
+npx prisma generate
 ```
+
+> [!IMPORTANT]
+> **Database Initialization**: You MUST run `npx prisma db push` to create the tables in your Turso database. If you see a "no such table" error, it means this step was skipped or failed.
 
 ---
 
@@ -533,8 +536,18 @@ Only needed if you want to auto-import orders from Zerodha Kite. Not required fo
 
 ---
 
-## ❓ Known Limitations
+## ❓ Known Limitations & Troubleshooting
 
+### Troubleshooting Missing Tables
+If you encounter an error like:
+`SQLITE_UNKNOWN: SQLite error: no such table: main.DailyPortfolioSnapshot`
+
+This means your database hasn't been initialized with the Prisma schema. To fix this, run:
+```bash
+npx prisma db push
+```
+
+### Known Limitations
 1. **Daily Token Refresh** — Upstox tokens expire every 24 hours. You must approve the daily push notification (or manually log in via Settings) to keep data flowing.
 2. **Index History** — NIFTY500 MOMENTUM 50 historical data before Sep 30, 2024 requires CSV backfill
 3. **Corporate Actions** — Must be manually entered (no API auto-detection for splits/bonuses)
