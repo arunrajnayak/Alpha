@@ -55,7 +55,7 @@ export const INDEX_CONFIG: Record<string, { csvUrl?: string; upstoxKey: string; 
     category: 'broad',
   },
   'NIFTY Microcap 250': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250list.csv',
+    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250_list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MICROCAP250',
     shortName: 'Microcap 250',
     category: 'broad',
@@ -295,7 +295,15 @@ async function fetchCSV(url: string): Promise<string | null> {
       return null;
     }
 
-    return await response.text();
+    const text = await response.text();
+
+    // Detect HTML responses (e.g. 404 pages served as 200)
+    if (text.trimStart().startsWith('<!DOCTYPE') || text.trimStart().startsWith('<html')) {
+      console.error(`[IndexConstituents] CSV URL returned HTML instead of CSV: ${url}`);
+      return null;
+    }
+
+    return text;
   } catch (error) {
     console.error(`[IndexConstituents] CSV fetch error for ${url}:`, error);
     return null;
