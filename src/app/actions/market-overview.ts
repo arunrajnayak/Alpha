@@ -108,7 +108,9 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
     }
 
     // 3. Fetch full quotes in batches (Upstox URL length limit) + index quote in parallel
-    const BATCH_SIZE = 25;
+    // Use larger batches for large indices (e.g. Microcap 250) to reduce round-trips.
+    // Upstox Full Quote URL can handle ~50 keys before hitting URL length limits.
+    const BATCH_SIZE = 50;
     const batches: string[][] = [];
     for (let i = 0; i < instrumentKeys.length; i += BATCH_SIZE) {
       batches.push(instrumentKeys.slice(i, i + BATCH_SIZE));
@@ -199,7 +201,9 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
     // 7. Top gainers/losers
     const sorted = [...constituents].sort((a, b) => b.changePercent - a.changePercent);
     const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
-    const topLosers = sorted.filter(c => c.changePercent < 0).reverse().slice(0, 10);
+    // sorted is DESC — losers sit at the tail. Slice the last 10, then reverse so biggest loser is first.
+    const losers = sorted.filter(c => c.changePercent < 0);
+    const topLosers = losers.slice(-Math.min(10, losers.length)).reverse();
 
     // 8. Index value
     let indexValue = 0;

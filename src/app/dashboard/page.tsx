@@ -13,18 +13,39 @@ import { MainChartCards, PnLCard, XirrCard } from '@/components/portfolio/Summar
 import { WinLossCard, AvgHoldingCard, AvgGainLossCard } from '@/components/portfolio/PortfolioStatsCards';
 import MarketCapCard from '@/components/portfolio/MarketCapCard';
 import ReturnsCard from '@/components/portfolio/ReturnsCard';
-import DrawdownChart from '@/components/portfolio/DrawdownChart';
 import { APP_CONFIG } from '@/lib/client-config';
+import { ChartErrorBoundary } from '@/components/ui/ErrorBoundary';
+import dynamic from 'next/dynamic';
 
 import SectorAllocationWrapper from '@/components/portfolio/SectorAllocationWrapper';
-import EquityCurve from '@/components/portfolio/EquityCurve';
-import PerformanceHeatmap from '@/components/portfolio/CalendarHeatmap';
-import MonthlyReturnsHeatmap from '@/components/portfolio/MonthlyReturnsHeatmap';
 import MarketCapAreaChart from '@/components/portfolio/MarketCapAreaChartWrapper';
 import SectorHistoryChart from '@/components/portfolio/SectorHistoryChartWrapper';
-import ExitsScatterChart from '@/components/exits/ExitsScatterChart';
-import DailyPnLChart from '@/components/portfolio/DailyPnLChart';
-import { ChartErrorBoundary } from '@/components/ui/ErrorBoundary';
+
+// Heavy chart components — lazy loaded to avoid blocking initial page render
+const DrawdownChart = dynamic(() => import('@/components/portfolio/DrawdownChart'), {
+  loading: () => <div className="h-full min-h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const EquityCurve = dynamic(() => import('@/components/portfolio/EquityCurve'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const DailyPnLChart = dynamic(() => import('@/components/portfolio/DailyPnLChart'), {
+  loading: () => <div className="h-[300px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const PerformanceHeatmap = dynamic(() => import('@/components/portfolio/CalendarHeatmap'), {
+  loading: () => <div className="h-[280px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const MonthlyReturnsHeatmap = dynamic(() => import('@/components/portfolio/MonthlyReturnsHeatmap'), {
+  loading: () => <div className="h-[280px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const ExitsScatterChart = dynamic(() => import('@/components/exits/ExitsScatterChart'), {
+  loading: () => <div className="h-[500px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
 
 // Loading skeleton component
 function DashboardSkeleton() {

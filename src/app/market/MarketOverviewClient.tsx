@@ -60,6 +60,7 @@ export default function MarketOverviewClient({
   const [indexSummaries, setIndexSummaries] = useState<IndexSummary[]>(initialSummaries);
   const [data, setData] = useState<MarketOverviewData | null>(initialData);
   const [loading, setLoading] = useState(false); // Default false since we have SSR data
+  const [loadError, setLoadError] = useState<string | null>(null); // Track fetch errors for display
   const [summariesLoading, setSummariesLoading] = useState(false); // Default false
   const [isMobile, setIsMobile] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -126,19 +127,30 @@ export default function MarketOverviewClient({
   const loadData = useCallback(async (indexName: string) => {
     try {
       setLoading(true);
+      setLoadError(null);
       const result = await fetchMarketOverview(indexName);
       if (result) {
+        // Success — clear any previous error
+        setLoadError(null);
         setData(result);
         // Immediately update heatmap on REST load (index switch or refresh)
-        setHeatmapConstituents(result.constituents);
-        lastHeatmapUpdateRef.current = Date.now();
+        if (result.constituents.length > 0) {
+          setHeatmapConstituents(result.constituents);
+          lastHeatmapUpdateRef.current = Date.now();
+        }
         updateTimestamp();
         if (result.tokenStatus) {
           setTokenStatus(result.tokenStatus);
         }
+      } else {
+        // fetchMarketOverview returned null — likely constituent CSV failed to load
+        // or all Upstox API batches failed. Show error but keep old data visible.
+        console.warn(`[MarketOverview] fetchMarketOverview returned null for ${indexName}`);
+        setLoadError(`Could not load data for ${indexName}. Constituent list may be unavailable.`);
       }
     } catch (err) {
       console.error(`Failed to load market data for ${indexName}:`, err);
+      setLoadError(`Failed to load ${indexName} data. Please retry.`);
     } finally {
       setLoading(false);
     }
@@ -246,7 +258,9 @@ export default function MarketOverviewClient({
       // Recalculate gainers/losers
       const sorted = [...updatedConstituents].sort((a, b) => b.changePercent - a.changePercent);
       const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
-      const topLosers = sorted.filter(c => c.changePercent < 0).reverse().slice(0, 10);
+      // sorted is DESC — losers sit at the tail. Slice the last 10, then reverse so biggest loser is first.
+      const losersArr = sorted.filter(c => c.changePercent < 0);
+      const topLosers = losersArr.slice(-Math.min(10, losersArr.length)).reverse();
 
       updateTimestamp();
 
@@ -363,8 +377,14 @@ export default function MarketOverviewClient({
   const isStreaming = streamStatus === 'connected';
 
   // REST Refresh loop (fallback/sync)
-  // Uses refs for selectedIndex so the interval doesn't restart on every index switch
+  // Uses refs for selectedIndex and isStreaming so the interval doesn't restart on every change
+  const isStreamingRef = useRef(isStreaming);
+  useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
+
   useEffect(() => {
+    // Clear any existing interval before creating a new one
+    if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
+
     if (isStreaming) {
       // When streaming, only sync summaries every 5 min (lightweight)
       // Full constituent data comes from WebSocket — no need for loadData
@@ -376,7 +396,7 @@ export default function MarketOverviewClient({
     } else {
       // When NOT streaming, poll every 30 seconds for fresh data
       dataRefreshRef.current = setInterval(() => {
-        if (isMarketOpen()) {
+        if (isMarketOpen() && !isStreamingRef.current) {
           loadSummaries(false);
           loadData(selectedIndexRef.current);
         }
@@ -384,7 +404,10 @@ export default function MarketOverviewClient({
     }
 
     return () => {
-      if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
+      if (dataRefreshRef.current) {
+        clearInterval(dataRefreshRef.current);
+        dataRefreshRef.current = null;
+      }
     };
   }, [isStreaming, loadData, loadSummaries]);
 
@@ -496,6 +519,14 @@ export default function MarketOverviewClient({
           ) : 'Refresh'}
         </button>
       </motion.div>
+
+      {/* Error Banner — shown when loadData fails (e.g. Microcap 250 CSV unavailable) */}
+      {loadError && (
+        <motion.div variants={itemVariants} className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs flex items-center gap-2">
+          <span>⚠️</span>
+          <span>{loadError}</span>
+        </motion.div>
+      )}
 
       {/* Sectoral Heatmap */}
       {indexSummaries.length > 0 && (

@@ -67,17 +67,6 @@ export async function fetchDashboardData() {
     drawdown: s.drawdown
   }));
 
-  // Debug: Check Feb 1st data
-  const feb1 = chartData.find(d => {
-      const dt = new Date(d.date);
-      return dt.getFullYear() === 2026 && dt.getMonth() === 1 && dt.getDate() === 1;
-  });
-  if (feb1) {
-      console.log('[DashboardQuery] Feb 1st Chart Data:', JSON.stringify(feb1));
-  } else {
-      console.log('[DashboardQuery] Feb 1st Chart Data NOT FOUND');
-  }
-
   const dashboardHistory = chartData.map(d => ({
     date: typeof d.date === 'string' ? d.date : d.date.toISOString(),
     drawdown: d.drawdown ?? 0,
