@@ -6,12 +6,15 @@ import path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 async function main() {
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
-  const tursoAuth = process.env.TURSO_AUTH_TOKEN;
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) process.exit(1);
 
-  if (!tursoUrl || !tursoAuth) process.exit(1);
+  const parsedUrl = new URL(dbUrl);
+  const tursoAuth = parsedUrl.searchParams.get('authToken') ?? undefined;
+  parsedUrl.searchParams.delete('sslmode');
+  parsedUrl.searchParams.delete('authToken');
 
-  const adapter = new PrismaLibSql({ url: tursoUrl, authToken: tursoAuth });
+  const adapter = new PrismaLibSql({ url: parsedUrl.toString(), authToken: tursoAuth });
   const prisma = new PrismaClient({ adapter });
 
   try {

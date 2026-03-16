@@ -205,9 +205,15 @@ async function main() {
   
   // Connect to database (needed for symbol mappings even in dry-run)
   console.log('\nConnecting to database...');
+  const dbUrl = process.env.DATABASE_URL!;
+  const parsedUrl = new URL(dbUrl);
+  const authTok = parsedUrl.searchParams.get('authToken') ?? undefined;
+  parsedUrl.searchParams.delete('sslmode');
+  parsedUrl.searchParams.delete('authToken');
+
   const adapter = new PrismaLibSql({
-    url: process.env.TURSO_DATABASE_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN!,
+    url: parsedUrl.toString(),
+    authToken: authTok,
   });
   
   const prisma = new PrismaClient({ adapter });

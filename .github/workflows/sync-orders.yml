@@ -28,12 +28,8 @@ jobs:
 
     - name: Run Sync Script
       env:
-        # Database
-        # Database keys must match src/lib/db.ts expectation
-        TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL || secrets.DATABASE_URL }}
-        TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN || secrets.DATABASE_AUTH_TOKEN }}
-        # Support standard env var too just in case
-        DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL || secrets.DATABASE_URL }}
+        # Database must match src/lib/db.ts expectation
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
         
         # Zerodha Credentials
         ZERODHA_USER_ID: ${{ secrets.ZERODHA_USER_ID }}

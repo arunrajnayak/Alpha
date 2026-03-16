@@ -1,7 +1,6 @@
 'use server';
 
 import { prisma, chunkArray } from '@/lib/db';
-import { createBackup } from '@/lib/backup';
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { recalculatePortfolioHistory } from '@/lib/finance';
 import { getLTP, hasValidToken } from '@/lib/upstox-client';
@@ -432,12 +431,6 @@ export async function getImportHistory() {
 }
 
 export async function revertImport(batchId: number) {
-  // Create backup before reverting
-  const backup = await createBackup(`pre_revert_batch_${batchId}`);
-  if (!backup.success) {
-      throw new Error("Safeguard: Backup failed. Aborting revert to prevent data loss.");
-  }
-
   // Delete transactions first
   await prisma.$transaction(async (tx) => {
     await tx.transaction.deleteMany({
@@ -455,12 +448,6 @@ export async function revertImport(batchId: number) {
 }
 
 export async function clearAllTransactions() {
-  // Create strict backup
-  const backup = await createBackup('pre_clear_all');
-  if (!backup.success) {
-      throw new Error("Safeguard: Backup failed. Aborting clear all to prevent data loss.");
-  }
-
   await prisma.$transaction(async (tx) => {
       // 1. Delete Foreign Key Dependents first (Transactions)
       await tx.transaction.deleteMany({});

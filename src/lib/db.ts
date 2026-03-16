@@ -24,47 +24,43 @@ export function chunkArray<T>(array: T[], chunkSize: number = SQLITE_IN_CLAUSE_L
 }
 
 function createPrismaClient(): PrismaClient {
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
-  const tursoAuth = process.env.TURSO_AUTH_TOKEN;
+  const dbUrl = process.env.DATABASE_URL;
 
-  // Always require Turso credentials - no local database fallback
-  if (!tursoUrl || !tursoAuth) {
+  // Always require Turso credentials via DATABASE_URL
+  if (!dbUrl) {
     throw new Error(
-      'Missing database credentials. Please set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in your .env.local file.\n' +
-      'Copy .env.local.example to .env.local and fill in your Turso credentials.'
+      'Missing database credentials. Please set DATABASE_URL in your .env.local file.\n' +
+      'Example: DATABASE_URL="libsql://your-db.turso.io?authToken=your-token"'
     );
   }
 
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(dbUrl);
+  } catch (e) {
+    throw new Error('Invalid DATABASE_URL format.');
+  }
+
+  const scheme = parsedUrl.protocol.replace(':', '');
   const supportedSchemes = new Set(['libsql', 'wss', 'ws', 'https', 'http', 'file']);
-  const resolveLibsqlUrl = (primary: string, fallback?: string) => {
-    const candidates = [primary, fallback].filter(Boolean) as string[];
-    for (const candidate of candidates) {
-      try {
-        const url = new URL(candidate);
-        if (supportedSchemes.has(url.protocol.replace(':', ''))) {
-          url.searchParams.delete('sslmode');
-          return url.toString();
-        }
-      } catch {
-        // ignore parse errors for now; we'll validate below
-      }
+  
+  if (!supportedSchemes.has(scheme)) {
+    if (scheme === 'postgres' || scheme === 'postgresql') {
+      throw new Error(
+        `Unsupported database URL scheme "${scheme}:". This app requires a Turso/libSQL URL. ` +
+        `Please set DATABASE_URL to your Turso connection string (libsql/https/wss).`
+      );
     }
+    throw new Error('Unsupported database URL. DATABASE_URL must be a libsql/https/wss/file URL.');
+  }
 
-    const firstCandidate = candidates[0];
-    if (firstCandidate) {
-      const scheme = firstCandidate.split(':')[0];
-      if (scheme === 'postgres' || scheme === 'postgresql') {
-        throw new Error(
-          `Unsupported database URL scheme "${scheme}:". This app requires a Turso/libSQL URL. ` +
-          `Please set TURSO_DATABASE_URL to your Turso connection string (libsql/https/wss), not a Postgres URL.`
-        );
-      }
-    }
-
-    throw new Error(
-      'Unsupported database URL. TURSO_DATABASE_URL must be a libsql/https/wss/file URL.'
-    );
-  };
+  // Extract auth token from URL query params
+  const authToken = parsedUrl.searchParams.get('authToken') ?? undefined;
+  
+  // Clean URL for the adapter by removing query params Prisma doesn't need
+  parsedUrl.searchParams.delete('sslmode');
+  parsedUrl.searchParams.delete('authToken');
+  const cleanUrl = parsedUrl.toString();
 
   // Suppress TLS warning in development (Turso connection)
   if (process.env.NODE_ENV !== 'production') {
@@ -81,11 +77,9 @@ function createPrismaClient(): PrismaClient {
 
   console.log('[Database] Connected to Turso (Serverless SQLite)');
 
-  const libsqlUrl = resolveLibsqlUrl(tursoUrl, process.env.DATABASE_URL);
-
   const adapter = new PrismaLibSql({
-    url: libsqlUrl,
-    authToken: tursoAuth,
+    url: cleanUrl,
+    authToken,
   });
 
   return new PrismaClient({ adapter });

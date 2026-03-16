@@ -101,16 +101,16 @@ More than enough for personal portfolio tracking.
 git clone https://github.com/<your-username>/Alpha.git
 cd Alpha
 
-# Copy environment template
+# Copy environment templates
 cp .env.local.example .env.local
+cp .env.example .env
 ```
 
 Edit `.env.local` with your values:
 
 ```bash
 # Database
-TURSO_DATABASE_URL=libsql://alpha-portfolio-<your-username>.turso.io
-TURSO_AUTH_TOKEN=eyJhb...your-token
+DATABASE_URL=libsql://alpha-portfolio-<your-username>.turso.io?authToken=eyJhb...your-token
 
 # Upstox API
 UPSTOX_API_KEY=your-api-key-uuid
@@ -144,7 +144,7 @@ npx prisma generate
 ```
 
 > [!IMPORTANT]
-> **Database Initialization**: You MUST run `npx prisma db push` to create the tables in your Turso database. If you see a "no such table" error, it means this step was skipped or failed.
+> **Database Initialization**: You MUST specify `DATABASE_URL` in your `.env.local` for the Prisma CLI to connect to Turso. Run `npx prisma db push` to create the tables in your Turso database. If you see a "no such table" error in the app, it means this step was skipped or failed.
 
 ---
 
@@ -207,8 +207,7 @@ git push -u origin main
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `TURSO_DATABASE_URL` | `libsql://...` | From Step 2 |
-| `TURSO_AUTH_TOKEN` | `eyJhb...` | Mark as **Sensitive** |
+| `DATABASE_URL` | `libsql://...?authToken=eyJhb...` | Turso URL + Auth Token |
 | `UPSTOX_API_KEY` | Your API key | From Step 1 |
 | `UPSTOX_API_SECRET` | Your API secret | Mark as **Sensitive** |
 | `UPSTOX_REDIRECT_URI` | `https://your-app.vercel.app/api/upstox/callback` | ⚠️ Use your Vercel URL |
@@ -499,8 +498,7 @@ If you want to auto-sync orders from Zerodha Kite:
 
 | Variable | Description |
 |----------|-------------|
-| `TURSO_DATABASE_URL` | Turso database URL |
-| `TURSO_AUTH_TOKEN` | Turso auth token |
+| `DATABASE_URL` | Turso database URL with `?authToken=` appended |
 | `UPSTOX_API_KEY` | Upstox API key (client_id) |
 | `UPSTOX_API_SECRET` | Upstox API secret |
 | `UPSTOX_REDIRECT_URI` | OAuth callback URL |
