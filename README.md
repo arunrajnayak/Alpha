@@ -137,14 +137,11 @@ UPSTOX_PIN=your-pin
 npm install
 
 # Push database schema to Turso
-npx prisma db push
-
-# Generate Prisma client
-npx prisma generate
+npm run db:setup
 ```
 
 > [!IMPORTANT]
-> **Database Initialization**: You MUST specify `DATABASE_URL` in your `.env.local` for the Prisma CLI to connect to Turso. Run `npx prisma db push` to create the tables in your Turso database. If you see a "no such table" error in the app, it means this step was skipped or failed.
+> **Database Initialization**: You MUST specify `DATABASE_URL` in your `.env.local` for the script to connect to Turso. Run `npm run db:setup` to create the tables in your Turso database. If you see a "no such table" error in the app, it means this step was skipped or failed.
 
 ---
 
