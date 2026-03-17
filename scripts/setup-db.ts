@@ -21,7 +21,7 @@ async function main() {
   try {
     // 1. Generate schema SQL
     console.log('⏳ Generating schema SQL from Prisma...');
-    cp.execSync('npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/setup.sql', { stdio: 'inherit' });
+    cp.execSync('npx prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > prisma/setup.sql', { stdio: 'inherit' });
 
     // 2. Read SQL
     const sql = fs.readFileSync('prisma/setup.sql', 'utf8');
