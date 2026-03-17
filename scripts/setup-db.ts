@@ -28,12 +28,20 @@ async function main() {
 
     // 3. Connect to Turso
     console.log('🔄 Connecting to Turso...');
+
+    // Filter out [dotenv] lines and other non-SQL junk that might have been captured
+    const cleanSql = sql
+      .split('\n')
+      .filter(line => !line.includes('[dotenv@'))
+      .join('\n');
+
+    const dbUrl = process.env.DATABASE_URL;
     const parsedUrl = new URL(dbUrl as string);
     const authToken = parsedUrl.searchParams.get('authToken') ?? process.env.TURSO_AUTH_TOKEN;
-    
+
     parsedUrl.searchParams.delete('authToken');
     parsedUrl.searchParams.delete('sslmode');
-    
+
     const client = createClient({
       url: parsedUrl.toString(),
       authToken,
@@ -41,30 +49,30 @@ async function main() {
 
     // 4. Execute SQL
     console.log('🚀 Applying schema to Turso database...');
-    
+
     // Split the SQL file into individual statements to execute them
     // executeMultiple in @libsql/client sometimes has limits, so we run them sequentially
-    const statements = sql
+    const statements = cleanSql
       .split(';')
       .map(s => s.trim())
       .filter(s => s.length > 0);
-      
+
     for (const stmt of statements) {
       await client.execute(stmt);
     }
 
     console.log('✅ Successfully pushed schema to Turso database!');
-    
+
     // Cleanup
     if (fs.existsSync('prisma/setup.sql')) {
       fs.unlinkSync('prisma/setup.sql');
     }
-    
+
     // Generate Prisma Client
     console.log('⏳ Generating Prisma Client...');
     cp.execSync('npx prisma generate', { stdio: 'inherit' });
     console.log('✅ Done!');
-    
+
     process.exit(0);
   } catch (err) {
     console.error('❌ Error applying schema:', err);
