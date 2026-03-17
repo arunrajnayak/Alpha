@@ -58,17 +58,7 @@ async function main() {
       .filter(s => s.length > 0);
 
     for (const stmt of statements) {
-      try {
-        await client.execute(stmt);
-      } catch (err: any) {
-        // Ignore "already exists" errors so the script can be run multiple times
-        const msg = err.message || '';
-        if (msg.includes('already exists')) {
-          console.log(`⚠️  Skipping: ${stmt.split('\n')[0].substring(0, 50)}... (Already exists)`);
-          continue;
-        }
-        throw err;
-      }
+      await client.execute(stmt);
     }
 
     console.log('✅ Successfully pushed schema to Turso database!');
