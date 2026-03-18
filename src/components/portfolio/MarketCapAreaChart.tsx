@@ -103,7 +103,7 @@ export default function MarketCapAreaChart({ data }: MarketCapAreaChartProps) {
               fontSize: '12px'
             }}
             itemStyle={{ padding: '2px 0' }}
-            formatter={(value: number | undefined, name: string | number | undefined) => [value !== undefined ? `${value.toFixed(1)}%` : '', name]}
+            formatter={(value, name) => [typeof value === 'number' ? `${value.toFixed(1)}%` : '', name]}
           />
           {CAP_CONFIG.map((cap) => {
               const isHovered = hoveredCap === cap.key;

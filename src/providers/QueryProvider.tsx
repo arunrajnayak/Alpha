@@ -60,7 +60,7 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         persistOptions={{ 
           persister,
           maxAge: 24 * 60 * 60 * 1000, // 24 hours
-          buster: 'v1', // Change this to invalidate all cached data
+          buster: process.env.NEXT_PUBLIC_APP_VERSION ?? 'v1', // Tied to app version — bump package.json version to bust stale cache
         }}
         onSuccess={() => {
           // Resume any paused mutations and revalidate active queries on restore

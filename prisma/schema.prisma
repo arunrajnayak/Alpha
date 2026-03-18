@@ -35,6 +35,8 @@ model ImportBatch {
   startDate    DateTime?
   endDate      DateTime?
   transactions Transaction[]
+
+  @@index([timestamp])
 }
 
 model DailyPortfolioSnapshot {
@@ -108,6 +110,7 @@ model StockHistory {
 
   @@unique([date, symbol])
   @@index([symbol])
+  @@index([date])
 }
 
 model IndexHistory {
@@ -116,6 +119,8 @@ model IndexHistory {
   close  Float
 
   @@id([date, symbol])
+  @@index([date])
+  @@index([symbol])
 }
 
 

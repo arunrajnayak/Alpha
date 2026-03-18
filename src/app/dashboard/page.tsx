@@ -2,6 +2,7 @@
 
 import { useDashboardData } from '@/hooks/useQueries';
 import { useHasMounted } from '@/hooks/useHasMounted';
+import { useMemo } from 'react';
 import { 
   faRocket,
   faArrowTrendDown,
@@ -118,6 +119,11 @@ export default function DashboardPage() {
     isWeekPositive
   } = data;
 
+  const drawdownData = useMemo(
+    () => dashboardHistory.map(d => ({ date: d.date, drawdown: d.drawdown })),
+    [dashboardHistory]
+  );
+
   return (
     <div className="flex flex-col gap-4 md:gap-8 pb-8 md:pb-0">
       {/* Background refresh indicator */}
@@ -230,7 +236,7 @@ export default function DashboardPage() {
           <div className="w-full md:w-[60%] h-[500px]">
               <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                     <ChartErrorBoundary componentName="Drawdown Chart">
-                      <DrawdownChart data={dashboardHistory.map(d => ({ date: d.date, drawdown: d.drawdown }))} />
+                      <DrawdownChart data={drawdownData} />
                     </ChartErrorBoundary>
               </div>
           </div>

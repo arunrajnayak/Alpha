@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import { getLiveDashboardData, LiveDashboardData, LiveStockData, BreadthByCategory, saveIntradayPnL, getIntradayPnLHistory, IntradayPnLPoint } from '@/app/actions/live';
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 
@@ -61,7 +61,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastBatchAppliedRef = useRef<number>(0);
   const lastPnLSaveRef = useRef<number>(0);
-  
+  const [, startTransition] = useTransition();
+
   // Shared subscribers for other components (like MarketOverview)
   const priceSubscribersRef = useRef<Set<(updates: PriceUpdate[]) => void>>(new Set());
 
@@ -108,7 +109,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
   // Monitor data changes to save P/L history periodically (throttled to 1 minute)
   useEffect(() => {
-    if (!data || !data.dayGain && data.dayGain !== 0) return;
+    if (!data || (!data.dayGain && data.dayGain !== 0)) return;
 
     const now = Date.now();
     // Only save if enough time passed since last save
@@ -156,7 +157,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     lastBatchAppliedRef.current = Date.now();
     
     
-    setData(currentData => {
+    startTransition(() => setData(currentData => {
       if (!currentData) return currentData;
 
       // Create a map of updates for quick lookup (by symbol)
@@ -325,12 +326,10 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         indices: updatedIndices,
         lastUpdated: new Date().toISOString(),
       };
-    });
-
-
+    }));
 
     setLastRefreshed(new Date());
-  }, []);
+  }, [startTransition]);
 
   // Handle price updates from WebSocket - batch them for less frequent UI updates
   const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {

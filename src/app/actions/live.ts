@@ -258,8 +258,15 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   // Also fetch symbol mappings to handle renamed/delisted stocks
   let sectorMap = new Map<string, string>();
   try {
-    // Get symbol mappings first
-    const symbolMappings = await prisma.symbolMapping.findMany();
+    // Get symbol mappings only for current holding symbols
+    const symbolMappings = await prisma.symbolMapping.findMany({
+      where: {
+        OR: [
+          { oldSymbol: { in: holdingSymbols } },
+          { newSymbol: { in: holdingSymbols } }
+        ]
+      }
+    });
     
     // Build expanded symbol list (include both old and new symbols)
     const expandedSymbols = new Set(holdingSymbols);
@@ -496,23 +503,23 @@ export async function saveIntradayPnL(pnl: number, percent: number): Promise<voi
   const todayIST = getTodayIST();
   
   try {
-    // Clean up old data (from previous days) - do this occasionally
-    // Using a simple approach: delete before inserting new data
-    await prisma.intradayPnL.deleteMany({
-      where: {
-        date: { lt: todayIST }
-      }
-    });
-    
-    // Insert new data point
-    await prisma.intradayPnL.create({
-      data: {
-        timestamp: now,
-        date: todayIST,
-        pnl,
-        percent
-      }
-    });
+    await prisma.$transaction([
+      // Clean up old data (from previous days)
+      prisma.intradayPnL.deleteMany({
+        where: {
+          date: { lt: todayIST }
+        }
+      }),
+      // Insert new data point
+      prisma.intradayPnL.create({
+        data: {
+          timestamp: now,
+          date: todayIST,
+          pnl,
+          percent
+        }
+      }),
+    ]);
   } catch (error: any) {
     const errorMessage = error?.message || '';
     if (errorMessage.includes('no such table')) {

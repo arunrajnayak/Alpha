@@ -9,28 +9,19 @@ import { revalidatePath } from 'next/cache';
  */
 export async function getAMFIHistory(): Promise<Array<{ period: string; count: number; updatedAt: string }>> {
     try {
-        // Get distinct periods with counts
+        // Get distinct periods with counts and max updatedAt in a single query
         const periods = await prisma.aMFIClassification.groupBy({
             by: ['period'],
             _count: { symbol: true },
+            _max: { updatedAt: true },
             orderBy: { period: 'desc' },
         });
 
-        // Get the latest updatedAt for each period
-        const history = await Promise.all(
-            periods.map(async (p) => {
-                const latest = await prisma.aMFIClassification.findFirst({
-                    where: { period: p.period },
-                    orderBy: { updatedAt: 'desc' },
-                    select: { updatedAt: true },
-                });
-                return {
-                    period: p.period,
-                    count: p._count.symbol,
-                    updatedAt: latest?.updatedAt?.toISOString() || new Date().toISOString(),
-                };
-            })
-        );
+        const history = periods.map((p) => ({
+            period: p.period,
+            count: p._count.symbol,
+            updatedAt: p._max.updatedAt?.toISOString() || new Date().toISOString(),
+        }));
 
         return history;
     } catch (error) {

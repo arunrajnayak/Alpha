@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 
 
 interface RecomputeContextType {
@@ -16,8 +16,9 @@ export function RecomputeProvider({ children }: { children: ReactNode }) {
     const [isRecomputing, setIsRecomputing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [message, setMessage] = useState('');
+    const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const triggerRecompute = async (fromDate?: string) => {
+    const triggerRecompute = useCallback(async (fromDate?: string) => {
         if (isRecomputing) return;
         setIsRecomputing(true);
         setProgress(0);
@@ -64,14 +65,14 @@ export function RecomputeProvider({ children }: { children: ReactNode }) {
             setMessage('Failed to recompute.');
         } finally {
             setIsRecomputing(false);
-            // Reset after a delay or keep mostly done state? 
-            // Let's reset message after delay but keep context clean
-            setTimeout(() => {
+            if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+            resetTimerRef.current = setTimeout(() => {
                 setProgress(0);
                 setMessage('');
+                resetTimerRef.current = null;
             }, 3000);
         }
-    };
+    }, [isRecomputing]);
 
     return (
         <RecomputeContext.Provider value={{ isRecomputing, progress, message, triggerRecompute }}>

@@ -798,7 +798,7 @@ export default function RebalanceModal({
                <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2, pt: 0 }}>
                    {summary.warnings.length > 0 && (
                         <Alert severity="warning" sx={{ mb: 2, py: 0, bgcolor: 'rgba(251, 191, 36, 0.1)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.2)', '& .MuiAlert-message': { py: 1 } }}>
-                            {summary.warnings.map((w, i) => <div key={i} className="text-xs">{w}</div>)}
+                            {summary.warnings.map((w) => <div key={w} className="text-xs">{w}</div>)}
                         </Alert>
                    )}
 

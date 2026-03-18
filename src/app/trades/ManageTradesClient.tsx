@@ -286,21 +286,21 @@ export default function ManageTradesClient({
         return result;
     }, [viewMode, groupedTransactions, dailyGroups, expandedGroups, expandedDailyGroups]);
 
-    const handleAdd = () => {
+    const handleAdd = useCallback(() => {
         setEditingTrade(null);
         setIsDialogOpen(true);
-    };
+    }, []);
 
-    const handleEdit = (trade: Transaction) => {
+    const handleEdit = useCallback((trade: Transaction) => {
         setEditingTrade(trade);
         setIsDialogOpen(true);
-    };
+    }, []);
 
-    const handleDelete = (id: number) => {
+    const handleDelete = useCallback((id: number) => {
         setDeleteConfirmation({ open: true, id });
-    };
+    }, []);
 
-    const confirmDelete = async () => {
+    const confirmDelete = useCallback(async () => {
         if (deleteConfirmation.id) {
             try {
                 await deleteTransaction(deleteConfirmation.id);
@@ -311,14 +311,14 @@ export default function ManageTradesClient({
             }
         }
         setDeleteConfirmation({ open: false, id: null });
-    };
+    }, [deleteConfirmation.id]);
 
-    const cancelDelete = () => {
+    const cancelDelete = useCallback(() => {
         setDeleteConfirmation({ open: false, id: null });
-    };
+    }, []);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleSubmit = async (data: any) => {
+    const handleSubmit = useCallback(async (data: any) => {
         try {
             if (editingTrade) {
                 await updateTransaction(editingTrade.id, data);
@@ -332,7 +332,7 @@ export default function ManageTradesClient({
             console.error("Failed to save trade", error);
             setSnackbar({ open: true, message: 'Failed to save trade', severity: 'error' });
         }
-    };
+    }, [editingTrade]);
 
 
 
@@ -340,25 +340,29 @@ export default function ManageTradesClient({
 
 
     
-    const toggleGroup = (groupId: string) => {
-        const newSet = new Set(expandedGroups);
-        if (newSet.has(groupId)) {
-            newSet.delete(groupId);
-        } else {
-            newSet.add(groupId);
-        }
-        setExpandedGroups(newSet);
-    };
+    const toggleGroup = useCallback((groupId: string) => {
+        setExpandedGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(groupId)) {
+                newSet.delete(groupId);
+            } else {
+                newSet.add(groupId);
+            }
+            return newSet;
+        });
+    }, []);
 
-    const toggleDailyGroup = (dateStr: string) => {
-        const newSet = new Set(expandedDailyGroups);
-        if (newSet.has(dateStr)) {
-            newSet.delete(dateStr);
-        } else {
-            newSet.add(dateStr);
-        }
-        setExpandedDailyGroups(newSet);
-    };
+    const toggleDailyGroup = useCallback((dateStr: string) => {
+        setExpandedDailyGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(dateStr)) {
+                newSet.delete(dateStr);
+            } else {
+                newSet.add(dateStr);
+            }
+            return newSet;
+        });
+    }, []);
 
     // Upload Functions
     const validateFileType = (fileToValidate: File): { valid: boolean; error?: string } => {
