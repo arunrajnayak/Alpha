@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useTransition } from 'react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { fetchMarketOverview, fetchAllIndexSummaries } from '@/app/actions/market-overview';
@@ -42,8 +42,7 @@ interface IndexSummary {
   instrumentKey: string;
 }
 
-const UPDATE_INTERVAL_MS = 1000; // Batch UI updates every 1 second (matches Live page)
-const HEATMAP_THROTTLE_MS = 5000; // Throttle expensive heatmap re-renders to every 5 seconds
+const UPDATE_INTERVAL_MS = 5000; // Batch UI updates every 5 seconds (matches Live page)
 
 interface MarketOverviewClientProps {
   initialSummaries: IndexSummary[];
@@ -64,13 +63,9 @@ export default function MarketOverviewClient({
   const [summariesLoading, setSummariesLoading] = useState(false); // Default false
   const [isMobile, setIsMobile] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
   
   const [tokenStatus, setTokenStatus] = useState<{ hasToken: boolean; message?: string } | null>(initialTokenStatus);
-  
-  // Throttled heatmap data — only updated every 5s to avoid expensive TreeMap re-renders
-  const [heatmapConstituents, setHeatmapConstituents] = useState(initialData?.constituents || []);
-  const lastHeatmapUpdateRef = useRef<number>(Date.now());
-  const heatmapTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Refresh timers
   const dataRefreshRef = useRef<NodeJS.Timeout | null>(null);
@@ -124,20 +119,15 @@ export default function MarketOverviewClient({
   }, []);
 
   // Fetch data for selected index (REST)
-  const loadData = useCallback(async (indexName: string) => {
+  const loadData = useCallback(async (indexName: string, showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setLoadError(null);
       const result = await fetchMarketOverview(indexName);
       if (result) {
         // Success — clear any previous error
         setLoadError(null);
         setData(result);
-        // Immediately update heatmap on REST load (index switch or refresh)
-        if (result.constituents.length > 0) {
-          setHeatmapConstituents(result.constituents);
-          lastHeatmapUpdateRef.current = Date.now();
-        }
         updateTimestamp();
         if (result.tokenStatus) {
           setTokenStatus(result.tokenStatus);
@@ -152,7 +142,7 @@ export default function MarketOverviewClient({
       console.error(`Failed to load market data for ${indexName}:`, err);
       setLoadError(`Failed to load ${indexName} data. Please retry.`);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [updateTimestamp]);
 
@@ -173,6 +163,7 @@ export default function MarketOverviewClient({
   }, [indexSummaries]);
 
   // Handle batched streaming updates to avoid UI stutter
+  // Wrapped in startTransition so streaming updates don't block user interactions
   const applyBatchedUpdates = useCallback(() => {
     const updates = pendingUpdatesRef.current;
     if (updates.size === 0) return;
@@ -182,122 +173,108 @@ export default function MarketOverviewClient({
     pendingUpdatesRef.current = new Map();
     lastBatchAppliedRef.current = Date.now();
 
-    // 1. Update Index Summaries
-    setIndexSummaries(prev => prev.map(idx => {
-      const update = updateMap.get(idx.instrumentKey);
-      if (!update || !update.ltp || update.ltp <= 0) return idx;
+    startTransition(() => {
+      // 1. Update Index Summaries
+      setIndexSummaries(prev => prev.map(idx => {
+        const update = updateMap.get(idx.instrumentKey);
+        if (!update || !update.ltp || update.ltp <= 0) return idx;
 
-      const prevClose = update.previousClose || idx.value - idx.change;
-      const change = update.ltp - prevClose;
-      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-
-      return {
-        ...idx,
-        value: update.ltp,
-        change,
-        changePercent,
-      };
-    }));
-
-    // 2. Update Main Data (if available)
-    setData(currentData => {
-      if (!currentData) return currentData;
-
-      let anyConstituentChanged = false;
-
-      const updatedConstituents = currentData.constituents.map(c => {
-        const update = updateMap.get(c.instrumentKey);
-        if (!update || !update.ltp || update.ltp <= 0) return c;
-
-        anyConstituentChanged = true;
-        const prevClose = update.previousClose || c.prevClose;
+        const prevClose = update.previousClose || idx.value - idx.change;
         const change = update.ltp - prevClose;
         const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
         return {
-          ...c,
-          lastPrice: update.ltp,
+          ...idx,
+          value: update.ltp,
           change,
           changePercent,
-          prevClose,
+        };
+      }));
+
+      // 2. Update Main Data (if available)
+      setData(currentData => {
+        if (!currentData) return currentData;
+
+        let anyConstituentChanged = false;
+
+        const updatedConstituents = currentData.constituents.map(c => {
+          const update = updateMap.get(c.instrumentKey);
+          if (!update || !update.ltp || update.ltp <= 0) return c;
+
+          anyConstituentChanged = true;
+          const prevClose = update.previousClose || c.prevClose;
+          const change = update.ltp - prevClose;
+          const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+          return {
+            ...c,
+            lastPrice: update.ltp,
+            change,
+            changePercent,
+            prevClose,
+          };
+        });
+
+        // Update index value if its update is in this batch
+        let newIndexValue = currentData.indexValue;
+        let newIndexChange = currentData.indexChange;
+        let newIndexChangePercent = currentData.indexChangePercent;
+
+        // Use ref to avoid stale closure — read current summaries
+        const currentSummaries = indexSummariesRef.current;
+        const selectedIndexSummaryUpdate = Array.from(updateMap.values()).find(
+          u => currentSummaries.find(s => s.name === currentData.indexName && s.instrumentKey === u.symbol)
+        );
+
+        if (selectedIndexSummaryUpdate && selectedIndexSummaryUpdate.ltp && selectedIndexSummaryUpdate.ltp > 0) {
+          const prevClose = selectedIndexSummaryUpdate.previousClose || currentData.indexValue - currentData.indexChange;
+          newIndexValue = selectedIndexSummaryUpdate.ltp;
+          newIndexChange = newIndexValue - prevClose;
+          newIndexChangePercent = prevClose > 0 ? (newIndexChange / prevClose) * 100 : 0;
+        }
+
+        if (!anyConstituentChanged && newIndexValue === currentData.indexValue) {
+          return currentData; // No updates for this specific view
+        }
+
+        // Recalculate advance/decline
+        let advancing = 0;
+        let declining = 0;
+        let unchanged = 0;
+        for (const c of updatedConstituents) {
+          if (c.changePercent > 0.01) advancing++;
+          else if (c.changePercent < -0.01) declining++;
+          else unchanged++;
+        }
+
+        // Recalculate gainers/losers
+        const sorted = [...updatedConstituents].sort((a, b) => b.changePercent - a.changePercent);
+        const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
+        // sorted is DESC — losers sit at the tail. Slice the last 10, then reverse so biggest loser is first.
+        const losersArr = sorted.filter(c => c.changePercent < 0);
+        const topLosers = losersArr.slice(-Math.min(10, losersArr.length)).reverse();
+
+        updateTimestamp();
+
+        return {
+          ...currentData,
+          indexValue: newIndexValue,
+          indexChange: newIndexChange,
+          indexChangePercent: newIndexChangePercent,
+          constituents: sorted,
+          advancing,
+          declining,
+          unchanged,
+          topGainers,
+          topLosers,
         };
       });
-
-      // Update index value if its update is in this batch
-      let newIndexValue = currentData.indexValue;
-      let newIndexChange = currentData.indexChange;
-      let newIndexChangePercent = currentData.indexChangePercent;
-
-      // Use ref to avoid stale closure — read current summaries
-      const currentSummaries = indexSummariesRef.current;
-      const selectedIndexSummaryUpdate = Array.from(updateMap.values()).find(
-        u => currentSummaries.find(s => s.name === currentData.indexName && s.instrumentKey === u.symbol)
-      );
-
-      if (selectedIndexSummaryUpdate && selectedIndexSummaryUpdate.ltp && selectedIndexSummaryUpdate.ltp > 0) {
-        const prevClose = selectedIndexSummaryUpdate.previousClose || currentData.indexValue - currentData.indexChange;
-        newIndexValue = selectedIndexSummaryUpdate.ltp;
-        newIndexChange = newIndexValue - prevClose;
-        newIndexChangePercent = prevClose > 0 ? (newIndexChange / prevClose) * 100 : 0;
-      }
-
-      if (!anyConstituentChanged && newIndexValue === currentData.indexValue) {
-        return currentData; // No updates for this specific view
-      }
-
-      // Recalculate advance/decline
-      let advancing = 0;
-      let declining = 0;
-      let unchanged = 0;
-      for (const c of updatedConstituents) {
-        if (c.changePercent > 0.01) advancing++;
-        else if (c.changePercent < -0.01) declining++;
-        else unchanged++;
-      }
-
-      // Recalculate gainers/losers
-      const sorted = [...updatedConstituents].sort((a, b) => b.changePercent - a.changePercent);
-      const topGainers = sorted.filter(c => c.changePercent > 0).slice(0, 10);
-      // sorted is DESC — losers sit at the tail. Slice the last 10, then reverse so biggest loser is first.
-      const losersArr = sorted.filter(c => c.changePercent < 0);
-      const topLosers = losersArr.slice(-Math.min(10, losersArr.length)).reverse();
-
-      updateTimestamp();
-
-      return {
-        ...currentData,
-        indexValue: newIndexValue,
-        indexChange: newIndexChange,
-        indexChangePercent: newIndexChangePercent,
-        constituents: sorted,
-        advancing,
-        declining,
-        unchanged,
-        topGainers,
-        topLosers,
-      };
     });
 
-  }, [updateTimestamp]); // No stale dependencies — uses refs for external state
+  }, [updateTimestamp, startTransition]); // No stale dependencies — uses refs for external state
 
-  // Throttled heatmap updates — only push new constituent data to heatmap every 5s
-  useEffect(() => {
-    if (!data?.constituents) return;
-    
-    const now = Date.now();
-    const timeSinceLastHeatmap = now - lastHeatmapUpdateRef.current;
-    
-    if (timeSinceLastHeatmap >= HEATMAP_THROTTLE_MS) {
-      setHeatmapConstituents(data.constituents);
-      lastHeatmapUpdateRef.current = now;
-    } else if (!heatmapTimerRef.current) {
-      heatmapTimerRef.current = setTimeout(() => {
-        heatmapTimerRef.current = null;
-        setHeatmapConstituents(data.constituents);
-        lastHeatmapUpdateRef.current = Date.now();
-      }, HEATMAP_THROTTLE_MS - timeSinceLastHeatmap);
-    }
-  }, [data?.constituents]);
+  // Heatmap throttle removed — with 5s batching, data.constituents only changes every 5s
+  // so the TreeMap naturally re-renders at the right cadence without a separate throttle.
 
   // Buffer incoming WebSocket ticks — skip when tab is hidden
   const handlePriceUpdate = useCallback((updates: PriceUpdate[]) => {
@@ -376,7 +353,7 @@ export default function MarketOverviewClient({
 
   const isStreaming = streamStatus === 'connected';
 
-  // REST Refresh loop (fallback/sync)
+  // REST Refresh loop — smart polling based on streaming status
   // Uses refs for selectedIndex and isStreaming so the interval doesn't restart on every change
   const isStreamingRef = useRef(isStreaming);
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
@@ -386,21 +363,21 @@ export default function MarketOverviewClient({
     if (dataRefreshRef.current) clearInterval(dataRefreshRef.current);
 
     if (isStreaming) {
-      // When streaming, only sync summaries every 5 min (lightweight)
-      // Full constituent data comes from WebSocket — no need for loadData
+      // When streaming, WebSocket drives constituent data.
+      // Only sync index summaries every 60s (lightweight) for SectoralHeatmap/IndexCards.
       dataRefreshRef.current = setInterval(() => {
         if (isMarketOpen()) {
           loadSummaries(false);
         }
-      }, 300000);
+      }, 60000);
     } else {
-      // When NOT streaming, poll every 30 seconds for fresh data
+      // When NOT streaming, poll full data every 10s as fallback
       dataRefreshRef.current = setInterval(() => {
-        if (isMarketOpen() && !isStreamingRef.current) {
+        if (isMarketOpen()) {
           loadSummaries(false);
-          loadData(selectedIndexRef.current);
+          loadData(selectedIndexRef.current, false);
         }
-      }, 30000);
+      }, 10000);
     }
 
     return () => {
@@ -415,7 +392,6 @@ export default function MarketOverviewClient({
   useEffect(() => {
     return () => {
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
-      if (heatmapTimerRef.current) clearTimeout(heatmapTimerRef.current);
     };
   }, []);
 
@@ -618,11 +594,11 @@ export default function MarketOverviewClient({
             </div>
           </motion.div>
 
-          {/* Heatmap — throttled to 5s updates for performance */}
+          {/* Heatmap — updates every 5s via batched WebSocket ticks */}
           {!isMobile && (
             <motion.div variants={itemVariants}>
               <MarketHeatmap
-                constituents={heatmapConstituents}
+                constituents={data.constituents}
                 isMobile={isMobile}
               />
             </motion.div>
