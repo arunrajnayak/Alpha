@@ -84,7 +84,8 @@ export async function ingestZerodhaTradesWithProgress(
         
     } catch (error) {
         importLogger.error('Error parsing CSV:', error);
-        throw new Error('Failed to parse CSV file. Ensure it is a valid Zerodha Tradebook.');
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to import tradebook: ${detail}`);
     }
 }
 
@@ -184,8 +185,11 @@ export async function processZerodhaTradesCore(
           .map(item => {
               // Safe division - totalQuantity is guaranteed > 0 from filter above
               const avgPrice = item.totalCost / item.totalQuantity;
-              // Composite ID for consolidated trade
-              const uniqueId = `BATCH-${batch.id}-${item.symbol}-${item.date.toISOString()}-${item.type}`;
+              // Stable, batch-independent composite ID so re-importing the same
+              // tradebook is idempotent. Trades are consolidated per
+              // (symbol, date, type), so this uniquely identifies one trade-day
+              // and the `orderId @unique` constraint prevents duplicate rows.
+              const uniqueId = `${item.symbol}-${item.date.toISOString()}-${item.type}`;
               
               return {
                   date: item.date,
@@ -198,10 +202,22 @@ export async function processZerodhaTradesCore(
               };
           });
 
-      // Bulk insert all transactions at once
-      const result = await tx.transaction.createMany({
-          data: transactionData
+      // Bulk insert. SQLite/Turso doesn't support createMany({ skipDuplicates }),
+      // so we pre-filter against existing orderIds to keep re-imports idempotent:
+      // any trade-day already present (matching orderId) is skipped, not duplicated.
+      const candidateOrderIds = transactionData.map((item) => item.orderId);
+      const existing = await tx.transaction.findMany({
+          where: { orderId: { in: candidateOrderIds } },
+          select: { orderId: true }
       });
+      const existingOrderIds = new Set(existing.map((row) => row.orderId));
+      const newTransactionData = transactionData.filter(
+          (item) => !existingOrderIds.has(item.orderId)
+      );
+
+      const result = newTransactionData.length > 0
+          ? await tx.transaction.createMany({ data: newTransactionData })
+          : { count: 0 };
 
       // Persist Symbol Mappings if provided (upsert requires individual calls)
       if (mappings && Object.keys(mappings).length > 0) {

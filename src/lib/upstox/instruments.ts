@@ -76,6 +76,11 @@ export const INDEX_KEYS: Record<string, string> = {
   'Nifty 500 Momentum 50': 'NSE_INDEX|Nifty500Momentm50',
   'Nifty500 Momentum 50': 'NSE_INDEX|Nifty500Momentm50',
   'Nifty500Momentm50': 'NSE_INDEX|Nifty500Momentm50',
+
+  // Nifty 500 (broad benchmark)
+  'NIFTY 500': 'NSE_INDEX|NIFTY 500',
+  'NIFTY_500': 'NSE_INDEX|NIFTY 500',
+  'Nifty 500': 'NSE_INDEX|NIFTY 500',
 };
 
 // ============================================================================

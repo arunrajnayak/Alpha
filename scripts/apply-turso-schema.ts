@@ -30,6 +30,23 @@ const client = createClient({
   authToken: TURSO_TOKEN,
 });
 
+/**
+ * Splits a Prisma-generated SQLite migration file into individual statements.
+ * These migrations only use `;` as a statement terminator and never embed
+ * semicolons inside string literals, so a simple split is safe here. We strip
+ * `-- ...` and block comments first so empty/comment-only fragments are dropped.
+ */
+function splitSqlStatements(sql: string): string[] {
+  const withoutComments = sql
+    .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+    .replace(/^\s*--.*$/gm, '');       // line comments
+
+  return withoutComments
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 async function main() {
   try {
     console.log('🚀 Connecting to Turso:', TURSO_URL);
@@ -52,14 +69,34 @@ async function main() {
 
       const sqlContent = fs.readFileSync(sqlFile, 'utf-8');
 
-      // SQLite/libSQL doesn't support PRAGMA foreign_keys inside transactions sometimes,
-      // but executeMultiple handles it well.
+      // Try the fast path first: executeMultiple runs the whole file in one shot.
+      // It stops at the FIRST failing statement, though — which is a problem for
+      // idempotent re-runs where some statements (e.g. `DROP INDEX` for an index
+      // that no longer exists) fail even though the important `CREATE TABLE`
+      // statements later in the file must still run. So on any failure we fall
+      // back to executing the file statement-by-statement, skipping ones that
+      // error (already applied / not applicable) and continuing with the rest.
       try {
         await client.executeMultiple(sqlContent);
         console.log(`✅ Applied migration ${folder} successfully.`);
       } catch (err: any) {
-        console.warn(`⚠️  Warning/Error applying ${folder}:`, err.message);
-        console.log('Continuing...');
+        console.warn(`⚠️  executeMultiple failed for ${folder}: ${err.message}`);
+        console.log('   Falling back to statement-by-statement execution...');
+
+        const statements = splitSqlStatements(sqlContent);
+        let applied = 0;
+        let skipped = 0;
+        for (const stmt of statements) {
+          try {
+            await client.execute(stmt);
+            applied++;
+          } catch (stmtErr: any) {
+            skipped++;
+            const preview = stmt.replace(/\s+/g, ' ').slice(0, 70);
+            console.warn(`   ⏭️  Skipped (${stmtErr.message}): ${preview}...`);
+          }
+        }
+        console.log(`   ✅ ${folder}: ${applied} statement(s) applied, ${skipped} skipped.`);
       }
     }
 

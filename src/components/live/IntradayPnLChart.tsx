@@ -28,7 +28,7 @@ interface IntradayPnLChartProps {
 const BENCHMARKS = [
   { key: 'portfolio', dataKey: 'percent',       label: 'Portfolio',  color: '#10b981' },
   { key: 'nifty50',  dataKey: 'nifty50Percent', label: 'Nifty 50',   color: '#8b5cf6' },
-  { key: 'n500m50',  dataKey: 'n500m50Percent', label: 'N500M50',    color: '#06b6d4' },
+  { key: 'n500m50',  dataKey: 'n500m50Percent', label: 'Nifty 500',    color: '#06b6d4' },
 ] as const;
 
 type SeriesKey = (typeof BENCHMARKS)[number]['key'];
@@ -251,7 +251,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
                 hide={!visible.nifty50}
               />
 
-              {/* Nifty500 Momentum 50 benchmark line */}
+              {/* Nifty 500 benchmark line */}
               <Line
                 type="monotone"
                 dataKey="n500m50Percent"

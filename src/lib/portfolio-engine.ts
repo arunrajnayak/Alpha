@@ -1,5 +1,44 @@
 import { differenceInDays } from 'date-fns';
 
+/**
+ * Replay ordering priority for transactions that share the same date.
+ *
+ * Trades are imported with a date-only granularity (time is zeroed at import),
+ * so intraday BUY/SELL pairs can end up in an arbitrary order. If a SELL is
+ * replayed before its same-day BUY, the oversell is clamped to zero and its
+ * quantity is silently lost — then the later BUY inflates the position, leaving
+ * a phantom holding for a stock that was actually fully sold.
+ *
+ * To avoid this we always replay same-day events as:
+ *   BUY  →  BONUS/SPLIT  →  SYMBOL_CHANGE  →  SELL
+ * i.e. shares must exist (and reflect corporate actions) before any SELL runs.
+ */
+const REPLAY_TYPE_ORDER: Record<string, number> = {
+    BUY: 0,
+    BONUS: 1,
+    SPLIT: 1,
+    SYMBOL_CHANGE: 2,
+    SELL: 3,
+};
+
+/**
+ * Returns a new array of transactions sorted by date ascending, breaking ties
+ * on the same date so BUYs (and corporate actions) are processed before SELLs.
+ * The sort is stable within each (date, type) group, preserving import order.
+ */
+export function orderTransactionsForReplay<T extends { date: Date; type: string }>(transactions: T[]): T[] {
+    return transactions
+        .map((tx, index) => ({ tx, index }))
+        .sort((a, b) => {
+            const dateDiff = a.tx.date.getTime() - b.tx.date.getTime();
+            if (dateDiff !== 0) return dateDiff;
+            const typeDiff = (REPLAY_TYPE_ORDER[a.tx.type] ?? 99) - (REPLAY_TYPE_ORDER[b.tx.type] ?? 99);
+            if (typeDiff !== 0) return typeDiff;
+            return a.index - b.index; // stable tie-break
+        })
+        .map((entry) => entry.tx);
+}
+
 // Types
 export interface PortfolioHolding {
     symbol: string;
@@ -78,17 +117,28 @@ export class PortfolioEngine {
             this.investedCapital -= tradeVal;
             this.dailyNetFlow -= tradeVal;
             
-            // Update Holdings (Reduce Qty)
-            const current = this.holdings.get(tx.symbol);
-            if (current && current.qty > 0) {
-                // Use Average Cost for "Book Value" reduction
-                // Guard against division by zero
-                const avgPrice = current.qty > 0 ? current.invested / current.qty : 0;
-                current.qty = Math.max(0, current.qty - tx.quantity);
+            // Update Holdings (net the quantity). We let the running quantity
+            // cross zero instead of clamping at each step. If the recorded SELLs
+            // for a symbol exceed its BUYs — e.g. missing buy imports or intraday
+            // shorts — the position settles to a non-positive quantity and is
+            // correctly excluded from current holdings, rather than leaving a
+            // phantom positive position (which previously happened because the
+            // per-step Math.max(0, ...) discarded the excess sell and a later BUY
+            // then re-inflated the holding).
+            const current = this.holdings.get(tx.symbol) || { symbol: tx.symbol, qty: 0, invested: 0, realizedPnl: 0 };
+            // Use Average Cost for "Book Value" reduction (guard against div-by-zero)
+            const avgPrice = current.qty > 0 ? current.invested / current.qty : 0;
+            current.qty = current.qty - tx.quantity;
+            if (current.qty > 0.00001) {
+                // Still long — reduce cost basis by the average cost of shares sold.
                 current.invested = Math.max(0, current.invested - (tx.quantity * avgPrice));
-                // Cleanup tiny floating point residuals
-                if (current.qty < 0.00001) { current.qty = 0; current.invested = 0; }
+            } else {
+                // Fully exited or over-sold — no remaining cost basis.
+                current.invested = 0;
+                // Snap tiny floating-point residuals to a clean zero.
+                if (Math.abs(current.qty) < 0.00001) current.qty = 0;
             }
+            this.holdings.set(tx.symbol, current);
 
             // Process Inventory for Realized PnL (FIFO)
             let qtySold = tx.quantity;

@@ -396,7 +396,7 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
           <Line
             type="monotone"
             dataKey="nifty500Momentum50NAV"
-            name="N500M50"
+            name="Nifty 500"
             stroke="#10b981"
             strokeWidth={hoveredSeries === 'nifty500Momentum50NAV' ? 3 : 2}
             strokeOpacity={hoveredSeries && hoveredSeries !== 'nifty500Momentum50NAV' ? 0.1 : 1}
@@ -480,7 +480,7 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
         {[
           { key: 'portfolioNAV', label: 'My NAV', color: '#3b82f6' },
           { key: 'niftyNAV', label: 'Nifty', color: '#8b5cf6' },
-          { key: 'nifty500Momentum50NAV', label: 'N500M50', color: '#10b981' },
+          { key: 'nifty500Momentum50NAV', label: 'Nifty 500', color: '#10b981' },
           { key: 'niftyMidcap100NAV', label: 'Midcap 100', color: '#f97316' },
           { key: 'niftySmallcap250NAV', label: 'Smallcap 250', color: '#ec4899' },
           { key: 'niftyMicrocap250NAV', label: 'Microcap 250', color: '#facc15' },

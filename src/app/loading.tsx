@@ -1,6 +1,14 @@
+import ShimmerText from '@/components/ui/ShimmerText';
+
 export default function Loading() {
   return (
-    <div className="flex flex-col gap-4 md:gap-8 pb-8 md:pb-0 min-h-screen pt-4 animate-pulse">
+    <div className="flex flex-col gap-4 md:gap-8 pb-8 md:pb-0 min-h-screen pt-4">
+      {/* Processing indicator */}
+      <div className="flex items-center justify-center">
+        <ShimmerText withDot className="text-sm">Loading your portfolio…</ShimmerText>
+      </div>
+
+      <div className="flex flex-col gap-4 md:gap-8 animate-pulse">
       {/* LiveHeader skeleton */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
@@ -34,6 +42,7 @@ export default function Loading() {
         {[...Array(3)].map((_, i) => (
           <div key={i} className="h-[300px] bg-slate-800/50 rounded-2xl border border-white/5"></div>
         ))}
+      </div>
       </div>
     </div>
   );

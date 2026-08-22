@@ -6,23 +6,34 @@ import { formatNumber } from '@/lib/format';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { LiveHeader, LiveStatsCards, LiveMovers, PerformanceRank, IntradayPnLChart } from '@/components/live';
+import ShimmerText from '@/components/ui/ShimmerText';
 
 const PortfolioHeatmap = dynamic(() => import('@/components/portfolio/PortfolioHeatmap'), {
-  loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
+  loading: () => (
+    <div className="relative h-[400px] rounded-2xl border border-white/5 overflow-hidden">
+      <div className="absolute inset-0 bg-slate-800/50 animate-pulse" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <ShimmerText withDot>Rendering portfolio heatmap…</ShimmerText>
+      </div>
+    </div>
+  ),
   ssr: false
 });
 
 const MarketOverviewSection = dynamic(() => import('./market/MarketOverviewClient'), {
   loading: () => (
-    <div className="flex flex-col gap-4 md:gap-5 animate-pulse">
+    <div className="flex flex-col gap-4 md:gap-5">
       <div className="flex flex-col md:flex-row gap-4 md:gap-5">
-        <div className="hidden md:flex flex-col gap-2 w-[220px] shrink-0">
+        <div className="hidden md:flex flex-col gap-2 w-[220px] shrink-0 animate-pulse">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-[76px] bg-slate-800/50 rounded-xl border border-white/5" />
           ))}
         </div>
-        <div className="flex-1">
-          <div className="h-[500px] bg-slate-800/50 rounded-2xl border border-white/5" />
+        <div className="flex-1 relative">
+          <div className="h-[500px] bg-slate-800/50 rounded-2xl border border-white/5 animate-pulse" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <ShimmerText withDot>Loading market overview…</ShimmerText>
+          </div>
         </div>
       </div>
     </div>

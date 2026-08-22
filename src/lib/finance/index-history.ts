@@ -9,7 +9,7 @@ import { financeLogger } from '@/lib/logger';
 export async function updateIndexHistory(startDate: Date) {
     const indices = [
         { symbol: 'NIFTY50', displayName: 'NIFTY 50' },
-        { symbol: 'NIFTY500_MOMENTUM50', displayName: 'NIFTY500 MOMENTUM 50' },
+        { symbol: 'NIFTY_500', displayName: 'NIFTY 500' },
         { symbol: 'NIFTY_MIDCAP100', displayName: 'NIFTY MIDCAP 100' },
         { symbol: 'NIFTY_SMALLCAP250', displayName: 'NIFTY SMALLCAP 250' },
         { symbol: 'NIFTY_MICROCAP250', displayName: 'NIFTY MICROCAP 250' }

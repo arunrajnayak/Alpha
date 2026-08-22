@@ -60,7 +60,7 @@ const ALL_WINDOWS: RollingWindow[] = ['1M', '3M', '6M', '1Y', '2Y', '3Y', '5Y'];
 const SERIES_CONFIG = [
   { key: 'portfolio' as const, label: 'Portfolio', color: '#3b82f6' },
   { key: 'nifty' as const,     label: 'Nifty',     color: '#8b5cf6' },
-  { key: 'n500m50' as const,   label: 'N500M50',   color: '#10b981' },
+  { key: 'n500m50' as const,   label: 'Nifty 500',   color: '#10b981' },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

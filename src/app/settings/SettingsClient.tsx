@@ -10,7 +10,7 @@ import { SettingsSection } from './SettingsLayout';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 import { initializeJob, triggerRecalculatePortfolio } from '@/app/actions';
-import { setDataLockDate } from '@/app/actions/settings';
+import { setDataLockDate, setUpstoxAnalyticsToken } from '@/app/actions/settings';
 import { refreshSectorMappings } from '@/app/actions/sectors';
 import { getUpstoxTokenStatus } from '@/app/actions/auth';
 import { useLiveData } from '@/context/LiveDataContext';
@@ -35,9 +35,11 @@ interface FreshnessData {
 export default function SettingsClient({
     initialDataLockDate,
     freshness,
+    initialAnalyticsTokenConfigured = false,
 }: {
     initialDataLockDate: string | null;
     freshness: FreshnessData | null;
+    initialAnalyticsTokenConfigured?: boolean;
 }) {
     // --- Common State ---
     const [recalcJobId, setRecalcJobId] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export default function SettingsClient({
     const [sectorCount, setSectorCount] = useState<number | null>(null);
 
     // --- Streaming State ---
-    const { streamingEnabled, setStreamingEnabled, streamStatus, isStreaming } = useLiveData();
+    const { streamingEnabled, setStreamingEnabled, streamStatus, isStreaming, refresh, clearConnectionError } = useLiveData();
 
     // --- Authentication State ---
     const [tokenStatus, setTokenStatus] = useState<{
@@ -67,6 +69,11 @@ export default function SettingsClient({
         statusMessage: string;
     } | null>(null);
     const [isLoadingToken, setIsLoadingToken] = useState(true);
+
+    // --- Analytics Token Input State ---
+    const [analyticsTokenInput, setAnalyticsTokenInput] = useState('');
+    const [isSavingToken, setIsSavingToken] = useState(false);
+    const [tokenConfigured, setTokenConfigured] = useState(initialAnalyticsTokenConfigured);
 
     // Fetch token status on mount
     const fetchTokenStatus = useCallback(async () => {
@@ -114,6 +121,48 @@ export default function SettingsClient({
             setSnackbar({ open: true, message: 'Error: ' + (e as Error).message, severity: 'error' });
         } finally {
             setIsSavingLock(false);
+        }
+    };
+
+    const handleSaveAnalyticsToken = async () => {
+        const value = analyticsTokenInput.trim();
+        if (!value) {
+            setSnackbar({ open: true, message: 'Please enter a token before saving.', severity: 'error' });
+            return;
+        }
+        setIsSavingToken(true);
+        try {
+            await setUpstoxAnalyticsToken(value);
+            setAnalyticsTokenInput('');
+            setTokenConfigured(true);
+            setSnackbar({ open: true, message: 'Upstox analytics token saved.', severity: 'success' });
+            await fetchTokenStatus();
+            // Token is now available — clear the "Upstox Token Missing" banner
+            // immediately and re-fetch live data so the app reconnects right away.
+            clearConnectionError();
+            await refresh();
+        } catch (e) {
+            setSnackbar({ open: true, message: 'Error: ' + (e as Error).message, severity: 'error' });
+        } finally {
+            setIsSavingToken(false);
+        }
+    };
+
+    const handleClearAnalyticsToken = async () => {
+        setIsSavingToken(true);
+        try {
+            await setUpstoxAnalyticsToken(null);
+            setAnalyticsTokenInput('');
+            setTokenConfigured(false);
+            setSnackbar({ open: true, message: 'Upstox analytics token cleared.', severity: 'success' });
+            await fetchTokenStatus();
+            // Re-fetch so the app reflects the removed token (banner may reappear
+            // if there is no UPSTOX_ANALYTICS_TOKEN env-var fallback).
+            await refresh();
+        } catch (e) {
+            setSnackbar({ open: true, message: 'Error: ' + (e as Error).message, severity: 'error' });
+        } finally {
+            setIsSavingToken(false);
         }
     };
 
@@ -199,8 +248,59 @@ export default function SettingsClient({
                                         : tokenStatus.hoursRemaining !== null
                                             ? `${tokenStatus.hoursRemaining.toFixed(1)}h left`
                                             : 'Connected')
-                                    : 'No token — set UPSTOX_ANALYTICS_TOKEN in your environment'}
+                                    : 'No token — set it below or via UPSTOX_ANALYTICS_TOKEN env var'}
                             </span>
+                        </div>
+
+                        {/* Analytics Token Setting */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-900/40 p-3 rounded-xl border border-white/5 gap-3">
+                            <div>
+                                <h3 className="text-sm font-medium text-gray-200">Analytics Token</h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    {tokenConfigured
+                                        ? 'A token is saved. Enter a new value to replace it, or clear it to use the environment variable.'
+                                        : 'Set the long-lived Upstox analytics token. Stored securely on the server.'}
+                                </p>
+                            </div>
+                            <div className="flex gap-2 items-center flex-wrap">
+                                <TextField
+                                    size="small"
+                                    type="password"
+                                    autoComplete="off"
+                                    placeholder={tokenConfigured ? '•••••••• (saved)' : 'Paste token'}
+                                    value={analyticsTokenInput}
+                                    onChange={(e) => setAnalyticsTokenInput(e.target.value)}
+                                    sx={{
+                                        minWidth: '200px',
+                                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' },
+                                        '& .MuiInputBase-input': { py: '6px' }
+                                    }}
+                                    slotProps={{
+                                        input: { sx: { color: 'white', fontSize: '0.8rem' } },
+                                        inputLabel: { shrink: true, sx: { color: '#94a3b8' } }
+                                    }} />
+                                <Button
+                                    variant="contained"
+                                    onClick={handleSaveAnalyticsToken}
+                                    disabled={isSavingToken || !analyticsTokenInput.trim()}
+                                    size="small"
+                                    className="btn-gradient"
+                                    sx={{ textTransform: 'none', height: '32px', minWidth: '60px' }}
+                                >
+                                    {isSavingToken ? <CircularProgress size={14} color="inherit" /> : 'Save'}
+                                </Button>
+                                {tokenConfigured && (
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        onClick={handleClearAnalyticsToken}
+                                        disabled={isSavingToken}
+                                        sx={{ color: '#f87171', minWidth: 'auto', px: 1, height: '32px' }}
+                                    >
+                                        Clear
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </Paper>

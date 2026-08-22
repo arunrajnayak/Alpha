@@ -32,7 +32,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
   { key: 'returns', label: 'Monthly Returns' },
   { key: 'alpha-nifty', label: 'vs Nifty' },
-  { key: 'alpha-momentum', label: 'vs N500M50' },
+  { key: 'alpha-momentum', label: 'vs Nifty 500' },
 ];
 
 // Helper to format percentage
@@ -294,7 +294,7 @@ export default function MonthlyReturnsHeatmap({ data, monthlySnapshots, chartDat
             <FontAwesomeIcon icon={faTable} className="text-purple-400 text-lg" />
           </div>
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-            {viewMode === 'returns' ? 'Monthly Returns' : viewMode === 'alpha-nifty' ? 'Alpha vs Nifty 50' : 'Alpha vs N500 Momentum 50'}
+            {viewMode === 'returns' ? 'Monthly Returns' : viewMode === 'alpha-nifty' ? 'Alpha vs Nifty 50' : 'Alpha vs Nifty 500'}
           </span>
         </div>
 

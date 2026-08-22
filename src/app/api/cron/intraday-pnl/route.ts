@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         
         // Extract benchmark index % changes (same logic as LiveDataContext)
         const nifty50Percent = dashboardData.indices.find(i => i.name === 'Nifty 50')?.percentChange ?? null;
-        const n500m50Percent = dashboardData.indices.find(i => i.name === 'Nifty 500 Momentum 50')?.percentChange ?? null;
+        const n500m50Percent = dashboardData.indices.find(i => i.name === 'Nifty 500')?.percentChange ?? null;
 
         // Save P/L + index benchmarks to database
         await saveIntradayPnL(dashboardData.dayGain, dashboardData.dayGainPercent, nifty50Percent, n500m50Percent);

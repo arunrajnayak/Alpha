@@ -501,7 +501,7 @@ export const INDEX_KEYS = {
     'Nifty Midcap 100': 'NSE_INDEX|NIFTY MIDCAP 100',      // UPPERCASE
     'Nifty Smallcap 250': 'NSE_INDEX|NIFTY SMLCAP 250',    // UPPERCASE, SMLCAP not SMALLCAP
     'Nifty Microcap 250': 'NSE_INDEX|NIFTY MICROCAP250',   // UPPERCASE, no space before 250
-    'Nifty 500 Momentum 50': 'NSE_INDEX|Nifty500Momentm50', // No spaces, Momentm not Momentum
+    'Nifty 500': 'NSE_INDEX|NIFTY 500',                    // Broad benchmark (uppercase, space before 500)
     'Nifty Bank': 'NSE_INDEX|Nifty Bank',
     'Nifty IT': 'NSE_INDEX|Nifty IT',
     'Nifty Next 50': 'NSE_INDEX|Nifty Next 50',

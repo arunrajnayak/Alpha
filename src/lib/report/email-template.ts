@@ -236,7 +236,7 @@ function renderPortfolio(p: ReportData['portfolio']): string {
           <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:left;">Period</th>
           <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">Portfolio</th>
           <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">Nifty 50</th>
-          <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">N500 Mom50</th>
+          <th style="padding:6px 0;font-size:10px;font-weight:700;color:${C.muted};text-transform:uppercase;text-align:right;">Nifty 500</th>
         </tr>
       </thead>
       <tbody>

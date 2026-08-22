@@ -7,7 +7,7 @@
  */
 
 import { prisma, chunkArray } from '@/lib/db';
-import { PortfolioEngine } from '@/lib/portfolio-engine';
+import { PortfolioEngine, orderTransactionsForReplay } from '@/lib/portfolio-engine';
 import { getLiveQuotes, getInstrumentKeys } from '@/lib/upstox';
 import { getCategoriesBatch, getSymbolResolver } from '@/lib/amfi';
 
@@ -79,12 +79,13 @@ export async function calculatePortfolioValue(
   const symbolMappings = await prisma.symbolMapping.findMany();
   const resolveSymbol = getSymbolResolver(symbolMappings);
 
-
-  for (const tx of transactions) {
-    engine.processTransaction({
-      ...tx,
-      symbol: resolveSymbol(tx.symbol),
-    });
+  // Order same-day events BUY-before-SELL to avoid phantom holdings from
+  // intraday buy/sell pairs (see orderTransactionsForReplay).
+  const orderedTransactions = orderTransactionsForReplay(
+    transactions.map(tx => ({ ...tx, symbol: resolveSymbol(tx.symbol) }))
+  );
+  for (const tx of orderedTransactions) {
+    engine.processTransaction(tx);
   }
 
   // 3. Get active holdings (qty > 0)

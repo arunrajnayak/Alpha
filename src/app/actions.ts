@@ -6,6 +6,7 @@ import { recalculatePortfolioHistory } from '@/lib/finance';
 import { getLTP, hasValidToken } from '@/lib/upstox-client';
 import { getInstrumentKeys, isValidSymbol, getInstrumentKeyByISIN, getSymbolFromKey } from '@/lib/instrument-service';
 import { getSymbolResolver } from '@/lib/amfi';
+import { orderTransactionsForReplay } from '@/lib/portfolio-engine';
 import { fetchNSEHistory } from '@/lib/nse-api';
 import { logger } from '@/lib/logger';
 
@@ -763,11 +764,14 @@ export async function getCurrentStockQuantities(): Promise<Record<string, number
     const symbolMappings = await prisma.symbolMapping.findMany();
     const resolveSymbol = getSymbolResolver(symbolMappings);
     
-    // Normalize symbols in transactions
-    const normalizedTransactions = transactions.map(tx => ({
-        ...tx,
-        symbol: resolveSymbol(tx.symbol)
-    }));
+    // Normalize symbols in transactions and order same-day events BUY-before-SELL
+    // so intraday pairs and splits replay in a consistent order.
+    const normalizedTransactions = orderTransactionsForReplay(
+        transactions.map(tx => ({
+            ...tx,
+            symbol: resolveSymbol(tx.symbol)
+        }))
+    );
 
     const holdings = new Map<string, number>();
     

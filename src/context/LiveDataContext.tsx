@@ -153,7 +153,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
         // Extract benchmark index % changes to co-store with each snapshot
         const nifty50Percent = data.indices.find(i => i.name === 'Nifty 50')?.percentChange ?? null;
-        const n500m50Percent = data.indices.find(i => i.name === 'Nifty 500 Momentum 50')?.percentChange ?? null;
+        const n500m50Percent = data.indices.find(i => i.name === 'Nifty 500')?.percentChange ?? null;
         
         saveIntradayPnL(currentPnl, currentPercent, nifty50Percent, n500m50Percent)
           .then(() => {

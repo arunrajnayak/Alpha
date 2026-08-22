@@ -1,8 +1,12 @@
 /**
  * Upstox Authentication Service
  *
- * Uses the Analytics Token — a long-lived (1-year) read-only token set via env var.
- * Falls back to DB-stored OAuth tokens if present (legacy support).
+ * Uses the Analytics Token — a long-lived (1-year) read-only token.
+ * The token can be configured either:
+ *   1. Via the Settings page, which stores it in the `AppConfig` table
+ *      under the key `UPSTOX_ANALYTICS_TOKEN` (takes priority), or
+ *   2. Via the `UPSTOX_ANALYTICS_TOKEN` environment variable (fallback).
+ * Falls back to DB-stored OAuth tokens if neither is present (legacy support).
  *
  * NOTE: External consumers should import token functions from '@/lib/upstox-client'
  * which re-exports everything from this file. This module is the internal implementation.
@@ -12,14 +16,70 @@ import { prisma } from '../db';
 import { TokenStatus, TokenExpiredError, NoTokenError } from './types';
 
 // ============================================================================
-// Analytics Token (Long-lived, env var based)
+// Analytics Token (Long-lived; DB-configured with env var fallback)
 // ============================================================================
 
+/** AppConfig key under which the Settings page stores the analytics token. */
+export const ANALYTICS_TOKEN_CONFIG_KEY = 'UPSTOX_ANALYTICS_TOKEN';
+
+interface AnalyticsTokenCache {
+  value: string | null;
+  source: 'settings' | 'env' | null;
+  cachedAt: number;
+}
+
+let analyticsTokenCache: AnalyticsTokenCache | null = null;
+const ANALYTICS_TOKEN_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
 /**
- * Check if Analytics Token is configured
+ * Clear the analytics token cache. Call this after the token is changed via
+ * the Settings page so the new value is picked up immediately.
  */
-export function hasAnalyticsToken(): boolean {
-  return !!process.env.UPSTOX_ANALYTICS_TOKEN;
+export function clearAnalyticsTokenCache(): void {
+  analyticsTokenCache = null;
+}
+
+/**
+ * Resolve the analytics token, preferring the value configured via the Settings
+ * page (AppConfig) over the environment variable. Returns `null` when neither
+ * is configured. Result is briefly cached to avoid a DB hit on every request.
+ */
+async function resolveAnalyticsToken(): Promise<AnalyticsTokenCache> {
+  const now = Date.now();
+  if (analyticsTokenCache && now - analyticsTokenCache.cachedAt < ANALYTICS_TOKEN_CACHE_TTL_MS) {
+    return analyticsTokenCache;
+  }
+
+  let value: string | null = null;
+  let source: 'settings' | 'env' | null = null;
+
+  try {
+    const cfg = await prisma.appConfig.findUnique({
+      where: { key: ANALYTICS_TOKEN_CONFIG_KEY },
+    });
+    if (cfg?.value) {
+      value = cfg.value;
+      source = 'settings';
+    }
+  } catch {
+    // DB unavailable — fall through to env var.
+  }
+
+  if (!value && process.env.UPSTOX_ANALYTICS_TOKEN) {
+    value = process.env.UPSTOX_ANALYTICS_TOKEN;
+    source = 'env';
+  }
+
+  analyticsTokenCache = { value, source, cachedAt: now };
+  return analyticsTokenCache;
+}
+
+/**
+ * Check if an Analytics Token is configured (via Settings or env var).
+ */
+export async function hasAnalyticsToken(): Promise<boolean> {
+  const { value } = await resolveAnalyticsToken();
+  return !!value;
 }
 
 // ============================================================================
@@ -48,8 +108,9 @@ export function clearTokenCache(): void {
  * Prefers Analytics Token (env var) over legacy DB token
  */
 export async function getStoredToken(): Promise<string | null> {
-  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
-    return process.env.UPSTOX_ANALYTICS_TOKEN;
+  const { value: analyticsToken } = await resolveAnalyticsToken();
+  if (analyticsToken) {
+    return analyticsToken;
   }
 
   const now = Date.now();
@@ -96,8 +157,9 @@ export async function getStoredToken(): Promise<string | null> {
  * Get access token - throws if not available
  */
 export async function getAccessToken(): Promise<string> {
-  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
-    return process.env.UPSTOX_ANALYTICS_TOKEN;
+  const { value: analyticsToken } = await resolveAnalyticsToken();
+  if (analyticsToken) {
+    return analyticsToken;
   }
 
   const token = await getStoredToken();
@@ -127,7 +189,8 @@ export async function getAccessToken(): Promise<string> {
  * Check if we have a valid token
  */
 export async function hasValidToken(): Promise<boolean> {
-  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+  const { value: analyticsToken } = await resolveAnalyticsToken();
+  if (analyticsToken) {
     return true;
   }
   const token = await getStoredToken();
@@ -139,14 +202,17 @@ export async function hasValidToken(): Promise<boolean> {
  */
 export async function getTokenStatus(): Promise<TokenStatus> {
   // Analytics token — long-lived, no expiry concerns
-  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+  const { value: analyticsToken, source } = await resolveAnalyticsToken();
+  if (analyticsToken) {
     return {
       hasToken: true,
       isAnalyticsToken: true,
       expiresAt: null,
       hoursRemaining: null,
       isExpiringSoon: false,
-      statusMessage: 'Analytics Token active (read-only, 1-year validity)',
+      statusMessage: source === 'settings'
+        ? 'Analytics Token active (configured in Settings, read-only)'
+        : 'Analytics Token active (read-only, 1-year validity)',
     };
   }
 
@@ -200,8 +266,9 @@ export async function getTokenStatus(): Promise<TokenStatus> {
 /**
  * Validate Upstox configuration
  */
-export function validateConfig(): { valid: boolean; missing: string[] } {
-  if (process.env.UPSTOX_ANALYTICS_TOKEN) {
+export async function validateConfig(): Promise<{ valid: boolean; missing: string[] }> {
+  const { value: analyticsToken } = await resolveAnalyticsToken();
+  if (analyticsToken) {
     return { valid: true, missing: [] };
   }
   return { valid: false, missing: ['UPSTOX_ANALYTICS_TOKEN'] };

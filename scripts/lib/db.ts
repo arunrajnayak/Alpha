@@ -1,6 +1,7 @@
 /**
  * Standalone Prisma client for scripts.
- * Loads .env.local for DATABASE_URL (Neon Postgres).
+ * Loads .env.local / .env for DATABASE_URL and connects to Turso/SQLite
+ * via the libSQL driver adapter (mirrors src/lib/db.ts).
  */
 
 import { config } from 'dotenv';
@@ -8,23 +9,22 @@ config({ path: '.env.local' });
 config({ path: '.env' });
 
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 
-const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl) throw new Error('Missing DATABASE_URL env var');
+const dbUrl = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL;
+if (!dbUrl) throw new Error('Missing DATABASE_URL (or TURSO_DATABASE_URL) env var');
 
-// Strip channel_binding and normalise sslmode to verify-full
-const urlObj = new URL(dbUrl);
-urlObj.searchParams.delete('channel_binding');
-urlObj.searchParams.set('sslmode', 'verify-full');
-const safeDbUrl = urlObj.toString();
+// Normalise the URL: trim, strip surrounding quotes, and force HTTP transport
+// (libsql:// -> https://) which is the transport used across the app.
+let cleanUrl = dbUrl.trim().replace(/^["']|["']$/g, '');
+if (/^libsql:\/\//i.test(cleanUrl)) {
+  cleanUrl = cleanUrl.replace(/^libsql:\/\//i, 'https://');
+}
 
-const pool = new Pool({
-  connectionString: safeDbUrl,
-  ssl: { rejectUnauthorized: false },
+const adapter = new PrismaLibSql({
+  url: cleanUrl,
+  authToken: process.env.TURSO_AUTH_TOKEN,
 });
-const adapter = new PrismaPg(pool);
 
 export const prisma = new PrismaClient({ adapter });
 

@@ -3,6 +3,7 @@ import { differenceInCalendarDays } from 'date-fns';
 import type { MarketCapCategory } from './amfi';
 import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver } from './amfi';
 import { calculateBrokerageCharges, calculateCapitalGainsTax, ChargesBreakdown, TaxBreakdown } from './charges';
+import { orderTransactionsForReplay } from './portfolio-engine';
 
 export interface ExitRecord {
     id: string; // Composite ID
@@ -42,10 +43,14 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
 
     const symbolMappings = await prisma.symbolMapping.findMany();
     const resolveSymbol = getSymbolResolver(symbolMappings);
-    const transactions = transactionsRaw.map(t => ({
-        ...t,
-        symbol: resolveSymbol(t.symbol)
-    }));
+    // Order same-day events BUY-before-SELL so intraday buy/sell pairs are paired
+    // correctly and don't corrupt exit-cycle tracking (see orderTransactionsForReplay).
+    const transactions = orderTransactionsForReplay(
+        transactionsRaw.map(t => ({
+            ...t,
+            symbol: resolveSymbol(t.symbol)
+        }))
+    );
 
     // Batch fetch AMFI categories for all symbols in transactions
     const uniqueSymbols = Array.from(new Set(transactions.map(t => t.symbol)));

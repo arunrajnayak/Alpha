@@ -1,8 +1,25 @@
 # Alpha Portfolio Tracker
 
+<p align="center">
+  A self-hosted portfolio tracker for Indian equity markets — live P&amp;L, performance analytics, and a daily NSE momentum screener.
+</p>
+
 <div align="center">
-  <img src="public/screenshots/live.png" alt="Live" width="49%" />
-  <img src="public/screenshots/dashboard.png" alt="Dashboard" width="49%" />
+  <img src="public/screenshots/live.png" alt="Alpha — Live Dashboard" width="85%" />
+  <br />
+  <sub><em>Live Dashboard — real-time P&amp;L, portfolio heatmap &amp; intraday chart</em></sub>
+</div>
+
+<br />
+
+<div align="center">
+  <details>
+    <summary><b>📊 View the full Historical Dashboard</b></summary>
+    <br />
+    <img src="public/screenshots/dashboard.png" alt="Alpha — Historical Dashboard" width="70%" />
+    <br />
+    <sub><em>Historical Dashboard — NAV, XIRR, drawdown &amp; benchmark comparisons</em></sub>
+  </details>
 </div>
 
 A self-hosted portfolio tracking application for Indian stock markets with real-time market data, historical performance analysis, and comprehensive reporting. Built with Next.js and powered by Upstox API.
@@ -16,11 +33,12 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 
 - **Real-time Dashboard** — Live portfolio P&L with WebSocket price streaming from Upstox
 - **Momentum Screener** — Daily-ranked NSE universe using composite Sharpe ratio scoring with ATH proximity filters, plus exit signal detection for portfolio holdings
+- **Radar — Volume-Breakout Scanner** — Live candlestick charts with volume-breakout/breakdown detection, HH/HL/LH/LL swing marking, and a ranked, sortable list across your holdings + a personal watchlist (`1m`→`1M` timeframes)
 - **Privacy Mode** — Toggle to hide monetary values on desktop (great for screen sharing)
 - **Performance Analytics** — NAV tracking, XIRR, drawdown, benchmark comparisons (NIFTY 50, NIFTY 500 MOMENTUM 50, etc.)
 - **Market Cap Classification** — Automatic Large/Mid/Small/Micro cap breakdown using AMFI data
 - **Sector Allocation** — Visual treemap and pie charts showing portfolio sector exposure
-- **Portfolio Heatmap** — Color-coded view of stock performance across your holdings
+- **Portfolio Heatmap** — Treemap, animated donut **Allocation** view, and diverging **Bars** view of holding performance, with an interactive scroll-synced legend
 - **Intraday P&L Chart** — Minute-by-minute P&L tracking with index overlay
 - **Corporate Actions** — Track stock splits, bonuses, and symbol changes with automatic price adjustments
 - **Trade Import** — Bulk import trades from Excel/CSV files
@@ -444,6 +462,23 @@ Indicates a warning condition. The stock is not in a Red state, but matches any 
 
 ---
 
+## 📡 Radar — Volume-Breakout Scanner
+
+A live candlestick + volume-breakout scanner (menu: **Radar**) that ranks your holdings alongside a personal watchlist by breakout strength.
+
+### What it does
+- **Candlestick chart** for the selected symbol with **Donchian(20)** breakout/breakdown levels, **HH / HL / LH / LL** swing markers, and a dashed marker at the candle where the current breakout/breakdown began.
+- **Ranked scanner list** — every symbol is scored and sorted so the strongest moves surface first.
+- **Sortable** by **Strength** (default), **BO** (breakouts first), **BD** (breakdowns first), or **A–Z**.
+- **Timeframes**: `1m · 5m · 15m · 30m · 1h · 4h · 1D · 1W · 1M` (default `1D`), built by resampling native Upstox candles.
+- **Live toggle** — pause auto-refresh + live ticks to study a frozen last-session chart on weekends/holidays; resume to fold live LTP into the forming candle.
+- **Personal watchlist** — add/remove your own symbols (validated against the Upstox instrument master). New symbols show an *Adding…* state, then auto-scroll + glow their row once the scan surfaces them. Persisted in the DB (`RadarWatchlist`) for cross-device sync, with a localStorage cache for instant paint + offline fallback.
+
+### Ranking formula
+Each symbol's score is `volumeRatio × (1 + |distanceFromLevel%| / 5)`, signed negative for breakdowns. `volumeRatio` is the latest volume vs the trailing average; `distanceFromLevel%` is how decisively price cleared the Donchian band. Default sort is by **magnitude** (either direction); use the sort buttons to group by direction.
+
+---
+
 ## 🏗️ Architecture
 
 <details>
@@ -504,19 +539,24 @@ src/
 │   │   ├── cron/          # Scheduled jobs (snapshot, screener, sector, corp actions)
 │   │   ├── stream/        # WebSocket authorization
 │   │   └── portfolio/     # Snapshot generation
+│   │   └── charts.ts      # Radar: candles, breakout scan, watchlist actions
 │   ├── screener/          # Momentum screener page
+│   ├── radar/             # Radar breakout-scanner page
 │   ├── dashboard/         # Historical dashboard page
 │   ├── settings/          # Settings page (auth, AMFI, corp actions)
 │   └── trades/            # Trade management & import
 ├── components/            # React components
 │   ├── screener/          # ScreenerClient, StatsBar, RulesInfoModal
+│   ├── radar/             # RadarClient, CandlestickChart, BreakoutList
 │   ├── live/              # LiveHeader, LiveStatsCards, LiveMovers, IntradayPnLChart
-│   └── portfolio/         # PortfolioTable, Heatmap, SectorAllocation
+│   └── portfolio/         # PortfolioTable, Heatmap (treemap/donut/bars), SectorAllocation
 ├── context/
 │   └── LiveDataContext.tsx # WebSocket + polling data provider
 ├── hooks/
-│   └── useUpstoxStream.ts # WebSocket connection to Upstox (Protobuf V3)
+│   ├── useUpstoxStream.ts # WebSocket connection to Upstox (Protobuf V3)
+│   └── useWatchlist.ts    # DB-backed Radar watchlist (localStorage cache)
 └── lib/                   # Core library code
+    ├── charts/            # Pure candle/indicator utils (resample, Donchian, pivots)
     ├── screener/          # Momentum screener pipeline
     │   ├── pipeline.ts    # Daily orchestrator (candles → score → rank → store)
     │   ├── scoring.ts     # Sharpe + composite score (mirrors backtest engine.py)
@@ -538,7 +578,7 @@ src/
 
 **Core Tables**: Transaction, DailyPortfolioSnapshot, WeeklyPortfolioSnapshot, MonthlyPortfolioSnapshot
 
-**Support Tables**: StockHistory, IndexHistory, SymbolMapping, AMFIClassification, SectorMapping, UpstoxToken, IntradayPnL
+**Support Tables**: StockHistory, IndexHistory, SymbolMapping, AMFIClassification, SectorMapping, UpstoxToken, IntradayPnL, Dividend, RadarWatchlist
 
 ### Real-time Data Flow
 

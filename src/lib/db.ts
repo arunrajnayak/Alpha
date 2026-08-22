@@ -29,6 +29,7 @@ function createPrismaClient(): PrismaClient {
   // Turso integration, so we fall back to it automatically.
   const dbUrl = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL;
 
+  // Always require Turso credentials via DATABASE_URL
   if (!dbUrl) {
     throw new Error(
       'Missing database credentials. Please set DATABASE_URL (or TURSO_DATABASE_URL) in your .env.local file.\n' +
@@ -50,6 +51,7 @@ function createPrismaClient(): PrismaClient {
     url: cleanUrl,
     authToken: process.env.TURSO_AUTH_TOKEN,
   });
+
   return new PrismaClient({ adapter });
 }
 

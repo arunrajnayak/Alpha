@@ -56,7 +56,7 @@ export async function GET(): Promise<NextResponse<AuthorizeResponse | { error: s
       INDEX_KEYS['Nifty Midcap 100'],
       INDEX_KEYS['Nifty Smallcap 250'],
       INDEX_KEYS['Nifty Microcap 250'],
-      INDEX_KEYS['Nifty 500 Momentum 50'],
+      INDEX_KEYS['Nifty 500'],
     ].filter(Boolean) as string[];
 
     for (const key of indexKeys) {

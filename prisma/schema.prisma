@@ -355,3 +355,34 @@ model Dividend {
   @@index([fiscalYear])
   @@index([exDate])
 }
+
+// User's custom Radar watchlist symbols (holdings are merged in separately).
+model RadarWatchlist {
+  id        Int      @id @default(autoincrement())
+  symbol    String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// Configurable news source domains for the Radar news panel (seeded with
+// defaults on first use; user can add/remove any public domain).
+model RadarNewsSource {
+  id        Int      @id @default(autoincrement())
+  domain    String   @unique
+  isPrivate Boolean  @default(false)
+  // Provider adapter for this source: "rss" (default website feed) or "x"
+  // (X/Twitter API). Determines which credential fields apply.
+  provider  String   @default("rss")
+  // Provider-specific credentials as a JSON key→value map (e.g. bearerToken).
+  // Stored in the user's own DB and never returned to the client (only a
+  // `hasAuth` flag is exposed).
+  authConfig String?
+  // Legacy single-credential columns (kept for backward compatibility).
+  authToken String?
+  authUser  String?
+  authPass  String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
