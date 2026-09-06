@@ -61,7 +61,7 @@ const LiveMovers = memo(function LiveMovers({
                                         {stock.dayChangePercent > 0 ? '+' : ''}{stock.dayChangePercent.toFixed(2)}%
                                     </span>
                                     <span className={`text-xs ${stock.dayChange >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>
-                                        {privacyMode && !isMobile ? '****' : (
+                                        {privacyMode ? '****' : (
                                             <>{stock.dayChange > 0 ? '+' : ''}{formatCurrency(stock.dayChange * stock.quantity, 0, 0)}</>
                                         )}
                                     </span>
@@ -111,7 +111,7 @@ const LiveMovers = memo(function LiveMovers({
                                         {stock.dayChangePercent.toFixed(2)}%
                                     </span>
                                     <span className="text-xs text-red-400/70">
-                                        {privacyMode && !isMobile ? '****' : formatCurrency(stock.dayChange * stock.quantity, 0, 0)}
+                                        {privacyMode ? '****' : formatCurrency(stock.dayChange * stock.quantity, 0, 0)}
                                     </span>
                                 </div>
                             </motion.div>

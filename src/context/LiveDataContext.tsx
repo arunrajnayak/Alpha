@@ -135,6 +135,27 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Global keyboard shortcut: Cmd+I (Mac) / Ctrl+I (Windows/Linux) to toggle privacy mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+        // Do not intercept when user is typing in form fields
+        const target = e.target as HTMLElement | null;
+        if (target) {
+          const tagName = target.tagName;
+          if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable) {
+            return;
+          }
+        }
+        e.preventDefault();
+        togglePrivacy();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePrivacy]);
+
   // Monitor data changes to save P/L history periodically (throttled to 1 minute)
   useEffect(() => {
     if (!data || (!data.dayGain && data.dayGain !== 0)) return;

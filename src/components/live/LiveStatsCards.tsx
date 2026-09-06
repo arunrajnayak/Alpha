@@ -41,7 +41,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
                 <div className="relative z-10 p-5 h-full flex flex-col justify-between">
                     <p className="text-xs font-medium text-violet-300/60 uppercase tracking-wider">Total Equity</p>
                     <h2 className="text-4xl font-bold bg-gradient-to-r from-violet-300 via-purple-200 to-white bg-clip-text text-transparent">
-                        {privacyMode && !isMobile ? '****' : (
+                        {privacyMode ? '****' : (
                             <>₹<CountUp 
                                 start={hasAnimatedInitial ? (prevData?.totalEquity ?? data.totalEquity) : 0}
                                 end={data.totalEquity} 
@@ -67,7 +67,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
                         </span>
                     </div>
                     <h2 className={`text-4xl font-bold whitespace-nowrap ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {privacyMode && !isMobile ? '****' : (
+                        {privacyMode ? '****' : (
                             <>{isPositive ? '+' : '-'}₹<CountUp 
                                 start={hasAnimatedInitial ? Math.abs(prevData?.dayGain ?? data.dayGain) : 0}
                                 end={Math.abs(data.dayGain)} 

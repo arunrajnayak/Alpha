@@ -229,7 +229,7 @@ export default function Header() {
                   ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
                   : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
               }`}
-              title={privacyMode ? 'Show Values' : 'Hide Values'}
+              title={privacyMode ? 'Show Values (⌘I)' : 'Hide Values (⌘I)'}
             >
               <FontAwesomeIcon icon={privacyMode ? faEyeSlash : faEye} className="w-4 h-4" />
             </button>
