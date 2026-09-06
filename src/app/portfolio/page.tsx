@@ -1,18 +1,25 @@
 'use client';
 
+import { Suspense, useState, useEffect } from 'react';
 import { usePortfolioHoldings, useHistoricalHoldings } from '@/hooks/useQueries';
 import PortfolioClient from '@/components/portfolio/PortfolioClient';
 import { useLiveData } from '@/context/LiveDataContext';
+import PortfolioLoading from './loading';
 
-export default function PortfolioPage() {
+function PortfolioContent() {
+  const [mounted, setMounted] = useState(false);
   const { privacyMode } = useLiveData();
   const { data: currentHoldings, isLoading: holdingsLoading } = usePortfolioHoldings();
   const { data: historicalHoldings, isLoading: historyLoading, isFetching } = useHistoricalHoldings();
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const isLoading = holdingsLoading || historyLoading;
 
-  if (isLoading && (!currentHoldings || !historicalHoldings)) {
-    return null; // Next.js loading.tsx handles the skeleton
+  if (!mounted || (isLoading && (!currentHoldings || !historicalHoldings))) {
+    return <PortfolioLoading />;
   }
 
   if (!currentHoldings || !historicalHoldings) {
@@ -36,3 +43,12 @@ export default function PortfolioPage() {
     </div>
   );
 }
+
+export default function PortfolioPage() {
+  return (
+    <Suspense fallback={<PortfolioLoading />}>
+      <PortfolioContent />
+    </Suspense>
+  );
+}
+

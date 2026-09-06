@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo, memo, forwardRef } from 'react';
-import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { PortfolioHolding } from '@/lib/types';
 import Table from '@mui/material/Table';
@@ -141,11 +140,12 @@ interface HoldingRowProps {
     totalPortfolioValue: number;
     index: number;
     privacyMode?: boolean;
+    onSymbolClick?: (symbol: string) => void;
 }
 
 const MASK = '••••';
 
-const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, index, privacyMode = false }: HoldingRowProps) {
+const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, index, privacyMode = false, onSymbolClick }: HoldingRowProps) {
     const avgPrice = h.invested / h.quantity;
     const isProfit = h.pnl >= 0;
     const weight = totalPortfolioValue > 0 ? (h.currentValue / totalPortfolioValue) * 100 : 0;
@@ -155,9 +155,9 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
             <StyledTableCell component="th" scope="row" sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: '#111827', borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-semibold text-white">
+                        <button onClick={() => onSymbolClick?.(h.symbol)} className="font-semibold text-white hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left">
                             {h.symbol}
-                        </span>
+                        </button>
                     </div>
                     <div className="hidden md:flex gap-1 flex-wrap">
                         <MarketCapChip category={h.marketCapCategory} />
@@ -230,7 +230,7 @@ const HoldingRow = memo(function HoldingRow({ holding: h, totalPortfolioValue, i
     );
 });
 
-export default function HoldingsTable({ holdings, privacyMode = false }: { holdings: PortfolioHolding[]; privacyMode?: boolean }) {
+export default function HoldingsTable({ holdings, privacyMode = false, onSymbolClick }: { holdings: PortfolioHolding[]; privacyMode?: boolean; onSymbolClick?: (symbol: string) => void }) {
   const [sortKey, setSortKey] = useState<SortKey>('weight');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -383,7 +383,7 @@ export default function HoldingsTable({ holdings, privacyMode = false }: { holdi
               <StyledTableCell component="th" scope="row" sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: '#111827', borderRight: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-semibold text-white">{h.symbol}</span>
+                    <button onClick={() => onSymbolClick?.(h.symbol)} className="font-semibold text-white hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left">{h.symbol}</button>
                   </div>
                   <div className="hidden md:flex gap-1 flex-wrap">
                     <MarketCapChip category={h.marketCapCategory} />
@@ -464,7 +464,7 @@ export default function HoldingsTable({ holdings, privacyMode = false }: { holdi
             </TableHead>
             <TableBody>
                 {sortedHoldings.map((h, i) => (
-                    <HoldingRow key={h.symbol} holding={h} totalPortfolioValue={totalPortfolioValue} index={i} privacyMode={privacyMode} />
+                    <HoldingRow key={h.symbol} holding={h} totalPortfolioValue={totalPortfolioValue} index={i} privacyMode={privacyMode} onSymbolClick={onSymbolClick} />
                 ))}
             </TableBody>
         </Table>

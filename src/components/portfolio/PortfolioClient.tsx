@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import HoldingsTable from './HoldingsTable';
 import HistoricalHoldingsTable from './HistoricalHoldingsTable';
 import RebalanceModal from './RebalanceModal';
+import StockChartModal from '@/components/chart/StockChartModal';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Button from '@mui/material/Button';
@@ -28,10 +29,15 @@ export default function PortfolioClient({
 }: PortfolioClientProps) {
     const [view, setView] = useState<'current' | 'historical'>('current');
     const [rebalanceOpen, setRebalanceOpen] = useState(false);
+    const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
     const prevRebalanceParam = useRef<string | null>(null);
+
+    const handleSymbolClick = useCallback((symbol: string) => {
+        setSelectedSymbol(symbol);
+    }, []);
 
     // Calculate total equity if not provided
     const portfolioValue = totalEquity ?? currentHoldings.reduce(
@@ -155,9 +161,9 @@ export default function PortfolioClient({
 
             <section className="animate-fade-in-up">
                 {view === 'current' ? (
-                     <HoldingsTable holdings={currentHoldings} privacyMode={privacyMode} />
+                     <HoldingsTable holdings={currentHoldings} privacyMode={privacyMode} onSymbolClick={handleSymbolClick} />
                 ) : (
-                    <HistoricalHoldingsTable holdings={historicalHoldings} privacyMode={privacyMode} />
+                    <HistoricalHoldingsTable holdings={historicalHoldings} privacyMode={privacyMode} onSymbolClick={handleSymbolClick} />
                 )}
             </section>
 
@@ -167,6 +173,13 @@ export default function PortfolioClient({
                 currentHoldings={rebalanceSnapshot}
                 totalEquity={rebalanceEquity}
                 onResetToLive={handleResetToLive}
+            />
+
+            <StockChartModal
+                symbol={selectedSymbol}
+                isOpen={!!selectedSymbol}
+                onClose={() => setSelectedSymbol(null)}
+                privacyMode={privacyMode}
             />
         </div>
     );

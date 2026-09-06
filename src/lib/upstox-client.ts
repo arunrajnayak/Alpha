@@ -111,7 +111,7 @@ export {
  */
 export async function getHistoricalCandles(
     instrumentKey: string,
-    interval: '1minute' | '30minute' | 'day' | 'week' | 'month',
+    interval: '1minute' | '5minute' | '30minute' | 'day' | 'week' | 'month',
     fromDate: string, // YYYY-MM-DD
     toDate: string    // YYYY-MM-DD
 ): Promise<{ candles: UpstoxCandle[] }> {
@@ -129,6 +129,10 @@ export async function getHistoricalCandles(
         case '1minute':
             unit = 'minutes';
             intervalValue = '1';
+            break;
+        case '5minute':
+            unit = 'minutes';
+            intervalValue = '5';
             break;
         case '30minute':
             unit = 'minutes';
@@ -187,6 +191,46 @@ export async function getHistoricalCandles(
     upstoxLogger.info(`Got ${candles.length} candles for ${instrumentKey}`);
 
     return { candles };
+}
+
+/**
+ * Fetch Intraday Candle Data for current trading day (V3 API)
+ * V3 URL format: /v3/historical-candle/intraday/{instrumentKey}/minutes/{interval}
+ */
+export async function getIntradayCandles(
+    instrumentKey: string,
+    interval: '1minute' | '5minute' | '30minute' = '5minute'
+): Promise<{ candles: UpstoxCandle[] }> {
+    const encodedKey = encodeURIComponent(instrumentKey);
+    const intervalValue = interval === '1minute' ? '1' : interval === '30minute' ? '30' : '5';
+    const url = `${CONFIG.baseUrlV3}/historical-candle/intraday/${encodedKey}/minutes/${intervalValue}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            return { candles: [] };
+        }
+
+        const json = await response.json();
+        const candles: UpstoxCandle[] = (json.data?.candles || []).map((c: (string | number)[]) => ({
+            timestamp: c[0] as string,
+            open: c[1] as number,
+            high: c[2] as number,
+            low: c[3] as number,
+            close: c[4] as number,
+            volume: c[5] as number,
+            oi: c[6] as number,
+        }));
+
+        return { candles };
+    } catch {
+        return { candles: [] };
+    }
 }
 
 // ============================================================================

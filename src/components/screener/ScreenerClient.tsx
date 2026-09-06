@@ -4,9 +4,13 @@ import { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LogoutIcon from '@mui/icons-material/Logout';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import StatsBar from './StatsBar';
 import RulesInfoModal from './RulesInfoModal';
 import RankHistoryModal from './RankHistoryModal';
+import StockChartModal from '@/components/chart/StockChartModal';
 import { getScreenerData, syncScreener, getRankHistoriesBatch, type ScreenerRow, type ScreenerStats } from '@/app/actions/screener';
 
 interface ScreenerClientProps {
@@ -21,14 +25,14 @@ function formatMcap(cr: number): string {
 }
 
 const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
-  'Large Cap': { label: 'Large', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  'Large':     { label: 'Large', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  'Mid Cap':   { label: 'Mid',   cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  'Mid':       { label: 'Mid',   cls: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  'Small Cap': { label: 'Small', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  'Small':     { label: 'Small', cls: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  'Micro Cap': { label: 'Micro', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-  'Micro':     { label: 'Micro', cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  'Large Cap': { label: 'Large', cls: 'text-blue-400' },
+  'Large':     { label: 'Large', cls: 'text-blue-400' },
+  'Mid Cap':   { label: 'Mid',   cls: 'text-orange-400' },
+  'Mid':       { label: 'Mid',   cls: 'text-orange-400' },
+  'Small Cap': { label: 'Small', cls: 'text-cyan-400' },
+  'Small':     { label: 'Small', cls: 'text-cyan-400' },
+  'Micro Cap': { label: 'Micro', cls: 'text-amber-400' },
+  'Micro':     { label: 'Micro', cls: 'text-amber-400' },
 };
 
 function getRankAccent(rank: number, inPortfolio: boolean, isPrefiltered: boolean = false): string {
@@ -59,9 +63,10 @@ interface BadgeTooltipProps {
   badgeCls: string;
   lines: string[];
   icon?: React.ReactNode;
+  iconOnly?: boolean;
 }
 
-function BadgeTooltip({ label, badgeCls, lines, icon }: BadgeTooltipProps) {
+function BadgeTooltip({ label, badgeCls, lines, icon, iconOnly }: BadgeTooltipProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -103,7 +108,7 @@ function BadgeTooltip({ label, badgeCls, lines, icon }: BadgeTooltipProps) {
             <div className="px-3 py-2 border-b border-zinc-800/80 flex items-center gap-1.5">
               {icon && <span className="text-zinc-400 flex items-center">{icon}</span>}
               <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: 'inherit' }}>
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold tracking-wider border ${badgeCls}`}>{label}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold tracking-wider ${badgeCls.includes('bg-') ? badgeCls : `border ${badgeCls} bg-zinc-800/60`}`}>{label}</span>
               </span>
             </div>
             {/* Lines */}
@@ -139,12 +144,23 @@ function BadgeTooltip({ label, badgeCls, lines, icon }: BadgeTooltipProps) {
       onMouseLeave={handleLeave}
       onClick={e => { e.stopPropagation(); reposition(); setOpen(v => !v); }}
     >
-      <span
-        className={`text-[9px] px-1.5 h-4 rounded border leading-none flex items-center gap-0.5 font-extrabold tracking-wider cursor-pointer ${badgeCls}`}
-      >
-        {icon}
-        {label}
-      </span>
+      {iconOnly ? (
+        <button
+          type="button"
+          className={`p-0.5 flex items-center justify-center cursor-pointer transition-colors ${badgeCls}`}
+          title={label}
+          aria-label={label}
+        >
+          {icon}
+        </button>
+      ) : (
+        <span
+          className={`text-[9px] px-1.5 h-4 rounded border leading-none flex items-center gap-0.5 font-extrabold tracking-wider cursor-pointer ${badgeCls}`}
+        >
+          {icon}
+          {label}
+        </span>
+      )}
       {tooltip}
     </span>
   );
@@ -289,8 +305,13 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [chartSymbol, setChartSymbol] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rankHistoryCacheRef = useRef<Record<string, { date: string; rank: number; compositeScore: number }[]>>({});
+
+  const chartRow = useMemo(() => {
+    return chartSymbol ? rows.find(r => r.symbol === chartSymbol) : null;
+  }, [chartSymbol, rows]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -646,7 +667,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         setSelectedCompany(row.companyName);
                       }
                     }}
-                    className={`transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
+                    className={`group transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
                   >
                     {/* Rank — left accent bar */}
                     <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 5px 0 0 ${accentColor}` }}>
@@ -687,12 +708,44 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                                 ? 'text-amber-100/90'
                                 : 'text-white'
                         }`}>{row.symbol}</span>
+                        {(() => {
+                          const b = MCAP_BADGE[row.marketCapCategory || ''];
+                          return b ? (
+                            <span className={`text-[10px] font-medium leading-none shrink-0 flex items-center ${b.cls}`}>
+                              {b.label}
+                            </span>
+                          ) : null;
+                        })()}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setChartSymbol(row.symbol);
+                          }}
+                          className="p-0.5 transition-all duration-150 hover:scale-110 hover:brightness-125 cursor-pointer shrink-0"
+                          title={`Open ${row.symbol} chart`}
+                          aria-label={`Open ${row.symbol} chart`}
+                        >
+                          <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
+                            <defs>
+                              <linearGradient id={`chart-grad-${row.symbol.replace(/[^a-zA-Z0-9]/g, '_')}`} x1="0%" y1="100%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor="#10b981" />
+                                <stop offset="50%" stopColor="#06b6d4" />
+                                <stop offset="100%" stopColor="#818cf8" />
+                              </linearGradient>
+                            </defs>
+                            <path
+                              d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"
+                              fill={`url(#chart-grad-${row.symbol.replace(/[^a-zA-Z0-9]/g, '_')})`}
+                            />
+                          </svg>
+                        </button>
                         {/* Exit / Warning / Caution signal badges */}
                         {exit && activeTab === 'portfolio' && exit.signalType === 'red' && (() => {
                           const exitLines = [
                             exit.isUnranked
-                              ? (exit.unrankedReason ? `Dropped: ${exit.unrankedReason}` : 'Dropped from screener universe')
-                              : exit.byRank ? 'Rank > 50' : '',
+                               ? (exit.unrankedReason ? `Dropped: ${exit.unrankedReason}` : 'Dropped from screener universe')
+                               : exit.byRank ? 'Rank > 50' : '',
                             exit.byFilter ? 'Below 200 DMA or outside 25% of ATH' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',
                             exit.byDrawdown ? 'Dropped > 25% since entry' : '',
@@ -703,9 +756,15 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             <BadgeTooltip
                               label={exit.protected ? 'LOCKED' : 'EXIT'}
                               badgeCls={exit.protected
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                : 'bg-red-500/20 text-red-300 border-red-500/40'}
+                                ? 'text-amber-400 hover:text-amber-300'
+                                : 'text-red-400 hover:text-red-300'}
                               lines={exitLines}
+                              iconOnly
+                              icon={exit.protected ? (
+                                <LockOutlinedIcon sx={{ fontSize: 16 }} />
+                              ) : (
+                                <LogoutIcon sx={{ fontSize: 16 }} />
+                              )}
                             />
                           );
                         })()}
@@ -720,8 +779,10 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           return (
                             <BadgeTooltip
                               label="CAUTION"
-                              badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
+                              badgeCls="text-amber-400 hover:text-amber-300"
                               lines={cautionLines}
+                              iconOnly
+                              icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
                             />
                           );
                         })()}
@@ -738,14 +799,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             }
                           />
                         )}
-                        {(() => {
-                          const b = MCAP_BADGE[row.marketCapCategory || ''];
-                          return b ? (
-                            <span className={`text-[9px] px-1.5 h-4 border rounded font-medium leading-none shrink-0 flex items-center ${b.cls}`}>
-                              {b.label}
-                            </span>
-                          ) : null;
-                        })()}
                       </div>
                       <div className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">
                         {row.companyName}
@@ -838,9 +891,21 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
           companyName={selectedCompany}
           rankType={activeTab === 'all' ? 'all' : 'filtered'}
           onClose={() => setSelectedSymbol(null)}
+          onOpenChart={(sym) => setChartSymbol(sym)}
           preloadedHistory={rankHistoryCacheRef.current[selectedSymbol]}
         />
       )}
+
+      <StockChartModal
+        symbol={chartSymbol}
+        isOpen={!!chartSymbol}
+        onClose={() => setChartSymbol(null)}
+        holding={chartRow ? {
+          symbol: chartRow.symbol,
+          currentPrice: chartRow.currentPrice > 0 ? chartRow.currentPrice : undefined,
+          marketCapCategory: chartRow.marketCapCategory || undefined,
+        } : null}
+      />
     </motion.div>
   );
 }

@@ -167,7 +167,7 @@ export interface InstrumentData {
 // Historical Data Interval Types
 // ============================================================================
 
-export type HistoricalInterval = '1minute' | '30minute' | 'day' | 'week' | 'month';
+export type HistoricalInterval = '1minute' | '5minute' | '30minute' | 'day' | 'week' | 'month';
 export type OHLCInterval = '1d' | 'I1' | 'I30';
 
 // ============================================================================

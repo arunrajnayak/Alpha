@@ -3,7 +3,8 @@
 import { useState, useMemo, memo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
 import { formatNumber } from '@/lib/format';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import StockChartModal from '@/components/chart/StockChartModal';
 
 export interface PortfolioHoldingItem {
   symbol: string;
@@ -172,7 +173,7 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
                   onMouseLeave={node.onMouseLeave}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedSymbol(prev => prev === node.id ? null : node.id);
+                    setSelectedSymbol(node.id);
                   }}
                 >
                   <defs>
@@ -267,60 +268,14 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
           />
         </div>
 
-      {/* Tap-to-Inspect Selected Holding Details Banner (Especially essential on Mobile) */}
-      <AnimatePresence>
-        {selectedHolding && (
-          <motion.div
-            initial={{ opacity: 0, height: 0, marginTop: 0 }}
-            animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
-            exit={{ opacity: 0, height: 0, marginTop: 0 }}
-            className="shrink-0 mx-2 mb-2 px-3 py-2 bg-slate-800/95 backdrop-blur-md rounded-xl border border-sky-500/40 shadow-xl overflow-hidden"
-          >
-            <div className="flex items-center justify-between gap-3 text-xs">
-              <div className="flex flex-col min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-white text-sm tracking-wide">{selectedHolding.symbol}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${getCapColor(selectedHolding.marketCapCategory)}`}>
-                    {selectedHolding.marketCapCategory || 'Stock'}
-                  </span>
-                  {selectedHolding.sector && (
-                    <span className="text-[10px] text-amber-400/90 truncate max-w-[130px]">{selectedHolding.sector}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 mt-1 text-gray-400 flex-wrap">
-                  <span>Value: <strong className="text-gray-200 font-mono">{privacyMode ? '****' : `₹${selectedHolding.formattedValue}`}</strong></span>
-                  {totalValue > 0 && (
-                    <span>Weight: <strong className="text-gray-200 font-mono">{((selectedHolding.currentValue / totalValue) * 100).toFixed(1)}%</strong></span>
-                  )}
-                  {selectedHolding.currentPrice !== undefined && selectedHolding.currentPrice > 0 && (
-                    <span>LTP: <strong className="text-gray-200 font-mono">₹{selectedHolding.currentPrice.toFixed(2)}</strong></span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 shrink-0">
-                <span className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-lg border ${
-                  selectedHolding.dayChangePercent >= 0
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                }`}>
-                  {selectedHolding.dayChangePercent >= 0 ? '+' : ''}{selectedHolding.dayChangePercent.toFixed(2)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSymbol(null)}
-                  className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
-                  title="Close inspection"
-                  aria-label="Close"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Interactive Stock Chart Modal */}
+      <StockChartModal
+        symbol={selectedSymbol}
+        isOpen={Boolean(selectedSymbol)}
+        onClose={() => setSelectedSymbol(null)}
+        holding={selectedHolding}
+        privacyMode={privacyMode}
+      />
     </div>
   );
 });

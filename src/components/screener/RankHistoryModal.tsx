@@ -7,6 +7,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
 import { getRankHistory } from '@/app/actions/screener';
 
 interface RankHistoryModalProps {
@@ -14,6 +15,7 @@ interface RankHistoryModalProps {
   companyName: string;
   rankType: 'filtered' | 'all';
   onClose: () => void;
+  onOpenChart?: (symbol: string) => void;
   preloadedHistory?: HistoryEntry[];  // skip fetch if provided
 }
 
@@ -111,7 +113,7 @@ function Stat({
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 export default function RankHistoryModal({
-  symbol, companyName, rankType, onClose, preloadedHistory,
+  symbol, companyName, rankType, onClose, onOpenChart, preloadedHistory,
 }: RankHistoryModalProps) {
   const [history, setHistory] = useState<HistoryEntry[]>(preloadedHistory ?? []);
   const [loading, setLoading] = useState(!preloadedHistory);
@@ -225,13 +227,29 @@ export default function RankHistoryModal({
                 </div>
                 <p className="text-sm text-gray-400 mt-1.5">{companyName}</p>
               </div>
-              <button onClick={onClose}
-                className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/8 transition-colors shrink-0"
-                aria-label="Close">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {onOpenChart && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenChart(symbol);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/25 text-xs font-semibold transition-colors cursor-pointer"
+                    title={`Open ${symbol} chart`}
+                  >
+                    <ShowChartIcon sx={{ fontSize: 16 }} />
+                    <span className="hidden sm:inline">Chart</span>
+                  </button>
+                )}
+                <button onClick={onClose}
+                  className="p-2 text-gray-500 hover:text-white rounded-xl hover:bg-white/8 transition-colors shrink-0 cursor-pointer"
+                  aria-label="Close">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Body */}

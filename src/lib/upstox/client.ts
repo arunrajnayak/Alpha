@@ -82,6 +82,10 @@ export async function getHistoricalCandles(
       unit = 'minutes';
       intervalValue = '1';
       break;
+    case '5minute':
+      unit = 'minutes';
+      intervalValue = '5';
+      break;
     case '30minute':
       unit = 'minutes';
       intervalValue = '30';

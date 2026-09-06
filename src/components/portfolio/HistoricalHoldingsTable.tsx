@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo, memo } from 'react';
-import Link from 'next/link';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { HistoricalHoldingData } from '@/lib/types';
 import Table from '@mui/material/Table';
@@ -65,7 +64,7 @@ const SortIndicator = memo(function SortIndicator({
     : <ArrowDownwardIcon sx={{ fontSize: 14, ml: 0.5, verticalAlign: 'middle' }} />;
 });
 
-export default function HistoricalHoldingsTable({ holdings, privacyMode = false }: { holdings: HistoricalHoldingData[]; privacyMode?: boolean }) {
+export default function HistoricalHoldingsTable({ holdings, privacyMode = false, onSymbolClick }: { holdings: HistoricalHoldingData[]; privacyMode?: boolean; onSymbolClick?: (symbol: string) => void }) {
   const [sortKey, setSortKey] = useState<SortKey>('totalPnl');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -200,9 +199,9 @@ export default function HistoricalHoldingsTable({ holdings, privacyMode = false 
                         >
                             <StyledTableCell component="th" scope="row" sx={{ position: 'sticky', left: 0, zIndex: 10, bgcolor: '#111827' }}>
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                    <span className="font-semibold text-white">
+                                    <button onClick={() => onSymbolClick?.(h.symbol)} className="font-semibold text-white hover:text-blue-400 hover:underline transition-colors cursor-pointer text-left">
                                         {h.symbol}
-                                    </span>
+                                    </button>
                                 </div>
                             </StyledTableCell>
                             <StyledTableCell align="right">
