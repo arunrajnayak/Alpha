@@ -48,9 +48,14 @@ export async function recalculatePortfolioHistoryInternal(
     onProgress?: ProgressCallback,
     options?: { forceNSE?: boolean; forceSymbol?: string }
 ) {
+    // Enforce UTC timezone during simulation so date arithmetic, startOfDay,
+    // and format() behave identically across local dev (IST) and Vercel production (UTC).
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'UTC';
 
-    financeLogger.info("Starting Portfolio Recalculation (TWR + Cashflow)...");
-    onProgress?.("Fetching Transactions...", 5);
+    try {
+        financeLogger.info("Starting Portfolio Recalculation (TWR + Cashflow)...");
+        onProgress?.("Fetching Transactions...", 5);
 
     // 1. Get all events
     const transactionsRaw = await prisma.transaction.findMany({
@@ -957,14 +962,21 @@ export async function recalculatePortfolioHistoryInternal(
     }
 
     financeLogger.info("Recalculation Complete.");
-    try {
-        // Invalidate caches - using 'as any' to bypass potential signature mismatch in tooling
-         
-        (revalidateTag as any)('portfolio-data');
-         
-        (revalidateTag as any)('dashboard-stats');
-    } catch (e) {
-        financeLogger.warn("revalidateTag failed (expected when run outside Next.js server context):", e);
+        try {
+            // Invalidate caches - using 'as any' to bypass potential signature mismatch in tooling
+             
+            (revalidateTag as any)('portfolio-data');
+             
+            (revalidateTag as any)('dashboard-stats');
+        } catch (e) {
+            financeLogger.warn("revalidateTag failed (expected when run outside Next.js server context):", e);
+        }
+    } finally {
+        if (prevTZ !== undefined) {
+            process.env.TZ = prevTZ;
+        } else {
+            delete process.env.TZ;
+        }
     }
 }
 
