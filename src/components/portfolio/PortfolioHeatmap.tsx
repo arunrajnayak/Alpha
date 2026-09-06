@@ -65,18 +65,6 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
     return allHoldings.reduce((sum, h) => sum + (h.currentValue || 0), 0);
   }, [allHoldings]);
 
-  const stats = useMemo(() => {
-    let advances = 0;
-    let declines = 0;
-    let unchanged = 0;
-    for (const h of allHoldings) {
-      if (h.dayChangePercent > 0) advances++;
-      else if (h.dayChangePercent < 0) declines++;
-      else unchanged++;
-    }
-    return { total: allHoldings.length, advances, declines, unchanged };
-  }, [allHoldings]);
-
   const selectedHolding = useMemo(() => {
     if (!selectedSymbol) return null;
     return allHoldings.find(h => h.symbol === selectedSymbol) || null;
@@ -101,24 +89,11 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
       className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col transition-all duration-200"
       style={{ height: containerHeight }}
     >
-      {/* Header with Title & Stats */}
-      <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
-            Portfolio Heatmap
-          </h3>
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-slate-800/60 border border-white/5 px-2 py-0.5 rounded-full font-mono">
-            <span className="text-emerald-400 font-semibold">{stats.advances} ▲</span>
-            <span className="text-gray-600">/</span>
-            <span className="text-rose-400 font-semibold">{stats.declines} ▼</span>
-            {stats.unchanged > 0 && (
-              <>
-                <span className="text-gray-600">/</span>
-                <span className="text-slate-400">{stats.unchanged} =</span>
-              </>
-            )}
-          </div>
-        </div>
+      {/* Header */}
+      <div className="px-4 pt-3 pb-2 shrink-0">
+        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
+          Portfolio Heatmap
+        </h3>
       </div>
 
       {/* Main Content Area */}
