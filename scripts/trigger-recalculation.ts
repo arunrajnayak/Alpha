@@ -4,6 +4,9 @@
  * Usage: npx tsx scripts/trigger-recalculation.ts [YYYY-MM-DD]
  */
 
+// Force UTC timezone so local execution matches production Vercel server environment exactly
+process.env.TZ = 'UTC';
+
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const Module = require('module');
