@@ -18,19 +18,24 @@ export default memo(function AdvanceDecline({ advancing, declining, unchanged }:
   const unchPct = (unchanged / total) * 100;
 
   return (
-    <div className="flex flex-col w-full min-w-[280px] sm:min-w-[340px] max-w-[450px] gap-2.5">
+    <div className="flex flex-col w-full min-w-0 gap-1.5">
       {/* Top Row: Counts */}
-      <div className="flex justify-between items-end px-1 font-mono tracking-tight">
-        <span className="text-[15px] sm:text-[17px] font-bold text-emerald-400">
-          {advancing}
+      <div className="flex justify-between items-end px-0.5 font-mono tracking-tight text-xs">
+        <span className="font-bold text-emerald-400">
+          {advancing} <span className="text-[10px] font-sans font-medium text-emerald-400/70">adv</span>
         </span>
-        <span className="text-[15px] sm:text-[17px] font-bold text-rose-500">
-          {declining}
+        {unchanged > 0 && (
+          <span className="text-[10px] font-sans text-gray-400 font-medium">
+            {unchanged} unch
+          </span>
+        )}
+        <span className="font-bold text-rose-500">
+          {declining} <span className="text-[10px] font-sans font-medium text-rose-400/70">dec</span>
         </span>
       </div>
       
       {/* Middle Row: Progress Bar */}
-      <div className="relative h-3.5 sm:h-4 w-full rounded-full overflow-hidden flex bg-slate-800 shadow-inner">
+      <div className="relative h-2.5 sm:h-3 w-full rounded-full overflow-hidden flex bg-slate-800 shadow-inner">
         <motion.div
           className="h-full bg-emerald-400"
           initial={{ width: 0 }}

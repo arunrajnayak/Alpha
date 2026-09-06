@@ -541,16 +541,26 @@ export default function MarketOverviewClient({
         <div className="flex-1 flex flex-col gap-4 md:gap-5 min-w-0">
           {/* Mobile-only compact stats row (heatmap is hidden on mobile, so stats still need to be shown) */}
           {isMobile && (
-            <motion.div variants={itemVariants} className="flex items-center justify-between gap-3 bg-slate-900/40 border border-white/5 rounded-2xl px-4 py-3">
-              <div className="flex flex-col min-w-0">
-                <span className="text-[11px] font-medium text-gray-400 truncate">{data.indexName}</span>
+            <motion.div
+              variants={itemVariants}
+              className="flex flex-col gap-2.5 bg-slate-900/50 border border-white/5 rounded-2xl p-4"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider truncate">
+                  {data.indexName}
+                </span>
                 {data.indexValue > 0 && (
-                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <div className="flex items-baseline gap-2 shrink-0">
                     <span className="text-base font-bold text-gray-100 tabular-nums">
                       {data.indexValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </span>
-                    <span className={`text-sm font-bold tabular-nums ${data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                      {data.indexChangePercent >= 0 ? '+' : ''}{data.indexChangePercent.toFixed(2)}%
+                    <span
+                      className={`text-sm font-bold tabular-nums ${
+                        data.indexChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-500'
+                      }`}
+                    >
+                      {data.indexChangePercent >= 0 ? '+' : ''}
+                      {data.indexChangePercent.toFixed(2)}%
                     </span>
                   </div>
                 )}

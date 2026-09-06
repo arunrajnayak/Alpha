@@ -58,8 +58,6 @@ export function getCapColor(cap: string | undefined): string {
 
 export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
-  const [sizeMode, setSizeMode] = useState<'value' | 'equal'>('value');
-  const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
 
   const allHoldings = useMemo(() => data?.allHoldings || [], [data?.allHoldings]);
 
@@ -79,10 +77,6 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
     return { total: allHoldings.length, advances, declines, unchanged };
   }, [allHoldings]);
 
-  const sortedHoldings = useMemo(() => {
-    return [...allHoldings].sort((a, b) => (b.dayChangePercent ?? 0) - (a.dayChangePercent ?? 0));
-  }, [allHoldings]);
-
   const selectedHolding = useMemo(() => {
     if (!selectedSymbol) return null;
     return allHoldings.find(h => h.symbol === selectedSymbol) || null;
@@ -94,20 +88,20 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
     children: allHoldings.map(h => ({
       ...h,
       name: h.symbol,
-      value: sizeMode === 'equal' ? 1 : Math.max(h.currentValue, 1),
+      value: Math.max(h.currentValue, 1),
     })),
-  }), [allHoldings, sizeMode]);
+  }), [allHoldings]);
 
   if (allHoldings.length === 0) return null;
 
-  const containerHeight = isMobile ? (viewMode === 'grid' ? 440 : 420) : 500;
+  const containerHeight = isMobile ? 420 : 500;
 
   return (
     <div
       className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col transition-all duration-200"
       style={{ height: containerHeight }}
     >
-      {/* Header with Title, Stats & Mobile View Controls */}
+      {/* Header with Title & Stats */}
       <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
@@ -125,68 +119,10 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
             )}
           </div>
         </div>
-
-        {/* Controls: Size weighting (Value vs Equal) & View mode (Map vs Grid) */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {viewMode === 'map' && (
-            <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-white/5 text-[10px]">
-              <button
-                type="button"
-                onClick={() => setSizeMode('value')}
-                className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-                  sizeMode === 'value' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-                }`}
-                title="Size proportional to holding value"
-              >
-                Value
-              </button>
-              <button
-                type="button"
-                onClick={() => setSizeMode('equal')}
-                className={`px-2 py-0.5 rounded-md font-medium transition-all ${
-                  sizeMode === 'equal' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-                }`}
-                title="Equal tile size for all holdings"
-              >
-                Equal
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-white/5 text-[10px]">
-            <button
-              type="button"
-              onClick={() => setViewMode('map')}
-              className={`px-2 py-0.5 rounded-md font-medium flex items-center gap-1 transition-all ${
-                viewMode === 'map' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-              }`}
-              title="Heatmap Treemap"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-              </svg>
-              <span>Map</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('grid')}
-              className={`px-2 py-0.5 rounded-md font-medium flex items-center gap-1 transition-all ${
-                viewMode === 'grid' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
-              }`}
-              title="Ranked Grid"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
-              <span>Grid</span>
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Main Content Area */}
-      {viewMode === 'map' ? (
-        <div className="flex-1 w-full min-h-0 relative" style={{ color: '#000' }}>
+      <div className="flex-1 w-full min-h-0 relative" style={{ color: '#000' }}>
           <ResponsiveTreeMap
             data={treeData}
             identity="name"
@@ -355,50 +291,6 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
             }}
           />
         </div>
-      ) : (
-        /* Alternative Performance Grid View for Mobile */
-        <div className="flex-1 w-full min-h-0 overflow-y-auto px-3 pb-2 pt-1 pr-1.5 scrollbar-thin scrollbar-thumb-slate-700">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {sortedHoldings.map((h) => {
-              const isPositive = (h.dayChangePercent ?? 0) >= 0;
-              const isSelected = selectedSymbol === h.symbol;
-              const bgColor = getHeatmapColor(h.dayChangePercent);
-              const textColor = getHeatmapTextColor(h.dayChangePercent);
-              return (
-                <button
-                  key={h.symbol}
-                  type="button"
-                  onClick={() => setSelectedSymbol(prev => prev === h.symbol ? null : h.symbol)}
-                  style={{ backgroundColor: bgColor }}
-                  className={`p-2 rounded-xl text-left transition-all duration-150 relative flex flex-col justify-between min-h-[64px] border ${
-                    isSelected
-                      ? 'border-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.5)] scale-[1.02]'
-                      : 'border-black/20 hover:opacity-95'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1 w-full">
-                    <span className="font-bold text-xs truncate" style={{ color: textColor }}>
-                      {h.symbol}
-                    </span>
-                    <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color: textColor }}>
-                      {isPositive ? '+' : ''}{h.dayChangePercent.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div
-                    className="flex items-center justify-between gap-1 mt-1 text-[10px] w-full"
-                    style={{ color: textColor, opacity: 0.85 }}
-                  >
-                    <span className="font-medium truncate">{h.marketCapCategory || 'Stock'}</span>
-                    <span className="font-mono font-semibold">
-                      {privacyMode ? '****' : `₹${h.formattedValue}`}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Tap-to-Inspect Selected Holding Details Banner (Especially essential on Mobile) */}
       <AnimatePresence>

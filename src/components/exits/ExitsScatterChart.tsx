@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { ExitRecord } from '@/lib/exits';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCircleNodes } from '@fortawesome/free-solid-svg-icons';
+import { faCircleNodes, faBullseye } from '@fortawesome/free-solid-svg-icons';
 import { formatNumber, formatCurrency } from '@/lib/format';
 import { useLiveData } from '@/context/LiveDataContext';
 
@@ -62,7 +62,7 @@ const CustomTooltip = ({ active, payload }: any) => {
           <span className="text-sm font-bold text-white">{data.symbol}</span>
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
             isCurrent
-              ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
               : 'bg-slate-700/50 text-gray-300 border-white/10'
           }`}>
             {isCurrent ? 'Current Holding' : 'Realized Exit'}
@@ -132,28 +132,21 @@ const renderCustomLabel = (props: any) => {
 export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsScatterChartProps) {
   const [filter, setFilter] = useState<'all' | 'exits' | 'holdings'>('all');
 
-  // Calculate max return for normalization
+  // Calculate max return for normalization of profit/loss opacity scale
   const maxAbsReturn = useMemo(() => {
-    const exitReturns = exits.map(e => Math.abs(e.changePercent));
-    const holdingReturns = holdings.map(h => Math.abs(h.pnlPercent ?? 0));
-    const combined = [...exitReturns, ...holdingReturns];
-    if (combined.length === 0) return 1;
-    const maxVal = Math.max(...combined);
+    if (exits.length === 0) return 1;
+    const maxVal = Math.max(...exits.map(e => Math.abs(e.changePercent)));
     return maxVal === 0 ? 1 : maxVal;
-  }, [exits, holdings]);
+  }, [exits]);
 
   const getExitColor = useCallback((returns: number) => {
     const isGain = returns >= 0;
     const absVal = Math.abs(returns);
-    const intensity = 0.55 + (absVal / maxAbsReturn) * 0.45;
-    return isGain ? `rgba(16, 185, 129, ${intensity})` : `rgba(239, 68, 68, ${intensity})`;
-  }, [maxAbsReturn]);
-
-  const getHoldingColor = useCallback((returns: number) => {
-    const absVal = Math.abs(returns);
-    const intensity = 0.65 + (absVal / maxAbsReturn) * 0.35;
-    // Sky blue for active holdings
-    return `rgba(56, 189, 248, ${intensity})`;
+    // Intensity scaling: 0.40 to 1.0 based on magnitude of profit/loss
+    const intensity = Math.min(1, 0.40 + (absVal / maxAbsReturn) * 0.60);
+    return isGain 
+      ? `rgba(16, 185, 129, ${intensity.toFixed(2)})` 
+      : `rgba(239, 68, 68, ${intensity.toFixed(2)})`;
   }, [maxAbsReturn]);
 
   const allPoints: ChartDataPoint[] = useMemo(() => {
@@ -175,14 +168,14 @@ export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsSc
       gainLoss: h.pnl ?? 0,
       netGainLoss: h.pnl ?? 0,
       size: 110,
-      color: getHoldingColor(h.pnlPercent ?? 0),
+      color: '#f59e0b', // Gold for current holdings
       isCurrentHolding: true,
       currentValue: h.currentValue,
       invested: h.invested,
     }));
 
     return [...exitPoints, ...holdingPoints];
-  }, [exits, holdings, getExitColor, getHoldingColor]);
+  }, [exits, holdings, getExitColor]);
 
   const chartData = useMemo(() => {
     if (filter === 'exits') return allPoints.filter(p => !p.isCurrentHolding);
@@ -192,9 +185,19 @@ export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsSc
 
   if (allPoints.length === 0) {
     return (
-      <div className="glass-card p-8 text-center animate-fade-in">
-        <FontAwesomeIcon icon={faCircleNodes} className="text-4xl text-gray-600 mb-4 block" />
-        <p className="text-gray-400">No trade or holding data to display</p>
+      <div className="flex flex-col h-full">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center">
+            <FontAwesomeIcon icon={faBullseye} className="text-emerald-400 text-lg" />
+          </div>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+            Holding Period vs Returns
+          </span>
+        </div>
+        <div className="glass-card p-8 text-center animate-fade-in flex-1 flex flex-col items-center justify-center">
+          <FontAwesomeIcon icon={faCircleNodes} className="text-4xl text-gray-600 mb-4 block" />
+          <p className="text-gray-400">No trade or holding data to display</p>
+        </div>
       </div>
     );
   }
@@ -212,9 +215,19 @@ export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsSc
 
   return (
     <div className="animate-fade-in-up h-full w-full flex flex-col justify-between">
-      {/* View Filter Pills */}
-      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-        <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-white/5 text-xs">
+      {/* Header with Title on Left and Filter Pills on Right */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center flex-shrink-0">
+            <FontAwesomeIcon icon={faBullseye} className="text-emerald-400 text-lg" />
+          </div>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+            Holding Period vs Returns
+          </span>
+        </div>
+
+        {/* View Filter Pills */}
+        <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-white/5 text-xs self-start sm:self-auto">
           <button
             type="button"
             onClick={() => setFilter('all')}
@@ -257,7 +270,7 @@ export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsSc
             </filter>
             <filter id="glow-holding" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
-              <feColorMatrix type="matrix" values="0 0 0 0 0.22  0 0 0 0 0.74  0 0 0 0 0.97  0 0 0 0.8 0"/>
+              <feColorMatrix type="matrix" values="0 0 0 0 0.96  0 0 0 0 0.68  0 0 0 0 0.08  0 0 0 0.85 0" />
               <feMerge>
                 <feMergeNode />
                 <feMergeNode in="SourceGraphic" />
@@ -311,8 +324,8 @@ export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsSc
                 <Cell 
                   key={`cell-${entry.symbol}-${isHolding ? 'h' : 'e'}-${index}`} 
                   fill={entry.color}
-                  fillOpacity={isHolding ? 0.9 : 0.75}
-                  stroke={isHolding ? '#38bdf8' : entry.color}
+                  fillOpacity={isHolding ? 0.95 : undefined}
+                  stroke={isHolding ? '#fbbf24' : entry.color}
                   strokeWidth={isHolding ? 2 : 1}
                   style={{ filter: isHolding ? 'url(#glow-holding)' : 'url(#glow)' }}
                 />
@@ -322,18 +335,26 @@ export default function ExitsScatterChart({ exits = [], holdings = [] }: ExitsSc
         </ScatterChart>
       </ResponsiveContainer>
 
-      {/* Updated Legend with Realized Profit, Realized Loss, and Current Holdings */}
+      {/* Legend with Profit scale, Loss scale, and Current Holding */}
       <div className="flex flex-wrap justify-center items-center gap-6 md:gap-8 mt-3 pt-2 border-t border-white/5 text-xs text-gray-400">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-          <span className="font-medium text-gray-300">Realized Profit</span>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            <div className="w-3 h-3 rounded-full opacity-40 bg-emerald-500" />
+            <div className="w-3 h-3 rounded-full opacity-70 bg-emerald-500" />
+            <div className="w-3 h-3 rounded-full opacity-100 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+          </div>
+          <span className="font-medium text-gray-300">Profit</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            <div className="w-3 h-3 rounded-full opacity-40 bg-red-500" />
+            <div className="w-3 h-3 rounded-full opacity-70 bg-red-500" />
+            <div className="w-3 h-3 rounded-full opacity-100 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
+          </div>
+          <span className="font-medium text-gray-300">Loss</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-          <span className="font-medium text-gray-300">Realized Loss</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-sky-400 ring-2 ring-sky-400/40 shadow-[0_0_8px_rgba(56,189,248,0.6)]" />
+          <div className="w-3 h-3 rounded-full bg-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
           <span className="font-medium text-gray-300">Current Holding</span>
         </div>
       </div>
