@@ -9,11 +9,8 @@ import { motion } from 'framer-motion';
 
 export const SIDEBAR_INDICES = [
   'NIFTY 50',
-  'NIFTY Midcap 150',
-  'NIFTY Smallcap 250',
-  'NIFTY Microcap 250',
-  'NIFTY Total Market',
   'NIFTY500 Momentum 50',
+  'NIFTY Total Market',
 ];
 
 // ============================================================================
@@ -168,12 +165,14 @@ function MobilePill({
 }) {
   const isPositive = idx.changePercent >= 0;
 
-  // Shorter display name for mobile
-  const shortLabel = idx.shortName
-    ?.replace('Nifty ', '')
-    .replace('NIFTY ', '')
-    .replace('NIFTY500 ', '')
-    || idx.name;
+  // Clear display name for the 3 indices on mobile
+  const getShortLabel = (name: string, shortName: string) => {
+    if (name.includes('Momentum 50') || name.includes('M50')) return 'Mom 500/50';
+    if (name.includes('Total Market')) return 'Total Market';
+    if (name.includes('50')) return 'Nifty 50';
+    return shortName || name;
+  };
+  const shortLabel = getShortLabel(idx.name, idx.shortName);
 
   return (
     <motion.button
@@ -181,20 +180,23 @@ function MobilePill({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
-      className={`shrink-0 flex flex-col items-start px-3 py-2 rounded-xl border transition-all duration-200 cursor-pointer ${
+      className={`w-full min-w-0 flex flex-col items-start px-2.5 py-2 rounded-xl border transition-all duration-200 cursor-pointer ${
         isSelected
-          ? 'bg-gradient-to-br from-blue-600/20 via-indigo-500/15 to-violet-500/10 border-blue-500/40'
-          : 'bg-slate-900/50 border-white/5'
+          ? 'bg-gradient-to-br from-blue-600/20 via-indigo-500/15 to-violet-500/10 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+          : 'bg-slate-900/50 border-white/5 hover:border-white/10'
       }`}
     >
-      <span className={`text-[10px] font-medium whitespace-nowrap ${isSelected ? 'text-blue-300' : 'text-gray-400'}`}>
+      <span className={`text-[10px] sm:text-[11px] font-semibold truncate w-full ${isSelected ? 'text-blue-300' : 'text-gray-400'}`}>
         {shortLabel}
       </span>
       {idx.value > 0 && (
-        <span className={`text-[13px] font-extrabold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <span className={`text-[13px] sm:text-[14px] font-extrabold tabular-nums block mt-0.5 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
           {isPositive ? '+' : ''}<AnimatedValue value={idx.changePercent} decimals={2} />%
         </span>
       )}
+      <span className={`text-[10px] tabular-nums mt-0.5 block truncate w-full ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
+        {idx.value > 0 ? <AnimatedValue value={idx.value} /> : '—'}
+      </span>
     </motion.button>
   );
 }
@@ -204,21 +206,20 @@ function MobilePill({
 // ============================================================================
 
 export default memo(function IndexSidebar({ indices, selectedIndex, onSelectIndex, isMobile }: IndexSidebarProps) {
-  // Filter to only the 6 sidebar indices, sorted by % change DESC
+  // Filter to only the 3 sidebar indices (NIFTY 50, NIFTY500 Momentum 50, NIFTY Total Market)
   const sidebarIndices = useMemo(() => {
     return SIDEBAR_INDICES
       .map(name => indices.find(i => i.name === name))
-      .filter((i): i is IndexSummary => !!i)
-      .sort((a, b) => b.changePercent - a.changePercent);
+      .filter((i): i is IndexSummary => !!i);
   }, [indices]);
 
   if (sidebarIndices.length === 0) return null;
 
-  // Mobile: horizontal scrollable pills
+  // Mobile: 3 equal-width cards in a responsive grid
   if (isMobile) {
     return (
-      <div className="overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-700">
-        <div className="flex gap-2">
+      <div className="w-full">
+        <div className="grid grid-cols-3 gap-2">
           {sidebarIndices.map((idx, i) => (
             <MobilePill
               key={idx.name}

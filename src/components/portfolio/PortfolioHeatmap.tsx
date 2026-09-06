@@ -1,140 +1,459 @@
 'use client';
 
+import { useState, useMemo, memo } from 'react';
 import { ResponsiveTreeMap } from '@nivo/treemap';
 import { formatNumber } from '@/lib/format';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export interface PortfolioHoldingItem {
+  symbol: string;
+  currentValue: number;
+  dayChangePercent: number;
+  dayChange?: number;
+  currentPrice?: number;
+  marketCapCategory?: string;
+  sector?: string;
+  formattedValue: string;
+  totalPnlPercent?: number;
+}
 
 interface PortfolioHeatmapProps {
   data: {
-    allHoldings: Array<{
-      symbol: string;
-      currentValue: number;
-      dayChangePercent: number;
-      marketCapCategory?: string;
-      sector?: string;
-      formattedValue: string;
-    }>;
+    allHoldings: PortfolioHoldingItem[];
   };
   isMobile: boolean;
   privacyMode: boolean;
 }
 
-export default function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
-    if (!data.allHoldings || data.allHoldings.length === 0) return null;
+export function getHeatmapColor(percent: number | undefined): string {
+  if (percent === undefined) return 'rgba(0,0,0,0)';
+  if (percent >= 10) return '#059669'; // Emerald 600
+  if (percent >= 5) return '#10b981';  // Emerald 500
+  if (percent >= 3) return '#34d399';  // Emerald 400
+  if (percent >= 1.5) return '#6ee7b7'; // Emerald 300
+  if (percent > 0) return '#d1fae5';   // Emerald 100
+  if (percent === 0) return '#64748b'; // Slate 500
+  if (percent > -1.5) return '#fee2e2'; // Red 100
+  if (percent > -3) return '#fca5a5';   // Red 300
+  if (percent > -5) return '#f87171';   // Red 400
+  if (percent > -10) return '#ef4444';  // Red 500
+  return '#b91c1c';                     // Red 700
+}
+
+export function getHeatmapTextColor(percent: number | undefined): string {
+  if (percent === undefined) return '#ffffff';
+  if (percent > 0 && percent < 5) return '#0f172a';
+  if (percent < 0 && percent > -5) return '#0f172a';
+  return '#ffffff';
+}
+
+export function getCapColor(cap: string | undefined): string {
+  const c = (cap || '').toLowerCase();
+  if (c.includes('large')) return 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30';
+  if (c.includes('mid')) return 'bg-violet-500/20 text-violet-400 border border-violet-500/30';
+  if (c.includes('small')) return 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30';
+  if (c.includes('micro')) return 'bg-lime-500/20 text-lime-400 border border-lime-500/30';
+  return 'bg-slate-700/50 text-gray-400 border border-white/5';
+}
+
+export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [sizeMode, setSizeMode] = useState<'value' | 'equal'>('value');
+  const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
+
+  const allHoldings = useMemo(() => data?.allHoldings || [], [data?.allHoldings]);
+
+  const totalValue = useMemo(() => {
+    return allHoldings.reduce((sum, h) => sum + (h.currentValue || 0), 0);
+  }, [allHoldings]);
+
+  const stats = useMemo(() => {
+    let advances = 0;
+    let declines = 0;
+    let unchanged = 0;
+    for (const h of allHoldings) {
+      if (h.dayChangePercent > 0) advances++;
+      else if (h.dayChangePercent < 0) declines++;
+      else unchanged++;
+    }
+    return { total: allHoldings.length, advances, declines, unchanged };
+  }, [allHoldings]);
+
+  const sortedHoldings = useMemo(() => {
+    return [...allHoldings].sort((a, b) => (b.dayChangePercent ?? 0) - (a.dayChangePercent ?? 0));
+  }, [allHoldings]);
+
+  const selectedHolding = useMemo(() => {
+    if (!selectedSymbol) return null;
+    return allHoldings.find(h => h.symbol === selectedSymbol) || null;
+  }, [selectedSymbol, allHoldings]);
+
+  const treeData = useMemo(() => ({
+    name: 'Portfolio',
+    color: 'transparent',
+    children: allHoldings.map(h => ({
+      ...h,
+      name: h.symbol,
+      value: sizeMode === 'equal' ? 1 : Math.max(h.currentValue, 1),
+    })),
+  }), [allHoldings, sizeMode]);
+
+  if (allHoldings.length === 0) return null;
+
+  const containerHeight = isMobile ? (viewMode === 'grid' ? 440 : 420) : 500;
 
   return (
-    <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 h-[500px] flex flex-col">
-      <div className="px-5 pt-4 pb-2 shrink-0">
-        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Portfolio Heatmap</h3>
-      </div>
-      <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
-        <ResponsiveTreeMap
-          data={{
-            name: "Portfolio",
-            color: "transparent",
-            children: data.allHoldings.map(h => ({ ...h, name: h.symbol, value: h.currentValue }))
-          }}
-          identity="name"
-          value="currentValue"
-          valueFormat={val => formatNumber(val, 0, 0)}
-          margin={{ top: 0, right: 10, bottom: 10, left: 10 }}
-          labelSkipSize={30}
-          innerPadding={3}
-          outerPadding={3}
-          colors={(node) => {
-            const d = node.data as { dayChangePercent?: number };
-            const percent = d.dayChangePercent;
-            if (percent === undefined) return 'rgba(0,0,0,0)';
-            
-            // Gain colors
-            if (percent >= 10) return '#059669'; // Emerald 600 (Max > 10%)
-            if (percent >= 5) return '#10b981';  // Emerald 500
-            if (percent >= 3) return '#34d399';  // Emerald 400
-            if (percent >= 1.5) return '#6ee7b7'; // Emerald 300
-            if (percent > 0) return '#d1fae5';   // Emerald 100
-            
-            if (percent === 0) return '#64748b'; // Slate 500
-            
-            // Loss colors
-            if (percent > -1.5) return '#fee2e2'; // Red 100
-            if (percent > -3) return '#fca5a5';   // Red 300
-            if (percent > -5) return '#f87171';   // Red 400
-            if (percent > -10) return '#ef4444';  // Red 500
-            return '#b91c1c';                     // Red 700 (Max > 10% loss)
-          }}
-          nodeOpacity={1}
-          nodeComponent={({ node }) => {
-            const percent = (node.data as { dayChangePercent?: number }).dayChangePercent;
-            if (percent === undefined) return null;
-            
-            // Determine text color based on background brightness
-            let textColor = '#ffffff';
-            if (percent > 0 && percent < 5) textColor = '#0f172a'; // Dark text for < 5% gain
-            if (percent < 0 && percent > -5) textColor = '#0f172a'; // Dark text for < 5% loss
-            const showSymbol = node.width > 28 && node.height > 22;
-            const showPercent = node.width > 40 && node.height > 38;
-            const maxFs = isMobile ? 8 : 11;
-            const fontSize = Math.min(node.width / 5, node.height / (showPercent ? 4.5 : 2.8), maxFs);
-            const clipId = `hm-${node.id.replace(/[^a-z0-9]/gi, '_')}`;
-            const pad = 3;
-            return (
-              <motion.g
-                key={node.id}
-                initial={{ opacity: 0, scale: 0.9, x: node.x, y: node.y }}
-                animate={{ opacity: 1, scale: 1, x: node.x, y: node.y }}
-                transition={{
-                  type: "spring",
-                  damping: 20,
-                  stiffness: 300,
-                  delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100
-                }}
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={node.onMouseEnter}
-                onMouseMove={node.onMouseMove}
-                onMouseLeave={node.onMouseLeave}
-                onClick={node.onClick}
+    <div
+      className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col transition-all duration-200"
+      style={{ height: containerHeight }}
+    >
+      {/* Header with Title, Stats & Mobile View Controls */}
+      <div className="px-4 pt-3 pb-2 shrink-0 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
+            Portfolio Heatmap
+          </h3>
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-slate-800/60 border border-white/5 px-2 py-0.5 rounded-full font-mono">
+            <span className="text-emerald-400 font-semibold">{stats.advances} ▲</span>
+            <span className="text-gray-600">/</span>
+            <span className="text-rose-400 font-semibold">{stats.declines} ▼</span>
+            {stats.unchanged > 0 && (
+              <>
+                <span className="text-gray-600">/</span>
+                <span className="text-slate-400">{stats.unchanged} =</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Controls: Size weighting (Value vs Equal) & View mode (Map vs Grid) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {viewMode === 'map' && (
+            <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-white/5 text-[10px]">
+              <button
+                type="button"
+                onClick={() => setSizeMode('value')}
+                className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                  sizeMode === 'value' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Size proportional to holding value"
               >
-                <defs>
-                  <clipPath id={clipId}>
-                    <rect x={pad} y={pad} width={Math.max(0, node.width - pad * 2)} height={Math.max(0, node.height - pad * 2)} />
-                  </clipPath>
-                </defs>
-                <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={2} rx={3} ry={3} />
-                {showSymbol && (
-                  <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
-                    <tspan x={node.width / 2} dy={showPercent ? "-0.6em" : "0.3em"} fontSize={fontSize} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id}</tspan>
-                    {showPercent && typeof percent === 'number' && (
-                      <tspan x={node.width / 2} dy="1.4em" fontSize={fontSize} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{percent > 0 ? '+' : ''}{percent.toFixed(1)}%</tspan>
-                    )}
-                  </text>
-                )}
-              </motion.g>
-            );
-          }}
-          enableLabel={false}
-          theme={{ tooltip: { container: { background: 'transparent', color: '#fff', padding: 0, borderRadius: '8px', boxShadow: 'none' } } }}
-          tooltip={({ node }) => {
-            const d = (node.data as unknown) as { symbol: string; dayChangePercent: number; marketCapCategory?: string; sector?: string; formattedValue: string };
-            const isPositive = d.dayChangePercent >= 0;
-            const getCapColor = (cap: string | undefined) => {
-              const c = (cap || '').toLowerCase();
-              if (c.includes('large')) return 'bg-cyan-500/20 text-cyan-400';
-              if (c.includes('mid')) return 'bg-violet-500/20 text-violet-400';
-              if (c.includes('small')) return 'bg-fuchsia-500/20 text-fuchsia-400';
-              if (c.includes('micro')) return 'bg-lime-500/20 text-lime-400';
-              return 'bg-slate-700/50 text-gray-400';
-            };
-            return (
-              <div className="backdrop-blur-md bg-slate-900/90 border border-white/10 p-3 rounded-xl shadow-2xl min-w-[160px]">
-                <div className="flex items-center justify-between gap-4 mb-2"><span className="font-bold text-white text-sm tracking-wide">{d.symbol}</span><span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${getCapColor(d.marketCapCategory)}`}>{d.marketCapCategory || 'Stock'}</span></div>
-                {d.sector && <div className="text-[10px] text-amber-400 mb-1.5">{d.sector}</div>}
-                <div className="flex items-baseline gap-1 mt-1"><span className={`text-lg font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>{isPositive ? '+' : ''}{d.dayChangePercent?.toFixed(2)}%</span></div>
-                <div className="mt-2 pt-2 border-t border-white/5 flex flex-col gap-0.5"><div className="flex justify-between text-[10px] text-gray-400"><span>Value</span><span className="text-gray-200 font-mono">{privacyMode ? '****' : `₹${d.formattedValue}`}</span></div></div>
-              </div>
-            );
-          }}
-        />
+                Value
+              </button>
+              <button
+                type="button"
+                onClick={() => setSizeMode('equal')}
+                className={`px-2 py-0.5 rounded-md font-medium transition-all ${
+                  sizeMode === 'equal' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Equal tile size for all holdings"
+              >
+                Equal
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center bg-slate-800/80 p-0.5 rounded-lg border border-white/5 text-[10px]">
+            <button
+              type="button"
+              onClick={() => setViewMode('map')}
+              className={`px-2 py-0.5 rounded-md font-medium flex items-center gap-1 transition-all ${
+                viewMode === 'map' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Heatmap Treemap"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+              <span>Map</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`px-2 py-0.5 rounded-md font-medium flex items-center gap-1 transition-all ${
+                viewMode === 'grid' ? 'bg-slate-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="Ranked Grid"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+              <span>Grid</span>
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Main Content Area */}
+      {viewMode === 'map' ? (
+        <div className="flex-1 w-full min-h-0 relative" style={{ color: '#000' }}>
+          <ResponsiveTreeMap
+            data={treeData}
+            identity="name"
+            value="value"
+            valueFormat={val => formatNumber(val, 0, 0)}
+            margin={isMobile ? { top: 0, right: 4, bottom: 4, left: 4 } : { top: 0, right: 8, bottom: 8, left: 8 }}
+            labelSkipSize={isMobile ? 18 : 28}
+            innerPadding={isMobile ? 2 : 3}
+            outerPadding={isMobile ? 2 : 3}
+            colors={node => getHeatmapColor((node.data as { dayChangePercent?: number }).dayChangePercent)}
+            nodeOpacity={1}
+            nodeComponent={({ node }) => {
+              const d = node.data as { dayChangePercent?: number; currentValue?: number };
+              const percent = d.dayChangePercent;
+              if (percent === undefined) return null;
+
+              const isSelected = selectedSymbol === node.id;
+              const textColor = getHeatmapTextColor(percent);
+              const pad = isMobile ? 2 : 3;
+              const availW = Math.max(0, node.width - pad * 2 - 2);
+              const availH = Math.max(0, node.height - pad * 2 - 2);
+
+              const CHAR_RATIO = 0.58;
+              const minPercentH = isMobile ? 26 : 30;
+              const minPercentW = isMobile ? 30 : 36;
+              const showPercent = availH >= minPercentH && availW >= minPercentW;
+
+              const maxFs = isMobile ? 9.5 : 12;
+              const minReadableFs = isMobile ? 6 : 7;
+
+              const maxByH = showPercent ? availH * 0.32 : availH * 0.46;
+              const maxByW = availW / Math.max(node.id.length * CHAR_RATIO, 1);
+
+              let fs = Math.min(maxByW, maxByH, maxFs);
+              let displaySymbol = node.id;
+
+              if (fs < minReadableFs) {
+                const charsAtMin = Math.floor(availW / (minReadableFs * CHAR_RATIO));
+                if (charsAtMin >= 4) {
+                  displaySymbol = node.id.slice(0, charsAtMin - 1) + '…';
+                  const fsTrimmed = Math.min(availW / (displaySymbol.length * CHAR_RATIO), maxByH, maxFs);
+                  fs = Math.max(fsTrimmed, minReadableFs);
+                } else if (charsAtMin >= 2 && availH >= 16) {
+                  displaySymbol = node.id.slice(0, charsAtMin);
+                  fs = minReadableFs;
+                } else {
+                  displaySymbol = '';
+                }
+              }
+
+              const percentFs = Math.min(fs * 0.85, isMobile ? 8.5 : 10);
+              const cx = node.width / 2;
+              const cy = node.height / 2;
+              const symbolY = showPercent ? cy - fs * 0.5 : cy;
+              const percentY = cy + percentFs * 0.9;
+              const clipId = `hm-${node.id.replace(/[^a-z0-9]/gi, '_')}`;
+
+              return (
+                <motion.g
+                  key={node.id}
+                  initial={{ opacity: 0, scale: 0.9, x: node.x, y: node.y }}
+                  animate={{ opacity: 1, scale: 1, x: node.x, y: node.y }}
+                  transition={{
+                    type: "spring",
+                    damping: 20,
+                    stiffness: 300,
+                    delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100
+                  }}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={node.onMouseEnter}
+                  onMouseMove={node.onMouseMove}
+                  onMouseLeave={node.onMouseLeave}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedSymbol(prev => prev === node.id ? null : node.id);
+                  }}
+                >
+                  <defs>
+                    <clipPath id={clipId}>
+                      <rect
+                        x={pad}
+                        y={pad}
+                        width={Math.max(0, node.width - pad * 2)}
+                        height={Math.max(0, node.height - pad * 2)}
+                        rx={2}
+                        ry={2}
+                      />
+                    </clipPath>
+                  </defs>
+                  <rect
+                    width={node.width}
+                    height={node.height}
+                    fill={node.color}
+                    stroke={isSelected ? '#38bdf8' : '#0f172a'}
+                    strokeWidth={isSelected ? 3 : (isMobile ? 1.5 : 2)}
+                    rx={3}
+                    ry={3}
+                    className={isSelected ? 'filter drop-shadow-[0_0_6px_rgba(56,189,248,0.8)]' : ''}
+                  />
+                  {displaySymbol && (
+                    <g clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
+                      <text
+                        x={cx}
+                        y={symbolY}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={fs}
+                        fontWeight="700"
+                        fill={textColor}
+                        style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.6))' : 'none' }}
+                      >
+                        {displaySymbol}
+                      </text>
+                      {showPercent && (
+                        <text
+                          x={cx}
+                          y={percentY}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={percentFs}
+                          fontWeight="600"
+                          fill={textColor}
+                          fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8}
+                          style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.6))' : 'none' }}
+                        >
+                          {percent > 0 ? '+' : ''}{percent.toFixed(1)}%
+                        </text>
+                      )}
+                    </g>
+                  )}
+                </motion.g>
+              );
+            }}
+            enableLabel={false}
+            theme={{ tooltip: { container: { background: 'transparent', color: '#fff', padding: 0, borderRadius: '8px', boxShadow: 'none' } } }}
+            tooltip={({ node }) => {
+              const d = (node.data as unknown) as PortfolioHoldingItem;
+              const isPositive = (d.dayChangePercent ?? 0) >= 0;
+              const holdingVal = d.currentValue ?? 0;
+              const weight = totalValue > 0 ? ((holdingVal / totalValue) * 100).toFixed(1) : null;
+              return (
+                <div className="backdrop-blur-md bg-slate-900/95 border border-white/10 p-3 rounded-xl shadow-2xl min-w-[170px] pointer-events-none">
+                  <div className="flex items-center justify-between gap-4 mb-1.5">
+                    <span className="font-bold text-white text-sm tracking-wide">{d.symbol}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${getCapColor(d.marketCapCategory)}`}>
+                      {d.marketCapCategory || 'Stock'}
+                    </span>
+                  </div>
+                  {d.sector && <div className="text-[10px] text-amber-400 mb-1.5">{d.sector}</div>}
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className={`text-base font-bold tabular-nums ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {isPositive ? '+' : ''}{d.dayChangePercent?.toFixed(2)}%
+                    </span>
+                    {weight && (
+                      <span className="text-[11px] text-gray-400 font-mono">
+                        ({weight}%)
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[11px] text-gray-400">
+                    <span>Value</span>
+                    <span className="text-gray-200 font-mono">{privacyMode ? '****' : `₹${d.formattedValue}`}</span>
+                  </div>
+                </div>
+              );
+            }}
+          />
+        </div>
+      ) : (
+        /* Alternative Performance Grid View for Mobile */
+        <div className="flex-1 w-full min-h-0 overflow-y-auto px-3 pb-2 pt-1 pr-1.5 scrollbar-thin scrollbar-thumb-slate-700">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+            {sortedHoldings.map((h) => {
+              const isPositive = (h.dayChangePercent ?? 0) >= 0;
+              const isSelected = selectedSymbol === h.symbol;
+              const bgColor = getHeatmapColor(h.dayChangePercent);
+              const textColor = getHeatmapTextColor(h.dayChangePercent);
+              return (
+                <button
+                  key={h.symbol}
+                  type="button"
+                  onClick={() => setSelectedSymbol(prev => prev === h.symbol ? null : h.symbol)}
+                  style={{ backgroundColor: bgColor }}
+                  className={`p-2 rounded-xl text-left transition-all duration-150 relative flex flex-col justify-between min-h-[64px] border ${
+                    isSelected
+                      ? 'border-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.5)] scale-[1.02]'
+                      : 'border-black/20 hover:opacity-95'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 w-full">
+                    <span className="font-bold text-xs truncate" style={{ color: textColor }}>
+                      {h.symbol}
+                    </span>
+                    <span className="text-[11px] font-bold tabular-nums shrink-0" style={{ color: textColor }}>
+                      {isPositive ? '+' : ''}{h.dayChangePercent.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div
+                    className="flex items-center justify-between gap-1 mt-1 text-[10px] w-full"
+                    style={{ color: textColor, opacity: 0.85 }}
+                  >
+                    <span className="font-medium truncate">{h.marketCapCategory || 'Stock'}</span>
+                    <span className="font-mono font-semibold">
+                      {privacyMode ? '****' : `₹${h.formattedValue}`}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tap-to-Inspect Selected Holding Details Banner (Especially essential on Mobile) */}
+      <AnimatePresence>
+        {selectedHolding && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginTop: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+            exit={{ opacity: 0, height: 0, marginTop: 0 }}
+            className="shrink-0 mx-2 mb-2 px-3 py-2 bg-slate-800/95 backdrop-blur-md rounded-xl border border-sky-500/40 shadow-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-white text-sm tracking-wide">{selectedHolding.symbol}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${getCapColor(selectedHolding.marketCapCategory)}`}>
+                    {selectedHolding.marketCapCategory || 'Stock'}
+                  </span>
+                  {selectedHolding.sector && (
+                    <span className="text-[10px] text-amber-400/90 truncate max-w-[130px]">{selectedHolding.sector}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-gray-400 flex-wrap">
+                  <span>Value: <strong className="text-gray-200 font-mono">{privacyMode ? '****' : `₹${selectedHolding.formattedValue}`}</strong></span>
+                  {totalValue > 0 && (
+                    <span>Weight: <strong className="text-gray-200 font-mono">{((selectedHolding.currentValue / totalValue) * 100).toFixed(1)}%</strong></span>
+                  )}
+                  {selectedHolding.currentPrice !== undefined && selectedHolding.currentPrice > 0 && (
+                    <span>LTP: <strong className="text-gray-200 font-mono">₹{selectedHolding.currentPrice.toFixed(2)}</strong></span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <span className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-lg border ${
+                  selectedHolding.dayChangePercent >= 0
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                }`}>
+                  {selectedHolding.dayChangePercent >= 0 ? '+' : ''}{selectedHolding.dayChangePercent.toFixed(2)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSymbol(null)}
+                  className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                  title="Close inspection"
+                  aria-label="Close"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
-}
+});

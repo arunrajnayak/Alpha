@@ -17,7 +17,7 @@ const MarketOverviewSection = dynamic(() => import('./market/MarketOverviewClien
     <div className="flex flex-col gap-4 md:gap-5 animate-pulse">
       <div className="flex flex-col md:flex-row gap-4 md:gap-5">
         <div className="hidden md:flex flex-col gap-2 w-[220px] shrink-0">
-          {[...Array(6)].map((_, i) => (
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="h-[76px] bg-slate-800/50 rounded-xl border border-white/5" />
           ))}
         </div>
