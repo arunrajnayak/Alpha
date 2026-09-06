@@ -635,18 +635,29 @@ export async function recalculatePortfolioHistoryInternal(
         // D. NAV Calculation
         if (prevTotalEquity === 0) {
             if (dailyNetFlow > 0) {
-                // First Day: Treat flow as start-of-day capital.
-                // Growth = End / Start(Flow).
+                // First Day: more capital deployed (BUY > SELL).
+                // Treat the net outflow as the starting capital for TWR.
                 const dailyReturn = (totalEquity - dailyNetFlow) / dailyNetFlow;
-                // Actually if we treat Flow as Start:
-                // End = 105. Start = 100. Return = (105-100)/100 = 0.05.
-                // Formula: (TotalEquity - Flow) / Flow ?
-                // 105 - 100 = 5. 5/100 = 0.05. Correct.
+                nav = 100 * (1 + dailyReturn);
+            } else if (dailyNetFlow < 0 && totalEquity > 0) {
+                // First day where sells exceed buys (e.g. mixed intraday exit + residual
+                // delivery position remaining). Net cash came IN, but some equity is held.
+                // Use |dailyNetFlow| as the implied starting capital so the residual
+                // delivery equity is correctly valued in NAV.
+                const impliedCapital = -dailyNetFlow;
+                const dailyReturn = (totalEquity - 0) / impliedCapital - 1;
                 nav = 100 * (1 + dailyReturn);
             } else {
+                // Pure intraday on first day (no residual equity after close).
+                // TWR requires a starting equity value — without held positions there
+                // is nothing to measure growth against. nav stays at 100.
+                // The intraday P&L is still captured correctly in XIRR (cashflow-based).
                 nav = 100;
             }
         } else {
+            // Standard TWR: adjust end-of-day equity for the day's external cash flows,
+            // then compound the resulting return onto the running NAV.
+            // dailyNetFlow > 0 = capital injected (BUY); < 0 = capital returned (SELL/intraday profit).
             const adjustedEndValue = totalEquity - dailyNetFlow;
             const dailyReturn = adjustedEndValue / prevTotalEquity;
             nav = nav * dailyReturn;
@@ -665,10 +676,17 @@ export async function recalculatePortfolioHistoryInternal(
              // TWR Return
              dailyRet = (totalEquity - dailyNetFlow) / prevTotalEquity - 1;
         } else if (dailyNetFlow > 0) {
-             // First Day / Restart
+             // First Day / Restart — capital deployed, some equity remains
              dailyPnL = totalEquity - dailyNetFlow;
              dailyRet = (totalEquity - dailyNetFlow) / dailyNetFlow;
+        } else if (dailyNetFlow < 0 && totalEquity > 0) {
+             // First day, net sells > buys, residual delivery equity held
+             // (same branch as new NAV case above)
+             const impliedCapital = -dailyNetFlow;
+             dailyPnL = totalEquity - impliedCapital;
+             dailyRet = totalEquity / impliedCapital - 1;
         }
+        // else: pure intraday first day — no starting equity, P&L = 0 for TWR
 
         navHistory.push(nav);
         let navMA200 = 0;
@@ -709,11 +727,14 @@ export async function recalculatePortfolioHistoryInternal(
             xirrFlows.push({ amount: displayCashflow, when: new Date(currentDate) });
         }
 
-        // F2. Compute XIRR and CAGR for this day
+        // F2. Compute XIRR and CAGR for this day.
+        // XIRR is computed as long as we have at least one historical cash flow.
+        // terminal = totalEquity (0 is valid — means all capital has been returned/closed out).
+        // The try/catch handles convergence failures (e.g. all-intraday with no delivery history).
         let dailyXirr: number | null = null;
         let dailyCagr: number | null = null;
 
-        if (totalEquity > 0 && xirrFlows.length > 0) {
+        if (xirrFlows.length > 0) {
             try {
                 const flowsWithTerminal = [
                     ...xirrFlows,
@@ -802,22 +823,12 @@ export async function recalculatePortfolioHistoryInternal(
              const stats = computeSnapshotStats(large, mid, small, micro, wins, losses, closedTradesCount, totalWinPct, totalLossPct, totalHoldDays);
 
              /**
-              * XIRR LIMITATION:
-              * XIRR is computationally expensive as it requires iterating over ALL cash flows
-              * from the portfolio start date up to the current snapshot date. Computing XIRR
-              * for every daily/weekly/monthly snapshot in a loop would cause:
-              * - O(n * m) complexity where n = days and m = cash flows
-              * - Potential timeouts for portfolios with 1000+ days of history
-              *
-              * WORKAROUND:
-              * - XIRR is calculated on-demand via `calculatePortfolioXIRR()` in the dashboard stats
-              * - Weekly/Monthly snapshot capture functions calculate XIRR individually
-              * - The recalculation loop sets XIRR to 0 as a placeholder
-              *
-              * For accurate XIRR in snapshots, use the individual capture functions or
-              * implement incremental XIRR calculation that reuses previous computations.
+              * Reuse the incremental XIRR already computed in the F2 block for this
+              * day. This avoids an O(n * m) re-computation of XIRR per snapshot while
+              * still providing an accurate value (same cash-flow array, same terminal
+              * date). Falls back to 0 when XIRR failed to converge (null).
               */
-             const xirrVal = 0;
+             const xirrVal = dailyXirr ?? 0;
 
              if (currentDate >= effectiveFromDate) {
                  weeklyData.push({
@@ -865,7 +876,8 @@ export async function recalculatePortfolioHistoryInternal(
              const currentMonthsCount = monthsActive + 1;
              const calculatedAvgExits = closedTradesCount / currentMonthsCount;
 
-             const xirrVal = 0;
+             // Reuse the incremental XIRR computed in the F2 block (same day, same flows).
+             const xirrVal = dailyXirr ?? 0;
 
              if (currentDate >= effectiveFromDate) {
                  monthlyData.push({
