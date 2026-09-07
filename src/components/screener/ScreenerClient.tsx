@@ -790,13 +790,10 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         {row.asmInfo && activeTab !== 'portfolio' && (
                           <BadgeTooltip
                             label={`ASM ${row.asmInfo.type}-${row.asmInfo.stage}`}
-                            badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
-                            lines={[row.asmInfo.desc]}
-                            icon={
-                              <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                              </svg>
-                            }
+                            badgeCls="text-amber-400 hover:text-amber-300"
+                            lines={[`⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}`]}
+                            iconOnly
+                            icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
                           />
                         )}
                       </div>
