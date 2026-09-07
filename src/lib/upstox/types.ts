@@ -130,12 +130,15 @@ export interface LTPResponseValue {
  * Raw OHLC response value from Upstox API
  */
 export interface OHLCResponseValue {
+  instrument_token?: string;
+  last_price?: number;
   live_ohlc?: {
     open: number;
     high: number;
     low: number;
     close: number;
     volume: number;
+    ts?: number;
   };
   prev_ohlc?: {
     open: number;
@@ -143,6 +146,7 @@ export interface OHLCResponseValue {
     low: number;
     close: number;
     volume: number;
+    ts?: number;
   };
 }
 

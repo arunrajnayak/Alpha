@@ -337,13 +337,25 @@ function StockChartModalContent({
     };
   }, [symbol, subscribeToPrices, handleLivePriceUpdate]);
 
-  const activeCandleStats: CandleBarStats | null = hoveredCandle ?? (candles.length > 0 ? {
-    open: candles[candles.length - 1].open,
-    high: candles[candles.length - 1].high,
-    low: candles[candles.length - 1].low,
-    close: candles[candles.length - 1].close,
-    volume: candles[candles.length - 1].volume,
-  } : null);
+  const activeCandleStats: CandleBarStats | null = hoveredCandle ?? (
+    liveTick
+      ? {
+          open: liveTick.open,
+          high: liveTick.high,
+          low: liveTick.low,
+          close: liveTick.close,
+          volume: liveTick.volume,
+        }
+      : candles.length > 0
+      ? {
+          open: candles[candles.length - 1].open,
+          high: candles[candles.length - 1].high,
+          low: candles[candles.length - 1].low,
+          close: candles[candles.length - 1].close,
+          volume: candles[candles.length - 1].volume,
+        }
+      : null
+  );
 
   const handleToggleIndicator = (key: keyof VisibleIndicators) => {
     setVisibleIndicators(prev => {

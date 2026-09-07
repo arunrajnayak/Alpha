@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getHistoricalCandles, getIntradayCandles, UpstoxCandle } from '@/lib/upstox-client';
 import { getInstrumentKey, getLiveQuotes, getOHLC } from '@/lib/upstox';
 import type { CandleData, TradeMarker, ChartInterval } from '@/lib/chart-types';
+import { todayISTYmd } from '@/lib/tz';
 
 /**
  * Fetch OHLCV candle data for a stock from Upstox API.
@@ -68,10 +69,15 @@ export async function getStockCandles(
     const minFromDateStr = minFromDateObj.toISOString().split('T')[0];
     const safeFromDate = fetchFromDate < minFromDateStr ? minFromDateStr : fetchFromDate;
 
-    const { candles } = await getHistoricalCandles(instrumentKey, interval, safeFromDate, toDate).catch((err) => {
-        console.warn(`Historical candles fetch failed for ${symbol} (${safeFromDate} to ${toDate}):`, err?.message || err);
-        return { candles: [] };
-    });
+    const [historicalRes, ohlcMap] = await Promise.all([
+        getHistoricalCandles(instrumentKey, interval, safeFromDate, toDate).catch((err) => {
+            console.warn(`Historical candles fetch failed for ${symbol} (${safeFromDate} to ${toDate}):`, err?.message || err);
+            return { candles: [] };
+        }),
+        interval === 'day' ? getOHLC([instrumentKey], '1d').catch(() => new Map()) : Promise.resolve(new Map()),
+    ]);
+
+    const candles = historicalRes.candles;
 
     // Deduplicate Upstox candles by date (YYYY-MM-DD) and sort ascending
     const candleMap = new Map<string, CandleData>();
@@ -85,6 +91,22 @@ export async function getStockCandles(
             close: c.close,
             volume: c.volume,
         });
+    }
+
+    // For daily timeframe, merge today's live session OHLC from Upstox market-quote/ohlc
+    if (interval === 'day' && ohlcMap.size > 0) {
+        const todayOhlc = ohlcMap.get(instrumentKey);
+        if (todayOhlc && todayOhlc.open > 0) {
+            const todayStr = todayISTYmd();
+            candleMap.set(todayStr, {
+                time: todayStr,
+                open: todayOhlc.open,
+                high: todayOhlc.high,
+                low: todayOhlc.low,
+                close: todayOhlc.close,
+                volume: todayOhlc.volume,
+            });
+        }
     }
 
     return Array.from(candleMap.values()).sort((a, b) => (a.time as string).localeCompare(b.time as string));

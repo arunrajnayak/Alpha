@@ -326,21 +326,29 @@ export async function getOHLC(
     for (const [responseKey, value] of Object.entries(json.data)) {
       const data = value as OHLCResponseValue;
       const ohlc = data.live_ohlc || data.prev_ohlc;
-
       if (ohlc) {
-        const normalizedKey = responseKey.replace(/:/g, '|');
-        const originalKey =
-          requestKeyLookup.get(responseKey) ||
-          requestKeyLookup.get(normalizedKey) ||
-          normalizedKey;
-
-        result.set(originalKey, {
+        const ohlcObj = {
           open: ohlc.open,
           high: ohlc.high,
           low: ohlc.low,
           close: ohlc.close,
           volume: ohlc.volume,
-        });
+        };
+
+        const normalizedKey = responseKey.replace(/:/g, '|');
+        if (data.instrument_token) {
+          result.set(data.instrument_token, ohlcObj);
+        }
+        const lookupByResponse = requestKeyLookup.get(responseKey);
+        if (lookupByResponse) {
+          result.set(lookupByResponse, ohlcObj);
+        }
+        const lookupByNormalized = requestKeyLookup.get(normalizedKey);
+        if (lookupByNormalized) {
+          result.set(lookupByNormalized, ohlcObj);
+        }
+        result.set(normalizedKey, ohlcObj);
+        result.set(responseKey, ohlcObj);
       }
     }
   }
