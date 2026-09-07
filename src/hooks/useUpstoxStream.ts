@@ -15,6 +15,7 @@ export interface PriceUpdate {
   previousClose: number;
   change: number;
   changePercent: number;
+  iep?: number;
 }
 
 export type StreamStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -48,6 +49,18 @@ interface FeedLTPC {
   ltt?: number | Long;
   ltq?: number | Long;
   cp?: number;
+  iep?: { value?: number } | number;
+}
+
+interface StatusInfo {
+  status?: string;
+  updatedTime?: number | Long;
+}
+
+interface MarketInfo {
+  segmentStatus?: Record<string, number>;
+  casMarketStatus?: Record<string, StatusInfo>;
+  preOpenSessionStatus?: Record<string, StatusInfo>;
 }
 
 interface Feed {
@@ -55,6 +68,10 @@ interface Feed {
   fullFeed?: {
     marketFF?: {
       ltpc?: FeedLTPC;
+      iep?: number;
+      rp?: number;
+      ieq?: number | Long;
+      casEligible?: boolean;
     };
     indexFF?: {
       ltpc?: FeedLTPC;
@@ -70,6 +87,7 @@ interface FeedResponse {
   type?: number;
   feeds?: Record<string, Feed>;
   currentTs?: number | Long;
+  marketInfo?: MarketInfo;
 }
 
 // Long type from protobufjs
@@ -88,11 +106,16 @@ interface Long {
 const PROTO_SCHEMA = `
 syntax = "proto3";
 
+message DoubleValue {
+  double value = 1;
+}
+
 message LTPC {
   double ltp = 1;
   int64 ltt = 2;
   int64 ltq = 3;
   double cp = 4;
+  DoubleValue iep = 5;
 }
 
 message MarketLevel {
@@ -145,6 +168,12 @@ message MarketFullFeed {
   double iv = 8;
   double tbq = 9;
   double tsq = 10;
+  double iep = 11;
+  double rp = 12;
+  int64 ieq = 13;
+  int64 iiqTotal = 14;
+  int64 iiqM = 15;
+  bool casEligible = 16;
 }
 
 message IndexFullFeed {
@@ -193,8 +222,15 @@ enum MarketStatus {
   CLOSING_END = 5;
 }
 
+message StatusInfo {
+  string status = 1;
+  int64 updatedTime = 2;
+}
+
 message MarketInfo {
   map<string, MarketStatus> segmentStatus = 1;
+  map<string, StatusInfo> casMarketStatus = 2;
+  map<string, StatusInfo> preOpenSessionStatus = 3;
 }
 
 message FeedResponse {
@@ -288,6 +324,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
       for (const [key, feed] of Object.entries(message.feeds)) {
         // Feed uses oneof FeedUnion - can be ltpc, fullFeed, or firstLevelWithGreeks
         let ltpc: FeedLTPC | undefined;
+        let ffIep: number | undefined;
 
         if (feed.ltpc) {
           // Direct LTPC mode
@@ -296,6 +333,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
           // Full feed mode - can be marketFF or indexFF
           if (feed.fullFeed.marketFF?.ltpc) {
             ltpc = feed.fullFeed.marketFF.ltpc;
+            ffIep = feed.fullFeed.marketFF.iep;
           } else if (feed.fullFeed.indexFF?.ltpc) {
             ltpc = feed.fullFeed.indexFF.ltpc;
           }
@@ -309,7 +347,16 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
         const symbol = symbolMapRef.current[key];
         if (!symbol) continue;
 
-        const ltp = ltpc.ltp || 0;
+        // Parse IEP (Indicative Equilibrium Price) if present
+        let rawIep: number | undefined = ffIep;
+        if (ltpc.iep !== undefined && ltpc.iep !== null) {
+          rawIep = typeof ltpc.iep === 'object' && 'value' in ltpc.iep ? ltpc.iep.value : Number(ltpc.iep);
+        }
+        const iep = rawIep && rawIep > 0 ? rawIep : undefined;
+
+        // In pre-open / CAS session, or if continuous trades haven't begun (ltp === 0),
+        // IEP is the discovered equilibrium price
+        const ltp = (ltpc.ltp && ltpc.ltp > 0) ? ltpc.ltp : (iep || 0);
         const previousClose = ltpc.cp || ltp;
         const change = ltp - previousClose;
         const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
@@ -321,6 +368,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
           previousClose,
           change,
           changePercent,
+          iep,
         });
       }
 
@@ -341,6 +389,8 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
         // Notify context/subscribers immediately (they do their own batching)
         onPriceUpdateRef.current?.(updates);
       }
+    } else if (message.type === 2 && message.marketInfo) {
+      upstoxLogger.info('Market info update:', message.marketInfo);
     }
   }, []);
 

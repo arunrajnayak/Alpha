@@ -256,6 +256,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
           currentValue: currentValue,
           totalPnl: totalPnl,
           totalPnlPercent: totalPnlPercent,
+          indicativePrice: update.iep ?? holding.indicativePrice,
         };
       });
 
@@ -516,8 +517,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       setLastRefreshed(new Date());
       
       // Update market hours based on actual server response
-      // This ensures streaming works during special sessions (like Sunday budget day)
-      setIsMarketHours(result.marketStatus === 'OPEN');
+      // This ensures streaming works during PRE_OPEN and special sessions (like Sunday budget day)
+      setIsMarketHours(result.marketStatus === 'OPEN' || result.marketStatus === 'PRE_OPEN');
       
       // Check token status from the result
       if (result.tokenStatus && !result.tokenStatus.hasToken && !errorShownRef.current) {

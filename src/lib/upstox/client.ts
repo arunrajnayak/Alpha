@@ -22,7 +22,6 @@ import {
 // Configuration
 // ============================================================================
 
-const BASE_URL_V2 = 'https://api.upstox.com/v2';
 const BASE_URL_V3 = 'https://api.upstox.com/v3';
 const BATCH_SIZE = 500; // Upstox limit for LTP requests
 
@@ -241,47 +240,60 @@ export async function getLTP(instrumentKeys: string[]): Promise<Map<string, numb
 
 /**
  * Get Full Market Quote for multiple instruments
- * Uses V2 endpoint for comprehensive data (OHLC, volume, circuit limits)
+ * Uses V3 endpoint for comprehensive data (OHLC, volume, circuit limits, CAS & Pre-Open IEP)
  */
 export async function getFullQuotes(
   instrumentKeys: string[]
 ): Promise<Map<string, UpstoxFullQuote>> {
+  if (instrumentKeys.length === 0) return new Map();
+
   const accessToken = await getAccessToken();
   const requestKeyLookup = buildKeyLookup(instrumentKeys);
-
-  const url = `${BASE_URL_V2}/market-quote/quotes?instrument_key=${instrumentKeys
-    .map((k) => encodeURIComponent(k))
-    .join(',')}`;
-
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new UpstoxError(
-      `Full quote fetch failed: ${response.status} - ${errorText}`,
-      response.status
-    );
-  }
-
-  const json = await response.json();
   const result = new Map<string, UpstoxFullQuote>();
 
-  if (json.data) {
-    for (const [responseKey, value] of Object.entries(json.data)) {
-      const normalizedKey = responseKey.replace(/:/g, '|');
-      const originalKey =
-        requestKeyLookup.get(responseKey) ||
-        requestKeyLookup.get(normalizedKey) ||
-        normalizedKey;
+  // Upstox V3 supports up to 500 instrument keys in a single request
+  const batches = chunkArray(instrumentKeys, BATCH_SIZE);
 
-      result.set(originalKey, value as UpstoxFullQuote);
+  for (const batch of batches) {
+    const url = `${BASE_URL_V3}/market-quote/quotes?instrument_key=${batch
+      .map((k) => encodeURIComponent(k))
+      .join(',')}`;
+
+    const response = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new UpstoxError(
+        `Full quote V3 fetch failed: ${response.status} - ${errorText}`,
+        response.status
+      );
+    }
+
+    const json = await response.json();
+
+    if (json.data) {
+      for (const [responseKey, value] of Object.entries(json.data)) {
+        const val = value as UpstoxFullQuote;
+        const normalizedKey = responseKey.replace(/:/g, '|');
+        const originalKey =
+          val.instrument_token ||
+          requestKeyLookup.get(responseKey) ||
+          requestKeyLookup.get(normalizedKey) ||
+          normalizedKey;
+
+        result.set(originalKey, val);
+
+        if (normalizedKey !== originalKey) {
+          result.set(normalizedKey, val);
+        }
+      }
     }
   }
 

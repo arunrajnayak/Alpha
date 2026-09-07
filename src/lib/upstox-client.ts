@@ -31,6 +31,8 @@ export interface UpstoxQuote {
         high: number;
         low: number;
         close: number;
+        volume?: number;
+        ts?: number;
     };
     net_change: number;
     total_buy_quantity: number;
@@ -41,6 +43,16 @@ export interface UpstoxQuote {
     oi?: number;
     oi_day_high?: number;
     oi_day_low?: number;
+    prev_close_price?: number;
+    year_high?: number;
+    year_low?: number;
+    previous_oi?: number;
+    indicative_equilibrium_price?: number;
+    indicative_equilibrium_quantity?: number;
+    indicative_imbalance_quantity_total?: number;
+    indicative_imbalance_quantity_market?: number;
+    reference_price?: number;
+    cas_eligible?: boolean;
 }
 
 export interface UpstoxLTP {
@@ -242,6 +254,8 @@ export interface UpstoxLiveQuoteV3 {
     instrument_token: string;
     previous_close: number;
     timestamp?: number;
+    indicative_equilibrium_price?: number;
+    is_pre_open?: boolean;
 }
 
 // chunkArray imported from db.ts (single source of truth)
@@ -372,13 +386,13 @@ export async function getLTP(instrumentKeys: string[]): Promise<Map<string, numb
 
 /**
  * Get Full Market Quote for multiple instruments
- * Uses V2 endpoint which includes OHLC, volume, circuit limits, etc.
- * 
- * Note: V3 has a different endpoint structure. For full quotes, V2 is still used
- * as it provides more comprehensive data in a single call.
+ * Uses V3 endpoint which includes OHLC, volume, circuit limits, CAS & Pre-Open IEP data.
  */
 export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string, UpstoxQuote>> {
+    if (instrumentKeys.length === 0) return new Map();
+
     const accessToken = await getAccessToken();
+    const result = new Map<string, UpstoxQuote>();
     
     // Build lookup map for key normalization
     const requestKeyLookup = new Map<string, string>();
@@ -388,41 +402,47 @@ export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string
         requestKeyLookup.set(key, key);
     }
     
-    const url = `${CONFIG.baseUrl}/market-quote/quotes?instrument_key=${instrumentKeys.map(k => encodeURIComponent(k)).join(',')}`;
-    
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-    });
+    // Upstox V3 supports up to 500 instruments per request
+    const batches = chunkArray(instrumentKeys, 500);
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        upstoxLogger.error(`Full quote fetch failed:`, errorText);
-        throw new Error(`Upstox Quote Fetch Failed: ${response.status} - ${errorText}`);
-    }
+    for (const batch of batches) {
+        const url = `${CONFIG.baseUrlV3}/market-quote/quotes?instrument_key=${batch.map(k => encodeURIComponent(k)).join(',')}`;
+        
+        const response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+            },
+        });
 
-    const json = await response.json();
-    const result = new Map<string, UpstoxQuote>();
-    
-    if (json.data) {
-        for (const [responseKey, value] of Object.entries(json.data)) {
-            // Normalize key: API returns colon-separated keys (NSE_INDEX:Nifty 50)
-            // but we request with pipe-separated keys (NSE_INDEX|Nifty 50)
-            const normalizedKey = responseKey.replace(/:/g, '|');
-            
-            // Try to find the original request key
-            const originalKey = requestKeyLookup.get(responseKey) || 
-                               requestKeyLookup.get(normalizedKey) || 
-                               normalizedKey;
-            
-            result.set(originalKey, value as UpstoxQuote);
-            
-            // Also store with normalized key if different
-            if (normalizedKey !== originalKey) {
-                result.set(normalizedKey, value as UpstoxQuote);
+        if (!response.ok) {
+            const errorText = await response.text();
+            upstoxLogger.error(`Full quote V3 fetch failed:`, errorText);
+            throw new Error(`Upstox Quote Fetch Failed: ${response.status} - ${errorText}`);
+        }
+
+        const json = await response.json();
+        
+        if (json.data) {
+            for (const [responseKey, value] of Object.entries(json.data)) {
+                const quoteVal = value as UpstoxQuote;
+                // Normalize key: API returns colon-separated keys (NSE_INDEX:Nifty 50)
+                // but we request with pipe-separated keys (NSE_INDEX|Nifty 50)
+                const normalizedKey = responseKey.replace(/:/g, '|');
+                
+                // Try to find the original request key
+                const originalKey = quoteVal.instrument_token ||
+                                   requestKeyLookup.get(responseKey) || 
+                                   requestKeyLookup.get(normalizedKey) || 
+                                   normalizedKey;
+                
+                result.set(originalKey, quoteVal);
+                
+                // Also store with normalized key if different
+                if (normalizedKey !== originalKey) {
+                    result.set(normalizedKey, quoteVal);
+                }
             }
         }
     }

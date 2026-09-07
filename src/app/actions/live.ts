@@ -8,9 +8,11 @@ import { getLiveQuoteV3, hasValidToken, UpstoxLiveQuoteV3 } from '@/lib/upstox-c
 import { getInstrumentKeys } from '@/lib/instrument-service';
 import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '@/lib/amfi';
 import { isMarketOpenAsync } from '@/lib/marketHours';
+import { isTradingHoliday } from '@/lib/market-holidays-cache';
 import { subDays } from 'date-fns';
 import { logger } from '@/lib/logger';
-import { istTimeParts, todayUTCMidnightForISTDay } from '@/lib/tz';
+import { istTimeParts, istDayOfWeek, todayUTCMidnightForISTDay } from '@/lib/tz';
+import { getFullQuotes } from '@/lib/upstox/client';
 
 const liveActionsLogger = logger.scope('LiveActions');
 
@@ -27,6 +29,8 @@ export interface LiveStockData {
   totalPnlPercent: number;
   marketCapCategory?: MarketCapCategory;
   sector?: string;
+  isPreOpen?: boolean;
+  indicativePrice?: number;
 }
 
 export interface BreadthByCategory {
@@ -36,14 +40,20 @@ export interface BreadthByCategory {
   micro: { advances: number; declines: number };
 }
 
-export type MarketStatus = 'OPEN' | 'CLOSED' | 'UNKNOWN';
+export type MarketStatus = 'OPEN' | 'CLOSED' | 'PRE_OPEN' | 'UNKNOWN';
 
-// Helper to check if we're in pre-market hours (before 9:15 AM IST)
-function isPreMarketHours(): boolean {
+// Helper to check if we're in the Pre-Open Session (09:00 AM - 09:15 AM IST)
+function isPreOpenSession(): boolean {
   const { hour, minute } = istTimeParts();
   const totalMinutes = hour * 60 + minute;
-  const marketOpenMinutes = 9 * 60 + 15; // 9:15 AM
-  return totalMinutes < marketOpenMinutes;
+  return totalMinutes >= 9 * 60 && totalMinutes < 9 * 60 + 15;
+}
+
+// Helper to check if we're in pre-market closed hours (before 09:00 AM IST)
+function isPreMarketClosed(): boolean {
+  const { hour, minute } = istTimeParts();
+  const totalMinutes = hour * 60 + minute;
+  return totalMinutes < 9 * 60;
 }
 
 // Helper to get today's date in IST as a Date object at start of day (UTC).
@@ -149,102 +159,151 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     liveActionsLogger.info(`computed ${holdings.length} holdings`);
 
     // Check market status
+    const isHoliday = await isTradingHoliday(new Date());
+    const day = istDayOfWeek(new Date());
+    const isWeekday = day >= 1 && day <= 5;
+    const isTradingDayToday = isWeekday && !isHoliday;
+
     const isMarketOpen = await isMarketOpenAsync();
-    const marketStatus: MarketStatus = isMarketOpen ? 'OPEN' : 'CLOSED';
-  
-  // Check if we should use historical data (market closed AND pre-market hours)
-  const preMarket = isPreMarketHours();
-  const useHistoricalData = !isMarketOpen && preMarket;
-  
-  if (useHistoricalData) {
-    liveActionsLogger.info(`Market closed and pre-market hours - using last trading day's data`);
-  }
+    const isPreOpen = isTradingDayToday && isPreOpenSession();
 
-  const emptyBreadth: BreadthByCategory = {
-    large: { advances: 0, declines: 0 },
-    mid: { advances: 0, declines: 0 },
-    small: { advances: 0, declines: 0 },
-    micro: { advances: 0, declines: 0 }
-  };
+    let marketStatus: MarketStatus = 'CLOSED';
+    if (isMarketOpen) {
+      marketStatus = 'OPEN';
+    } else if (isPreOpen) {
+      marketStatus = 'PRE_OPEN';
+    }
+  
+    // Check if we should use historical data:
+    // Only when market is closed AND before 09:00 AM (pre-market closed) or on weekend/holiday.
+    // In pre-open (09:00-09:15) or regular open or post-market, use real Upstox quote data!
+    const useHistoricalData = !isMarketOpen && !isPreOpen && (!isTradingDayToday || isPreMarketClosed());
+    
+    if (useHistoricalData) {
+      liveActionsLogger.info(`Market closed and pre-market hours - using last trading day's data`);
+    } else if (isPreOpen) {
+      liveActionsLogger.info(`Market in Pre-Open session (09:00-09:15 IST) - fetching live indicative quotes`);
+    }
 
-  if (holdings.length === 0) {
-    return {
-      totalEquity: 0,
-      totalInvested: 0,
-      totalPnl: 0,
-      totalPnlPercent: 0,
-      dayGain: 0,
-      dayGainPercent: 0,
-      topGainers: [],
-      topLosers: [],
-      advances: 0,
-      declines: 0,
-      breadthByCategory: emptyBreadth,
-      allHoldings: [],
-      lastUpdated: new Date().toISOString(),
-      indices: [],
-      sectorAllocations: [],
-      marketStatus
+    const emptyBreadth: BreadthByCategory = {
+      large: { advances: 0, declines: 0 },
+      mid: { advances: 0, declines: 0 },
+      small: { advances: 0, declines: 0 },
+      micro: { advances: 0, declines: 0 }
     };
-  }
 
-  // 2. Check if we have a valid Upstox token
-  const hasToken = await hasValidToken();
-  
-  // Fetch indices in parallel (uses Upstox internally now)
-  const indicesPromise = fetchNseIndices();
+    if (holdings.length === 0) {
+      return {
+        totalEquity: 0,
+        totalInvested: 0,
+        totalPnl: 0,
+        totalPnlPercent: 0,
+        dayGain: 0,
+        dayGainPercent: 0,
+        topGainers: [],
+        topLosers: [],
+        advances: 0,
+        declines: 0,
+        breadthByCategory: emptyBreadth,
+        allHoldings: [],
+        lastUpdated: new Date().toISOString(),
+        indices: [],
+        sectorAllocations: [],
+        marketStatus
+      };
+    }
 
-  // 3. Get instrument keys for all holdings
-  const holdingSymbols = holdings.map(h => h.symbol);
-  const instrumentKeyMap = await getInstrumentKeys(holdingSymbols);
-  
-  // Build quote map
-  const quoteMap = new Map<string, UpstoxLiveQuoteV3>();
-  let latestTradeTime: number = 0;
-  
-  // Fetch historical prices if we need them (for pre-market display)
-  let historicalPrices: {
-    lastDayPrices: Map<string, { close: number; date: Date }>;
-    previousDayPrices: Map<string, { close: number; date: Date }>;
-    lastTradingDate: Date | null;
-  } | null = null;
-  
-  if (useHistoricalData) {
-    historicalPrices = await getLastTradingDayPrices(holdingSymbols);
-    liveActionsLogger.info(`Fetched historical prices for ${historicalPrices.lastDayPrices.size} symbols, last trading date: ${historicalPrices.lastTradingDate?.toISOString().split('T')[0]}`);
-  }
-  
-  if (hasToken && !useHistoricalData) {
-    try {
-      // Get all instrument keys that we found
-      const instrumentKeys = Array.from(instrumentKeyMap.values());
-      
-      if (instrumentKeys.length > 0) {
-        const quotes = await getLiveQuoteV3(instrumentKeys);
-        liveActionsLogger.info(`Fetched ${quotes.size} Upstox quotes for ${instrumentKeys.length} instruments`);
+    // 2. Check if we have a valid Upstox token
+    const hasToken = await hasValidToken();
+    
+    // Fetch indices in parallel (uses Upstox internally now)
+    const indicesPromise = fetchNseIndices();
+
+    // 3. Get instrument keys for all holdings
+    const holdingSymbols = holdings.map(h => h.symbol);
+    const instrumentKeyMap = await getInstrumentKeys(holdingSymbols);
+    
+    // Build quote map
+    const quoteMap = new Map<string, UpstoxLiveQuoteV3>();
+    let latestTradeTime: number = 0;
+    
+    // Fetch historical prices if we need them (for pre-market display)
+    let historicalPrices: {
+      lastDayPrices: Map<string, { close: number; date: Date }>;
+      previousDayPrices: Map<string, { close: number; date: Date }>;
+      lastTradingDate: Date | null;
+    } | null = null;
+    
+    if (useHistoricalData) {
+      historicalPrices = await getLastTradingDayPrices(holdingSymbols);
+      liveActionsLogger.info(`Fetched historical prices for ${historicalPrices.lastDayPrices.size} symbols, last trading date: ${historicalPrices.lastTradingDate?.toISOString().split('T')[0]}`);
+    }
+    
+    if (hasToken && !useHistoricalData) {
+      try {
+        // Get all instrument keys that we found
+        const instrumentKeys = Array.from(instrumentKeyMap.values());
         
-        // Map instrument keys back to symbols
-        for (const [symbol, key] of instrumentKeyMap.entries()) {
-          const quote = quotes.get(key);
-          if (quote) {
-            quoteMap.set(symbol, quote);
-            
-            // Track latest trade time to determine data date
-             if (quote.timestamp) {
-                const tradeTime = quote.timestamp;
-                if (tradeTime > latestTradeTime) {
-                    latestTradeTime = tradeTime;
+        if (instrumentKeys.length > 0) {
+          let quotesFetched = false;
+          try {
+            // Use V3 Full Quotes to capture Indicative Equilibrium Price (IEP) for Pre-Open & CAS
+            const fullQuotes = await getFullQuotes(instrumentKeys);
+            if (fullQuotes.size > 0) {
+              quotesFetched = true;
+              liveActionsLogger.info(`Fetched ${fullQuotes.size} Upstox V3 full quotes for ${instrumentKeys.length} instruments (isPreOpen: ${isPreOpen})`);
+              for (const [symbol, key] of instrumentKeyMap.entries()) {
+                const q = fullQuotes.get(key) || fullQuotes.get(key.replace(/\|/g, ':'));
+                if (q) {
+                  const iep = q.indicative_equilibrium_price && q.indicative_equilibrium_price > 0 
+                    ? q.indicative_equilibrium_price 
+                    : undefined;
+                  const prevClose = q.prev_close_price || q.ohlc?.close || q.last_price;
+                  const activePrice = (isPreOpen && iep) ? iep : (q.last_price || iep || prevClose);
+                  
+                  quoteMap.set(symbol, {
+                    last_price: activePrice,
+                    instrument_token: q.instrument_token || key,
+                    previous_close: prevClose,
+                    timestamp: q.ohlc?.ts ? q.ohlc.ts : undefined,
+                    indicative_equilibrium_price: iep,
+                    is_pre_open: isPreOpen,
+                  });
+
+                  if (q.ohlc?.ts && q.ohlc.ts > latestTradeTime) {
+                    latestTradeTime = q.ohlc.ts;
+                  }
                 }
-             }
+              }
+            }
+          } catch (fullQuoteErr) {
+            liveActionsLogger.warn("V3 Full quote fetch failed, falling back to LTP V3:", fullQuoteErr);
+          }
+
+          if (!quotesFetched) {
+            const quotes = await getLiveQuoteV3(instrumentKeys);
+            liveActionsLogger.info(`Fetched ${quotes.size} Upstox quotes for ${instrumentKeys.length} instruments`);
+            
+            // Map instrument keys back to symbols
+            for (const [symbol, key] of instrumentKeyMap.entries()) {
+              const quote = quotes.get(key);
+              if (quote) {
+                quoteMap.set(symbol, quote);
+                
+                // Track latest trade time to determine data date
+                if (quote.timestamp && quote.timestamp > latestTradeTime) {
+                  latestTradeTime = quote.timestamp;
+                }
+              }
+            }
           }
         }
+      } catch (error) {
+        liveActionsLogger.error("Error fetching Upstox quotes:", error);
       }
-    } catch (error) {
-      liveActionsLogger.error("Error fetching Upstox quotes:", error);
+    } else if (!useHistoricalData) {
+      liveActionsLogger.warn("No valid Upstox token - using fallback prices");
     }
-  } else if (!useHistoricalData) {
-    liveActionsLogger.warn("No valid Upstox token - using fallback prices");
-  }
 
   // Fetch AMFI market cap classifications for all holdings
   const amfiCategories = await getAMFICategoriesBatch(holdingSymbols);
@@ -361,7 +420,9 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       totalPnl: stockTotalPnl,
       totalPnlPercent: stockTotalPnlPercent,
       marketCapCategory,
-      sector: sectorMap.get(h.symbol)
+      sector: sectorMap.get(h.symbol),
+      isPreOpen,
+      indicativePrice: quote?.indicative_equilibrium_price,
     });
   }
 
@@ -431,6 +492,8 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   if (useHistoricalData && historicalPrices?.lastTradingDate) {
     // Use the last trading date from historical data
     dataDate = historicalPrices.lastTradingDate.toISOString();
+  } else if (isPreOpen) {
+    dataDate = new Date().toISOString();
   } else if (latestTradeTime > 0) {
     dataDate = new Date(latestTradeTime).toISOString();
   }

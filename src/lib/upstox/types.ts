@@ -26,6 +26,8 @@ export interface UpstoxFullQuote {
     high: number;
     low: number;
     close: number;
+    volume?: number;
+    ts?: number;
   };
   net_change: number;
   total_buy_quantity: number;
@@ -36,6 +38,16 @@ export interface UpstoxFullQuote {
   oi?: number;
   oi_day_high?: number;
   oi_day_low?: number;
+  prev_close_price?: number;
+  year_high?: number;
+  year_low?: number;
+  previous_oi?: number;
+  indicative_equilibrium_price?: number;
+  indicative_equilibrium_quantity?: number;
+  indicative_imbalance_quantity_total?: number;
+  indicative_imbalance_quantity_market?: number;
+  reference_price?: number;
+  cas_eligible?: boolean;
 }
 
 export interface UpstoxCandle {
@@ -54,6 +66,7 @@ export interface OHLC {
   low: number;
   close: number;
   volume?: number;
+  ts?: number;
 }
 
 // ============================================================================

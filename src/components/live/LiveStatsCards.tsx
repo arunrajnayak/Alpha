@@ -61,7 +61,9 @@ const LiveStatsCards = memo(function LiveStatsCards({
                 <div className="absolute inset-0 opacity-40" style={{ background: isPositive ? 'linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.2) 50%, transparent 100%)' : 'linear-gradient(90deg, transparent 0%, rgba(239, 68, 68, 0.2) 50%, transparent 100%)', animation: 'shimmer 3s ease-in-out infinite' }} />
                 <div className="relative z-10 p-5 h-full flex flex-col justify-between">
                     <div className="flex items-start justify-between">
-                        <p className={`text-xs font-medium uppercase tracking-wider ${isPositive ? 'text-emerald-300/60' : 'text-red-300/60'}`}>Today&apos;s P&L</p>
+                        <p className={`text-xs font-medium uppercase tracking-wider ${isPositive ? 'text-emerald-300/60' : 'text-red-300/60'}`}>
+                            {data.marketStatus === 'PRE_OPEN' ? 'Pre-Open P&L' : "Today's P&L"}
+                        </p>
                         <span className={`px-2.5 py-1 rounded-full text-lg font-bold ${isPositive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`}>
                             {isPositive ? '↑' : '↓'} {Math.abs(data.dayGainPercent).toFixed(2)}%
                         </span>

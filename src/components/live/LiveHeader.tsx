@@ -16,7 +16,7 @@ interface LiveHeaderProps {
     onRefresh: () => void;
     onDownloadSnapshot: () => void;
     itemVariants: Variants;
-    marketStatus?: 'OPEN' | 'CLOSED' | 'UNKNOWN';
+    marketStatus?: 'OPEN' | 'CLOSED' | 'PRE_OPEN' | 'UNKNOWN';
     dataDate?: string;
 }
 
@@ -33,6 +33,7 @@ const LiveHeader = memo(function LiveHeader({
     dataDate
 }: LiveHeaderProps) {
     const isClosed = marketStatus === 'CLOSED';
+    const isPreOpen = marketStatus === 'PRE_OPEN';
     
     // Format data date if available
     const formattedDataDate = dataDate ? new Date(dataDate).toLocaleDateString('en-US', {
@@ -61,12 +62,20 @@ const LiveHeader = memo(function LiveHeader({
                     <div className="flex items-center gap-3">
                         <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
                             <span className="gradient-text">
-                                {isClosed 
-                                    ? (isHistoricalData ? 'Last Trading Day' : 'Market Closed')
-                                    : (marketOpen ? 'Market Live' : 'Market Today')}
+                                {isPreOpen
+                                    ? 'Pre-Open Session'
+                                    : isClosed 
+                                        ? (isHistoricalData ? 'Last Trading Day' : 'Market Closed')
+                                        : (marketOpen ? 'Market Live' : 'Market Today')}
                             </span>
                         </h1>
                     </div>
+                    {isPreOpen && (
+                        <div className="flex items-center gap-2 text-xs md:text-sm text-amber-300/80">
+                            <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span>Indicative equilibrium prices from exchange call auction (9:00–9:15 AM IST)</span>
+                        </div>
+                    )}
                     {isClosed && formattedDataDate && (
                         <div className="flex items-center gap-2 text-sm text-gray-400">
                              <FontAwesomeIcon icon={faCalendar} className="w-3 h-3 text-gray-500" />
@@ -78,7 +87,13 @@ const LiveHeader = memo(function LiveHeader({
                 <div className="flex items-center gap-2 bg-slate-800/40 backdrop-blur-md border border-white/5 rounded-2xl p-1.5 shadow-lg">
                     {/* Last Updated - Desktop only */}
                     <div className="hidden md:flex items-center gap-2 px-3 py-1.5 border-r border-white/5 mr-1">
-                        <div className={`w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-orange-500' : 'bg-emerald-500'} ${marketOpen && !isClosed ? 'animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}></div>
+                        <div className={`w-1.5 h-1.5 rounded-full ${
+                            isPreOpen
+                                ? 'bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.6)]'
+                                : isClosed 
+                                    ? 'bg-orange-500' 
+                                    : 'bg-emerald-500'
+                        } ${marketOpen && !isClosed && !isPreOpen ? 'animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : ''}`}></div>
                         <p className="text-gray-400 text-xs font-medium">
                             {lastRefreshed && (() => {
                                 const rounded = new Date(lastRefreshed);
