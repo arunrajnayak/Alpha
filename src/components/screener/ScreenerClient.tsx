@@ -634,7 +634,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
                 const is5PctCircuit    = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
-                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && (!!row.isBE || is5PctCircuit));
+                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && row.rank <= 50 && (!!row.isBE || is5PctCircuit));
                 const isProtected      = !!exit && exit.protected;
 
                 // All-tab tier: portfolio > pre-filtered > universe-only
