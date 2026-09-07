@@ -72,11 +72,10 @@ interface BadgeTooltipProps {
   badgeCls: string;
   lines: string[];
   icon?: React.ReactNode;
-  headerIcon?: React.ReactNode;
   iconOnly?: boolean;
 }
 
-function BadgeTooltip({ label, badgeCls, lines, icon, headerIcon, iconOnly }: BadgeTooltipProps) {
+function BadgeTooltip({ label, badgeCls, lines, icon, iconOnly }: BadgeTooltipProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -116,7 +115,7 @@ function BadgeTooltip({ label, badgeCls, lines, icon, headerIcon, iconOnly }: Ba
           >
             {/* Header */}
             <div className="px-3 py-2 border-b border-zinc-800/80 flex items-center gap-1.5">
-              {(headerIcon || icon) && <span className="text-zinc-400 flex items-center">{headerIcon || icon}</span>}
+              {icon && <span className="text-zinc-400 flex items-center">{icon}</span>}
               <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: 'inherit' }}>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold tracking-wider ${badgeCls.includes('bg-') ? badgeCls : `border ${badgeCls} bg-zinc-800/60`}`}>{label}</span>
               </span>
@@ -775,14 +774,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                               badgeCls="text-amber-400 hover:text-amber-300"
                               lines={cautionLines}
                               iconOnly
-                              headerIcon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
-                              icon={
-                                <span className="inline-flex items-center gap-1 leading-none">
-                                  <WarningAmberIcon sx={{ fontSize: 16 }} />
-                                  {exit.isBE && <span className="text-[10px] font-bold tracking-wide">BE</span>}
-                                  {exit.is5PctCircuit && <span className="text-[10px] font-bold tracking-wide">5%</span>}
-                                </span>
-                              }
+                              icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
                             />
                           );
                         })()}
@@ -800,14 +792,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                               badgeCls="text-amber-400 hover:text-amber-300"
                               lines={warnLines}
                               iconOnly
-                              headerIcon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
-                              icon={
-                                <span className="inline-flex items-center gap-1 leading-none">
-                                  <WarningAmberIcon sx={{ fontSize: 16 }} />
-                                  {row.isBE && <span className="text-[10px] font-bold tracking-wide">BE</span>}
-                                  {is5PctCircuit && <span className="text-[10px] font-bold tracking-wide">5%</span>}
-                                </span>
-                              }
+                              icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
                             />
                           );
                         })()}
