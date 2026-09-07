@@ -37,13 +37,13 @@ export default function RulesInfoModal({ open, onClose }: RulesInfoModalProps) {
             </div>
 
             {/* Universe Filters */}
-            <Section title="Universe Filters" subtitle="All must pass (AND logic)">
-              <RuleRow label="Exchange" value="NSE equity (EQ) + GOLDBEES, SILVERBEES" />
-              <RuleRow label="Market Cap" value=">= 1,000 Crores (NSE bhavcopy)" />
+            <Section title="Pre-filtered Criteria" subtitle="All must pass for Pre-filtered tab (AND logic). All tab has no market cap or price/trend filters.">
+              <RuleRow label="Exchange" value="NSE equity (EQ & BE series) + GOLDBEES, SILVERBEES" />
+              <RuleRow label="Market Cap" value=">= 1,000 Crores (NSE bhavcopy) — Pre-filtered tab only" />
               <RuleRow label="Min Price" value=">= ₹50 (ETFs exempt)" />
               <RuleRow label="Volume" value="Median daily turnover >= ₹1 Cr (126 trading days)" />
-              <RuleRow label="Circuit Limit" value="Band width >= 15% (exclude 2%/5% circuit stocks)" />
-              <RuleRow label="BE Category" value="Excluded (trade-to-trade stocks)" />
+              <RuleRow label="Circuit Limit" value="Band width >= 9% (5% circuit stocks tagged with Warning; 2% circuit excluded)" />
+              <RuleRow label="BE Category" value="Included with Warning/Caution tag (trade-to-trade stocks)" />
               <RuleRow label="200 DMA" value="Close >= 200-day simple moving average" />
               <RuleRow label="ATH Proximity" value="Close >= 70% of all-time high" />
             </Section>

@@ -624,7 +624,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
               ) : displayRows.map(row => {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
-                const isWarning        = !!exit && exit.signalType === 'yellow';
+                const is5PctCircuit    = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
+                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && (!!row.isBE || is5PctCircuit));
                 const isProtected      = !!exit && exit.protected;
 
                 // All-tab tier: portfolio > pre-filtered > universe-only
@@ -772,6 +773,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           const cautionLines = [
                             exit.byRank && !exit.isUnranked ? 'Rank 51–60 (watch zone)' : '',
                             exit.isBE ? 'Moved to BE (T+0) settlement category' : '',
+                            exit.is5PctCircuit ? '5% daily circuit limit' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',
                             exit.byDrawdownWarn && !exit.byDrawdown ? 'Dropped > 20% since entry (warn zone)' : '',
                             row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
@@ -794,6 +796,29 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             lines={[`⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}`]}
                             iconOnly
                             icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
+                          />
+                        )}
+                        {/* BE badge — shown outside portfolio tab */}
+                        {row.isBE && activeTab !== 'portfolio' && (
+                          <BadgeTooltip
+                            label="BE"
+                            badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            lines={[
+                              'Trade-to-Trade (BE Series)',
+                              'Compulsory delivery settlement (no intraday trading)',
+                              '100% upfront margin required (higher surveillance)',
+                            ]}
+                          />
+                        )}
+                        {/* 5% Circuit badge — shown outside portfolio tab */}
+                        {is5PctCircuit && activeTab !== 'portfolio' && (
+                          <BadgeTooltip
+                            label="5% CIRCUIT"
+                            badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            lines={[
+                              '5% Daily Circuit Band Limit',
+                              'Daily price band restricted to ±5% (higher lock-in / exit liquidity risk)',
+                            ]}
                           />
                         )}
                       </div>

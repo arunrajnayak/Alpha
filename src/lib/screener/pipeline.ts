@@ -104,15 +104,10 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   }
   const tradeable = instruments.filter(i => !i.instrumentKey.startsWith('NSE_INDEX|'));
 
-  // Filter out BE (trade-to-trade) category stocks — they have settlement restrictions
-  // and are explicitly excluded from screener rankings (see RulesInfoModal)
+  // BE (trade-to-trade) stocks are included in the universe (ranked with warning highlight in pre-filtered tab)
   const beSymbols = await getBESymbols();
-  const tradeableFiltered = tradeable.filter(i => !beSymbols.has(i.symbol));
-  if (beSymbols.size > 0) {
-    const beCount = tradeable.length - tradeableFiltered.length;
-    pipelineLogger.info(`[${elapsed()}] Excluded ${beCount} BE (trade-to-trade) stocks from universe`);
-  }
-  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (after BE filter)`);
+  const tradeableFiltered = tradeable;
+  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (including ${beSymbols.size} BE series)`);
   await progress(10, `${tradeableFiltered.length} instruments`);
 
   // ── Step 3: Patch today's prices (batch OHLC) ─────────────────────────────
@@ -246,12 +241,10 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     pipelineLogger.info(`[${elapsed()}] mcap fallback: ${mcapFallbackCount} symbols rescued from last known MomentumScore`);
   }
 
-  // Pre-filter to stocks that pass mcap + ETF whitelist — no point loading prices for the rest
-  const scoreableInsts = tradeableFiltered.filter(i => {
-    const mcap = mcapMap.get(i.symbol);
-    return (mcap && mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(i.symbol) || portfolioSymbols?.has(i.symbol);
-  });
-  pipelineLogger.info(`[${elapsed()}] ${scoreableInsts.length} scoreable (mcap filter from ${tradeableFiltered.length})`);
+  // All tab: score all tradeable instruments without market cap filter.
+  // Market cap filter (>= 1,000 Cr) is applied selectively to the Pre-filtered set during scoring.
+  const scoreableInsts = tradeableFiltered;
+  pipelineLogger.info(`[${elapsed()}] ${scoreableInsts.length} scoreable instruments for all-universe scoring`);
 
   // ── Step 4b: Circuit check (skip if already >90s to save time) ─────────────
   const keyToSymbol = new Map<string, string>();
@@ -394,11 +387,12 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
       const allResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { skipFilters: true });
       if (!allResult) continue;
 
-      // Also check if it passes filters (for the filtered set)
-      // Circuit band < 15% excludes from pre-filtered, but portfolio holdings are exempt
+      // Circuit band < 9% (2% circuit stocks and narrow bands) excluded from pre-filtered; 5% circuits (bandWidth ~10.5%) are allowed with warning highlight
+      // Market cap must be >= 1,000 Cr (or whitelisted ETF / portfolio holding)
       const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH);
-      const passesCircuit = bandWidth === undefined || bandWidth >= 0.15 || !!portfolioSymbols?.has(inst.symbol);
-      const passesFilters = filteredResult !== null && passesCircuit;
+      const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol) || !!portfolioSymbols?.has(inst.symbol);
+      const passesCircuit = bandWidth === undefined || bandWidth >= 0.09 || !!portfolioSymbols?.has(inst.symbol);
+      const passesFilters = filteredResult !== null && passesCircuit && passesMcap;
 
       const sparkline = closes.slice(-50);
 

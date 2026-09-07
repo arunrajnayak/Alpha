@@ -411,16 +411,17 @@ Composite Score = avgSharpe = mean(Sharpe_12m, Sharpe_6m, Sharpe_3m)
 - **3-month**: 62 trading days ending **21 days ago** (effectively a 4m→1m window — the most recent month is skipped to reduce noise from mean reversion)
 - **ATH proximity** is an **entry filter** (≥70% of ATH), **not** a score component
 
-### Filters (all must pass)
+### Pre-filtered Criteria (all must pass for Pre-filtered tab; All tab has no market cap or entry filters)
 
 | Filter | Threshold |
 |--------|-----------|
-| Market cap | ≥ ₹1,000 Cr (NSE Bhavcopy) |
+| Market cap | ≥ ₹1,000 Cr (NSE Bhavcopy, Pre-filtered only) |
 | Price | ≥ ₹50 (ETFs GOLDBEES/SILVERBEES exempt) |
 | 200 DMA | Close ≥ 200-day SMA |
 | ATH proximity | Within 30% of all-time high |
 | Volume | Median daily turnover ≥ ₹1 Cr (126-day lookback) |
-| Circuit band | ≥ 15% (excludes 2%/5% circuit stocks) |
+| Circuit band | ≥ 9% (5% circuit stocks included with Warning tag; excludes 2% circuit) |
+| Series | EQ & BE series included (BE highlighted with Warning/Caution badge) |
 | History | ≥ 269 trading days of data (252 + 21 skip days) |
 
 ### Exit & Warning Signals
@@ -429,15 +430,17 @@ Portfolio holdings are evaluated daily against the momentum screener criteria to
 
 #### 🔴 Red (Exit Signal)
 Indicates an immediate recommendation to sell. Triggered if any of the following apply:
-- **Major Filter Breach**: Close is below 200 DMA **AND** $> 25\%$ below ATH (`athProximity < 0.75`) simultaneously.
+- **Major Filter Breach**: Close is below 200 DMA **OR** $> 25\%$ below ATH (`athProximity < 0.75`).
 - **Major Rank Drop**: The stock's rank drops $> 60$.
+- **Major Drawdown**: Dropped $> 25\%$ from peak since entry.
 - **Fell Out of Universe**: The stock is unranked for reasons other than being in the BE category.
 
 #### 🟡 Yellow (Warning Signal)
 Indicates a warning condition. The stock is not in a Red state, but matches any of the following:
 - **Below 50 DMA**: Close is below the 50-day simple moving average.
 - **Moderate Rank Drop**: The stock's rank is between 51 and 60.
-- **BE Category**: The stock is unranked specifically because it belongs to the "BE category" (Trade-to-Trade).
+- **Moderate Drawdown**: Dropped between 20% and 25% from peak since entry.
+- **BE Category**: The stock belongs to the "BE category" (Trade-to-Trade).
 
 #### 🔒 Min Hold Protection (Lock)
 - Holdings held for **$< 14$ days** are **LOCKED** (minimum hold protection, displayed with a yellow lock icon in the UI). Exit and Warning signals are suppressed/ignored during this lock window to prevent premature exits.

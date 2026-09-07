@@ -50,17 +50,18 @@ saveScores()        ← upsert MomentumScore (today's computedDate)
 saveRankingHistory()← append to RankingHistory (50-day rolling window)
 ```
 
-## Entry filters (ALL must pass for a stock to be ranked)
+## Entry filters (ALL must pass for Pre-filtered tab; All tab has no market cap or entry filters)
 
 | Filter | Value | Source |
 |--------|-------|--------|
-| Market cap | ≥ ₹1,000 Cr | `StockMarketCap` (bhavcopy) |
+| Market cap | ≥ ₹1,000 Cr (Pre-filtered only) | `StockMarketCap` (bhavcopy) |
 | Price | ≥ ₹50 | Latest close |
 | Price exemption | GOLDBEES, SILVERBEES | Hardcoded |
 | Above 200 DMA | close ≥ SMA(200) | `ScreenerPrice` |
 | ATH proximity | close ≥ 70% × ATH | `StockATH` |
 | Turnover | median(close × volume, 126d) ≥ ₹1 Cr | `ScreenerPrice` |
-| Circuit band | ≥ 15% | NSE instrument data |
+| Circuit band | ≥ 9% (5% circuit tagged Caution) | NSE instrument data |
+| Series | EQ & BE included (BE tagged Caution) | Instrument master |
 | Data history | ≥ 269 trading days | `ScreenerPrice` row count |
 
 ## Exit & Warning Signal Logic (src/app/actions/screener.ts)
@@ -75,13 +76,15 @@ A portfolio holding is evaluated daily against three potential signal conditions
 A holding triggers a Red Exit Signal if:
 - **Major filter breach** (`byFilter` is true).
 - **Major rank drop**: Stock's rank is $> 60$.
+- **Major drawdown**: Dropped $> 25\%$ from peak since entry.
 - **Fell out of universe**: Stock is unranked for reasons other than being in the BE category.
 
 ### 🟡 Yellow (Warning Signal)
 A holding triggers a Yellow Warning Signal if it does not meet the Red criteria, but satisfies:
 - **DMA breach**: Close is below 50 DMA (`by50Dma` is true).
 - **Moderate rank drop**: Stock's rank is between 51 and 60.
-- **BE Category**: Stock is unranked specifically because it was moved into the Trade-to-Trade (BE) category.
+- **BE Category**: Stock belongs to the Trade-to-Trade (BE) category (ranked $\le 60$).
+- **Moderate drawdown**: Dropped between 20% and 25% from peak since entry.
 
 ### 🔒 Min Hold Protection (Lock)
 ```typescript

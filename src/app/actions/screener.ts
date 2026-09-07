@@ -6,7 +6,7 @@ import { computePortfolioState } from '@/lib/finance/recalculation';
 import { computeReturns, sharpeRatio, PARAMS } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
-import { getAllInstrumentData } from '@/lib/instrument-service';
+import { getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
 import { createJob, completeJob, failJob } from '@/lib/jobs';
 import { fetchASMList } from '@/lib/nse-api';
 
@@ -33,6 +33,7 @@ export interface ScreenerRow {
   isPreFiltered?: boolean;  // only set for 'all' tab — stock also passes pre-filter
   isUnranked?: boolean;
   unrankedReason?: string;
+  isBE?: boolean;
   exitSignal?: {
     byRank: boolean;    // rank > 50
     byFilter: boolean;  // below 200 DMA OR athProximity < 0.75
@@ -42,6 +43,7 @@ export interface ScreenerRow {
     protected: boolean; // last BUY within 14 days (min hold rule)
     isUnranked: boolean; // not in screener universe (e.g. BE category)
     isBE: boolean;       // specifically moved to BE (T+0 settlement) category
+    is5PctCircuit?: boolean; // 5% daily circuit limit
     unrankedReason?: string;
     // Signal classification
     signalType: 'green' | 'yellow' | 'red';
@@ -103,6 +105,7 @@ export async function getScreenerData(
   }
 
   const scores = await getCachedActiveScores(rankTypeForScores);
+  const beSymbols = await getBESymbols();
 
   // Fetch ASM surveillance list
   let asmMap = new Map<string, { symbol: string; type: 'ST' | 'LT'; stage: string; desc: string }>();
@@ -253,6 +256,7 @@ export async function getScreenerData(
       rankChange,
       inPortfolio,
       isPreFiltered: filteredSymbols.size > 0 ? filteredSymbols.has(s.symbol) : undefined,
+      isBE: beSymbols.has(s.symbol) || s.symbol.endsWith('-BE'),
       asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
       drawdownSinceEntry,
     };
@@ -424,6 +428,7 @@ export async function getScreenerData(
           inPortfolio: true,
           isUnranked: true,
           unrankedReason,
+          isBE,
           asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
           drawdownSinceEntry,
         });
@@ -438,19 +443,20 @@ export async function getScreenerData(
     for (const row of allRows) {
       if (!row.inPortfolio) continue;
       const isUnranked = row.isUnranked === true;
-      const isBE = isUnranked && (row.unrankedReason?.includes('BE category') ?? false);
+      const isBE = row.isBE ?? (isUnranked && (row.unrankedReason?.includes('BE category') ?? false));
+      const is5PctCircuit = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
       const byRank   = isUnranked || row.rank > 50;
       const byFilter = !row.dmaSwatches.above200 || row.athProximity < 0.75;
       const by50Dma = !row.dmaSwatches.above50;
       const byDrawdownWarn = row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null && row.drawdownSinceEntry < -20;
       const byDrawdown     = row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null && row.drawdownSinceEntry < -25;
-      if (!byRank && !byFilter && !by50Dma && !byDrawdownWarn) continue;
+      if (!byRank && !byFilter && !by50Dma && !byDrawdownWarn && !isBE && !is5PctCircuit) continue;
       const ageDays     = holdingAgeDays.get(row.symbol) ?? 9999;
       const isProtected = ageDays < 14;
 
       // Determine signal type:
       // Red: byFilter, or other unranked reasons (not BE), or rank > 60, or DD > 25%
-      // Yellow: BE category OR rank 51-60 OR below 50 DMA OR DD 20-25% (warn zone)
+      // Yellow: BE category OR 5% circuit OR rank 51-60 OR below 50 DMA OR DD 20-25% (warn zone)
       let signalType: 'green' | 'yellow' | 'red';
       const isRed = byFilter || (isUnranked && !isBE) || (!isUnranked && row.rank > 60) || byDrawdown;
       if (isRed) {
@@ -459,7 +465,7 @@ export async function getScreenerData(
         signalType = 'yellow';
       }
 
-      row.exitSignal = { byRank, byFilter, by50Dma, byDrawdownWarn, byDrawdown, protected: isProtected, isUnranked, isBE, unrankedReason: row.unrankedReason, signalType };
+      row.exitSignal = { byRank, byFilter, by50Dma, byDrawdownWarn, byDrawdown, protected: isProtected, isUnranked, isBE, is5PctCircuit, unrankedReason: row.unrankedReason, signalType };
     }
   }
 
