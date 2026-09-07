@@ -27,8 +27,8 @@ Include a Markdown Table listing all Exit (🔴) and Warning (🟡) stocks:
 | Symbol | Signal | Rank | Key Trigger / Reason | Action / Status |
 |---|---|---|---|---|
 Provide commentary on technical breaches:
-- **EXIT (Red)**: Below 200 DMA & >25% ATH drawdown, rank >60, or dropped screener universe.
-- **WARNING (Yellow)**: Below 50 DMA, rank 51–60, moved to BE category, or dropped > 20% from post-portfolio addition high.
+- **EXIT (Red)**: Below 200 DMA & >25% ATH drawdown, rank >70, or dropped screener universe.
+- **WARNING (Yellow)**: Below 50 DMA, rank 51–70, moved to BE category, or dropped > 20% from post-portfolio addition high.
 - **ASM Surveillance**: Call out any stock on short/long-term surveillance (e.g. LT-1, LT-4).
 - **Protected**: Note stocks held < 14 days (cannot be exited yet).
 
@@ -69,7 +69,7 @@ function warnSummary(w: WarnCandidate): string {
   if (w.by50Dma) reasons.push('below 50 DMA');
   if (w.byDrawdownWarn) reasons.push('dropped > 20% since entry');
   if (w.isBE)    reasons.push('moved to BE category');
-  if (w.byRank && w.rank != null) reasons.push(`rank ${w.rank} (51–60 band)`);
+  if (w.byRank && w.rank != null) reasons.push(`rank ${w.rank} (51–70 band)`);
   return `${w.symbol} [WARNING${w.protected ? ' — PROTECTED' : ''}]: ${reasons.join(', ')}`;
 }
 

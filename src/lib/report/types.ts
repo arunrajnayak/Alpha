@@ -88,7 +88,7 @@ export interface WarnCandidate {
   symbol:    string;
   rank:      number | null;
   by50Dma:   boolean;
-  byRank:    boolean; // rank 51-60
+  byRank:    boolean; // rank 51-70
   byDrawdownWarn: boolean;
   isBE:      boolean;
   protected: boolean;

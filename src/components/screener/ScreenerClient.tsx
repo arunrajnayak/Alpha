@@ -39,8 +39,7 @@ const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
   'micro':     { label: 'Micro', cls: 'text-lime-400' },
 };
 
-function getRankAccent(rank: number, inPortfolio: boolean): string {
-  if (inPortfolio) return 'rgb(99,102,241)';
+function getRankAccent(rank: number): string {
   if (rank <= 50) return 'rgb(34,197,94)';
   return 'rgba(239,68,68,0.6)';
 }
@@ -647,7 +646,18 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         ? 'rgb(234,179,8)'
                         : row.isUnranked
                           ? 'rgb(63,63,70)'
-                          : getRankAccent(row.rank, row.inPortfolio);
+                          : getRankAccent(row.rank);
+
+                const rankTextColor = isAllTab
+                  ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
+                  : 'text-zinc-400'
+                  : isExitCandidate
+                    ? 'text-red-400'
+                    : isWarning
+                      ? 'text-yellow-400'
+                      : isProtected
+                        ? 'text-amber-400'
+                        : getRankTextColor(row.rank);
 
                 const rowBg = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
@@ -674,12 +684,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       {row.isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
-                        <span className={`font-mono text-xl font-black tabular-nums leading-none ${
-                          isAllTab
-                            ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
-                            : 'text-zinc-400'
-                            : getRankTextColor(row.rank)
-                        }`}>
+                        <span className={`font-mono text-xl font-black tabular-nums leading-none ${rankTextColor}`}>
                           {row.rank}
                         </span>
                       )}
@@ -721,7 +726,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           const exitLines = [
                             exit.isUnranked
                                ? (exit.unrankedReason || 'Outside screener universe')
-                               : exit.byRank ? (row.rank > 0 ? `Rank #${row.rank} (> 60)` : 'Rank > 60') : '',
+                               : exit.byRank ? (row.rank > 0 ? `Rank #${row.rank} (> 70)` : 'Rank > 70') : '',
                             ...(exit.byFilter ? (() => {
                               const f: string[] = [];
                               if (!row.dmaSwatches.above200) f.push('Below 200 DMA');
@@ -751,7 +756,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         })()}
                         {exit && activeTab === 'portfolio' && exit.signalType === 'yellow' && (() => {
                           const cautionLines = [
-                            exit.byRank && !exit.isUnranked ? (row.rank > 0 ? `Rank #${row.rank} (51–60 watch zone)` : 'Rank 51–60 (watch zone)') : '',
+                            exit.byRank && !exit.isUnranked ? (row.rank > 0 ? `Rank #${row.rank} (51–70 watch zone)` : 'Rank 51–70 (watch zone)') : '',
                             exit.isBE ? 'BE series (Trade-to-Trade)' : '',
                             exit.is5PctCircuit ? '5% daily circuit limit' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',

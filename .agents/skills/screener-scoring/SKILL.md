@@ -75,15 +75,15 @@ A portfolio holding is evaluated daily against three potential signal conditions
 ### 🔴 Red (Exit Signal)
 A holding triggers a Red Exit Signal if:
 - **Major filter breach** (`byFilter` is true).
-- **Major rank drop**: Stock's rank is $> 60$.
+- **Major rank drop**: Stock's rank is $> 70$.
 - **Major drawdown**: Dropped $> 25\%$ from peak since entry.
 - **Fell out of universe**: Stock is unranked for reasons other than being in the BE category.
 
 ### 🟡 Yellow (Warning Signal)
 A holding triggers a Yellow Warning Signal if it does not meet the Red criteria, but satisfies:
 - **DMA breach**: Close is below 50 DMA (`by50Dma` is true).
-- **Moderate rank drop**: Stock's rank is between 51 and 60.
-- **BE Category**: Stock belongs to the Trade-to-Trade (BE) category (ranked $\le 60$).
+- **Moderate rank drop**: Stock's rank is between 51 and 70.
+- **BE Category**: Stock belongs to the Trade-to-Trade (BE) category (ranked $\le 70$).
 - **Moderate drawdown**: Dropped between 20% and 25% from peak since entry.
 
 ### 🔒 Min Hold Protection (Lock)

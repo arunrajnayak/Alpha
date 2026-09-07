@@ -431,14 +431,14 @@ Portfolio holdings are evaluated daily against the momentum screener criteria to
 #### 🔴 Red (Exit Signal)
 Indicates an immediate recommendation to sell. Triggered if any of the following apply:
 - **Major Filter Breach**: Close is below 200 DMA **OR** $> 25\%$ below ATH (`athProximity < 0.75`).
-- **Major Rank Drop**: The stock's rank drops $> 60$.
+- **Major Rank Drop**: The stock's rank drops $> 70$.
 - **Major Drawdown**: Dropped $> 25\%$ from peak since entry.
 - **Fell Out of Universe**: The stock is unranked for reasons other than being in the BE category.
 
 #### 🟡 Yellow (Warning Signal)
 Indicates a warning condition. The stock is not in a Red state, but matches any of the following:
 - **Below 50 DMA**: Close is below the 50-day simple moving average.
-- **Moderate Rank Drop**: The stock's rank is between 51 and 60.
+- **Moderate Rank Drop**: The stock's rank is between 51 and 70.
 - **Moderate Drawdown**: Dropped between 20% and 25% from peak since entry.
 - **BE Category**: The stock belongs to the "BE category" (Trade-to-Trade).
 

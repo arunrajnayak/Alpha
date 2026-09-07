@@ -455,10 +455,10 @@ export async function getScreenerData(
       const isProtected = ageDays < 14;
 
       // Determine signal type:
-      // Red: byFilter, or other unranked reasons (not BE), or rank > 60, or DD > 25%
-      // Yellow: BE category OR 5% circuit OR rank 51-60 OR below 50 DMA OR DD 20-25% (warn zone)
+      // Red: byFilter, or other unranked reasons (not BE), or rank > 70, or DD > 25%
+      // Yellow: BE category OR 5% circuit OR rank 51-70 OR below 50 DMA OR DD 20-25% (warn zone)
       let signalType: 'green' | 'yellow' | 'red';
-      const isRed = byFilter || (isUnranked && !isBE) || (!isUnranked && row.rank > 60) || byDrawdown;
+      const isRed = byFilter || (isUnranked && !isBE) || (!isUnranked && row.rank > 70) || byDrawdown;
       if (isRed) {
         signalType = 'red';
       } else {
