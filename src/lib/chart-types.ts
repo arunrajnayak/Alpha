@@ -214,6 +214,23 @@ export function toTradingViewSymbol(symbol: string): string {
   return `NSE:${cleaned}`;
 }
 
+export const MIN_BAR_SPACING = 1;
+export const MAX_BAR_SPACING = 25;
+
+/** Get standard initial period for an interval if none is saved */
+export function getDefaultPeriodForInterval(interval: ChartInterval): ChartPeriod {
+  switch (interval) {
+    case '5minute':
+      return '1D';
+    case 'day':
+      return '1Y';
+    case 'week':
+      return '5Y';
+    case 'month':
+      return 'MAX';
+  }
+}
+
 /**
  * Load chart preferences from localStorage with fallback to defaults.
  */
@@ -225,6 +242,17 @@ export function loadChartPreferences(): ChartPreferences {
     const raw = localStorage.getItem(CHART_PREFS_STORAGE_KEY);
     if (!raw) return DEFAULT_CHART_PREFERENCES;
     const parsed = JSON.parse(raw);
+
+    // Sanitize bar spacing to avoid corrupt / inflated values pushing candles off-screen
+    const sanitizedBarSpacing: Partial<Record<ChartInterval, number>> = {};
+    if (parsed.barSpacingByInterval && typeof parsed.barSpacingByInterval === 'object') {
+      for (const [key, val] of Object.entries(parsed.barSpacingByInterval)) {
+        if (typeof val === 'number' && isFinite(val) && val >= MIN_BAR_SPACING && val <= MAX_BAR_SPACING) {
+          sanitizedBarSpacing[key as ChartInterval] = Number(val.toFixed(2));
+        }
+      }
+    }
+
     return {
       interval: parsed.interval ?? DEFAULT_CHART_PREFERENCES.interval,
       period: parsed.period !== undefined ? parsed.period : null,
@@ -232,7 +260,7 @@ export function loadChartPreferences(): ChartPreferences {
         ...DEFAULT_CHART_PREFERENCES.visibleIndicators,
         ...(parsed.visibleIndicators || {}),
       },
-      barSpacingByInterval: parsed.barSpacingByInterval || {},
+      barSpacingByInterval: sanitizedBarSpacing,
       rightOffsetByInterval: parsed.rightOffsetByInterval || {},
       periodByInterval: parsed.periodByInterval || {},
       chartViewMode: parsed.chartViewMode ?? DEFAULT_CHART_PREFERENCES.chartViewMode,
@@ -250,15 +278,28 @@ export function saveChartPreferences(update: Partial<ChartPreferences>): void {
   if (typeof window === 'undefined') return;
   try {
     const current = loadChartPreferences();
+
+    const sanitizedUpdateBarSpacing: Partial<Record<ChartInterval, number>> = {};
+    if (update.barSpacingByInterval) {
+      for (const [key, val] of Object.entries(update.barSpacingByInterval)) {
+        if (typeof val === 'number' && isFinite(val)) {
+          sanitizedUpdateBarSpacing[key as ChartInterval] = Number(
+            Math.min(MAX_BAR_SPACING, Math.max(MIN_BAR_SPACING, val)).toFixed(2)
+          );
+        }
+      }
+    }
+
     const next: ChartPreferences = {
       interval: update.interval ?? current.interval,
       period: update.period !== undefined ? update.period : current.period,
       visibleIndicators: update.visibleIndicators
         ? { ...current.visibleIndicators, ...update.visibleIndicators }
         : current.visibleIndicators,
-      barSpacingByInterval: update.barSpacingByInterval
-        ? { ...current.barSpacingByInterval, ...update.barSpacingByInterval }
-        : current.barSpacingByInterval,
+      barSpacingByInterval: {
+        ...current.barSpacingByInterval,
+        ...sanitizedUpdateBarSpacing,
+      },
       rightOffsetByInterval: update.rightOffsetByInterval
         ? { ...current.rightOffsetByInterval, ...update.rightOffsetByInterval }
         : current.rightOffsetByInterval,
@@ -273,4 +314,62 @@ export function saveChartPreferences(update: Partial<ChartPreferences>): void {
     // Ignore storage errors
   }
 }
+
+/**
+ * Normalizes any candle time (string 'YYYY-MM-DD', ISO string, or numeric epoch seconds)
+ * to epoch seconds for strict sorting and comparison.
+ */
+export function candleTimeToEpochSeconds(time: string | number): number {
+  if (typeof time === 'number') {
+    return time;
+  }
+  const str = String(time).trim();
+  const asNum = Number(str);
+  if (!isNaN(asNum) && asNum > 100_000_000) {
+    return asNum;
+  }
+  if (str.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return Math.floor(Date.parse(str + 'T00:00:00Z') / 1000);
+  }
+  const parsed = Date.parse(str);
+  if (!isNaN(parsed)) {
+    return Math.floor(parsed / 1000);
+  }
+  return 0;
+}
+
+/**
+ * Deduplicates and sorts candle data strictly ascending by time.
+ * Lightweight Charts strictly requires that every bar has time > prevBar.time.
+ */
+export function sanitizeCandles(candles: CandleData[]): CandleData[] {
+  if (!candles || candles.length === 0) return [];
+
+  // Sort ascending by epoch seconds
+  const sorted = [...candles].sort((a, b) => {
+    return candleTimeToEpochSeconds(a.time) - candleTimeToEpochSeconds(b.time);
+  });
+
+  const clean: CandleData[] = [];
+  let prevEpoch: number | null = null;
+
+  for (const c of sorted) {
+    const epoch = candleTimeToEpochSeconds(c.time);
+    if (prevEpoch !== null && epoch === prevEpoch) {
+      // Duplicate timestamp: overwrite previous entry with the later one
+      if (clean.length > 0) {
+        clean[clean.length - 1] = c;
+      }
+      continue;
+    }
+    if (prevEpoch !== null && epoch < prevEpoch) {
+      continue;
+    }
+    prevEpoch = epoch;
+    clean.push(c);
+  }
+
+  return clean;
+}
+
 

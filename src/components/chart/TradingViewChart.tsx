@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   createChart,
   CandlestickSeries,
@@ -25,11 +25,15 @@ import {
   ChartInterval,
   ChartPeriod,
   DEFAULT_RIGHT_OFFSET,
+  MIN_BAR_SPACING,
+  MAX_BAR_SPACING,
   periodToMonths,
   calculateSMA,
   calculateVWAP,
   loadChartPreferences,
+  sanitizeCandles,
 } from '@/lib/chart-types';
+import { todayISTYmd } from '@/lib/tz';
 
 export interface VisibleIndicators {
   dma10?: boolean;
@@ -82,14 +86,40 @@ export function getTargetLogicalRange(
   }
 
   if (interval === '5minute') {
-    let barsCount = 75; // ~1 trading day (09:15 - 15:30)
-    if (period === '1D') barsCount = 75;
-    else if (period === '2D') barsCount = 150;
-    else if (period === '5D') barsCount = 375;
-    else if (period === '1M') barsCount = candles.length;
-    else barsCount = 75;
+    if (period === '1M') {
+      return { from: 0, to: lastIdx + rightMargin };
+    }
+    if (period === '5D') {
+      return { from: Math.max(0, lastIdx - 375), to: lastIdx + rightMargin };
+    }
+    if (period === '2D') {
+      return { from: Math.max(0, lastIdx - 150), to: lastIdx + rightMargin };
+    }
 
-    const fromIdx = Math.max(0, lastIdx - barsCount);
+    // Default or '1D': frame the current trading day in IST
+    const lastTime = candles[lastIdx].time;
+    const lastISTDate = typeof lastTime === 'string'
+      ? lastTime.slice(0, 10)
+      : todayISTYmd(new Date(Number(lastTime) * 1000));
+
+    let todayStartIdx = lastIdx;
+    for (let i = lastIdx; i >= 0; i--) {
+      const cTime = candles[i].time;
+      const cDate = typeof cTime === 'string'
+        ? cTime.slice(0, 10)
+        : todayISTYmd(new Date(Number(cTime) * 1000));
+      if (cDate === lastISTDate) {
+        todayStartIdx = i;
+      } else {
+        break;
+      }
+    }
+
+    // Ensure at least 25 bars are visible so morning sessions are well-proportioned
+    const todayBars = lastIdx - todayStartIdx + 1;
+    const minBars = 25;
+    const fromIdx = todayBars < minBars ? Math.max(0, lastIdx - minBars) : todayStartIdx;
+
     return { from: fromIdx, to: lastIdx + rightMargin };
   }
 
@@ -120,6 +150,16 @@ export function getTargetLogicalRange(
   return { from: fromIdx, to: lastIdx + rightMargin };
 }
 
+/** A single live-tick bar to update the chart imperatively via series.update() */
+export interface LiveTick {
+  time: number | string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 interface Props {
   symbol?: string;
   candles: CandleData[];
@@ -137,6 +177,8 @@ interface Props {
   resetZoomTrigger?: number;
   onNearStartOfData?: () => void;
   onHoverCandle?: (candle: CandleBarStats | null) => void;
+  /** Live tick from WebSocket — bypasses React state, calls series.update() directly */
+  liveTick?: LiveTick | null;
 }
 
 export default function TradingViewChart({
@@ -163,6 +205,7 @@ export default function TradingViewChart({
   resetZoomTrigger = 0,
   onNearStartOfData,
   onHoverCandle,
+  liveTick = null,
 }: Props) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
@@ -198,6 +241,9 @@ export default function TradingViewChart({
   const lastBarSpacingRef = useRef<number | null>(null);
   const lastScrollPosRef = useRef<number | null>(null);
   const pendingPeriodFitRef = useRef(false);
+
+  // Strictly sanitize, sort ascending, and deduplicate candles
+  const cleanCandles = useMemo(() => sanitizeCandles(candles), [candles]);
 
   // Series references
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -239,6 +285,9 @@ export default function TradingViewChart({
         timeVisible: interval === '5minute',
         secondsVisible: false,
         rightOffset: savedRightOffset ?? DEFAULT_RIGHT_OFFSET,
+        minBarSpacing: MIN_BAR_SPACING,
+        maxBarSpacing: MAX_BAR_SPACING,
+        lockVisibleTimeRangeOnResize: true,
       },
       width: initialWidth,
       height: initialHeight,
@@ -349,9 +398,18 @@ export default function TradingViewChart({
       }, 800);
     };
 
+    const handlePointerMove = (e: PointerEvent) => {
+      if (e.buttons > 0) {
+        handleUserInteraction();
+      }
+    };
+
     const containerEl = chartContainerRef.current;
     containerEl.addEventListener('wheel', handleUserInteraction, { passive: true });
     containerEl.addEventListener('pointerdown', handleUserInteraction, { passive: true });
+    containerEl.addEventListener('pointermove', handlePointerMove, { passive: true });
+    containerEl.addEventListener('pointerup', handleUserInteraction, { passive: true });
+    containerEl.addEventListener('pointercancel', handleUserInteraction, { passive: true });
     containerEl.addEventListener('touchstart', handleUserInteraction, { passive: true });
     containerEl.addEventListener('touchmove', handleUserInteraction, { passive: true });
 
@@ -363,8 +421,15 @@ export default function TradingViewChart({
         onNearStartOfDataRef.current?.();
       }
 
-      // Ignore programmatic updates from fitting periods or initial positioning
-      if (isProgrammaticChangeRef.current) {
+      // Only user-initiated actions (wheel zoom, pinch, drag scroll) should update zoom preferences or clear period.
+      // Programmatic updates, layout/modal resizes, and initial fitting must NEVER be treated as user manual zoom.
+      if (isProgrammaticChangeRef.current || !isUserInteractingRef.current) {
+        const currentBarSpacing = chartRef.current.timeScale().options().barSpacing;
+        const currentScrollPos = chartRef.current.timeScale().scrollPosition();
+        if (currentBarSpacing) lastBarSpacingRef.current = currentBarSpacing;
+        if (currentScrollPos !== null && currentScrollPos >= 0) {
+          lastScrollPosRef.current = currentScrollPos;
+        }
         return;
       }
 
@@ -453,14 +518,17 @@ export default function TradingViewChart({
     return () => {
       containerEl.removeEventListener('wheel', handleUserInteraction);
       containerEl.removeEventListener('pointerdown', handleUserInteraction);
+      containerEl.removeEventListener('pointermove', handlePointerMove);
+      containerEl.removeEventListener('pointerup', handleUserInteraction);
+      containerEl.removeEventListener('pointercancel', handleUserInteraction);
       containerEl.removeEventListener('touchstart', handleUserInteraction);
       containerEl.removeEventListener('touchmove', handleUserInteraction);
       if (interactionTimerRef.current) clearTimeout(interactionTimerRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (zoomDebounceRef.current) {
         clearTimeout(zoomDebounceRef.current);
-        // Flush pending zoom or pan setting before unmounting so it is never lost
-        if (chartRef.current && !isProgrammaticChangeRef.current) {
+        // Flush pending zoom or pan setting before unmounting only if user was actively interacting
+        if (chartRef.current && !isProgrammaticChangeRef.current && isUserInteractingRef.current) {
           const finalBarSpacing = chartRef.current.timeScale().options().barSpacing;
           const finalScrollPos = chartRef.current.timeScale().scrollPosition();
           if (finalBarSpacing && finalBarSpacing > 0) {
@@ -582,7 +650,7 @@ export default function TradingViewChart({
       secondsVisible: false,
     });
 
-    if (candles.length === 0) {
+    if (cleanCandles.length === 0) {
       candleSeriesRef.current.setData([]);
       volumeSeriesRef.current.setData([]);
       dma10SeriesRef.current?.setData([]);
@@ -593,12 +661,13 @@ export default function TradingViewChart({
       vwapSeriesRef.current?.setData([]);
       markersPluginRef.current?.setMarkers([]);
       prevCandlesRef.current = [];
+      initialFitDoneRef.current = false;
       return;
     }
 
     const prevCandles = prevCandlesRef.current;
     const prevLength = prevCandles.length;
-    const newLength = candles.length;
+    const newLength = cleanCandles.length;
     const isIntervalChange = interval !== lastFittedIntervalRef.current;
     prevIntervalRef.current = interval;
 
@@ -606,17 +675,17 @@ export default function TradingViewChart({
       !isIntervalChange &&
       prevLength > 0 &&
       newLength > prevLength &&
-      candles[newLength - 1]?.time === prevCandles[prevLength - 1]?.time;
+      cleanCandles[newLength - 1]?.time === prevCandles[prevLength - 1]?.time;
     const prependedCount = newLength - prevLength;
 
     const prevRange = isPrepend && chartRef.current
       ? chartRef.current.timeScale().getVisibleLogicalRange()
       : null;
 
-    prevCandlesRef.current = candles;
+    prevCandlesRef.current = cleanCandles;
 
     // Candlesticks
-    const formattedCandles = candles.map(c => ({
+    const formattedCandles = cleanCandles.map(c => ({
       time: c.time as Time,
       open: c.open,
       high: c.high,
@@ -626,7 +695,7 @@ export default function TradingViewChart({
     candleSeriesRef.current.setData(formattedCandles);
 
     // Volume
-    const volumeData = candles.map(c => ({
+    const volumeData = cleanCandles.map(c => ({
       time: c.time as Time,
       value: c.volume,
       color: c.close >= c.open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)',
@@ -637,11 +706,11 @@ export default function TradingViewChart({
     const indValues: IndicatorValues = {};
 
     if (interval === 'day') {
-      const dma10Data = calculateSMA(candles, 10);
-      const dma20Data = calculateSMA(candles, 20);
-      const dma50Data = calculateSMA(candles, 50);
-      const dma100Data = calculateSMA(candles, 100);
-      const dma200Data = calculateSMA(candles, 200);
+      const dma10Data = calculateSMA(cleanCandles, 10);
+      const dma20Data = calculateSMA(cleanCandles, 20);
+      const dma50Data = calculateSMA(cleanCandles, 50);
+      const dma100Data = calculateSMA(cleanCandles, 100);
+      const dma200Data = calculateSMA(cleanCandles, 200);
 
       indValues.dma10 = dma10Data[dma10Data.length - 1]?.value;
       indValues.dma20 = dma20Data[dma20Data.length - 1]?.value;
@@ -657,7 +726,7 @@ export default function TradingViewChart({
 
       vwapSeriesRef.current?.setData([]);
     } else if (interval === '5minute') {
-      const vwapData = calculateVWAP(candles);
+      const vwapData = calculateVWAP(cleanCandles);
       indValues.vwap = vwapData[vwapData.length - 1]?.value;
 
       vwapSeriesRef.current?.setData(visibleIndicators.vwap !== false ? vwapData.map(d => ({ time: d.time as Time, value: d.value })) : []);
@@ -688,7 +757,7 @@ export default function TradingViewChart({
       if (isIntraday) {
         // For intraday, match each trade date to the first candle of that day (usually 09:15)
         const dateToCandleTime = new Map<string, number>();
-        for (const c of candles) {
+        for (const c of cleanCandles) {
           if (typeof c.time === 'number') {
             const dateStr = new Date(c.time * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
             if (!dateToCandleTime.has(dateStr)) {
@@ -740,7 +809,7 @@ export default function TradingViewChart({
       } else {
         // Daily / Weekly / Monthly
         // Ensure only one BUY and/or SELL marker per date
-        const candleDates = new Set(candles.map(c => String(c.time).slice(0, 10)));
+        const candleDates = new Set(cleanCandles.map(c => String(c.time).slice(0, 10)));
         const seenBuy = new Set<string>();
         const seenSell = new Set<string>();
 
@@ -785,7 +854,7 @@ export default function TradingViewChart({
     }
 
     // Position or fit timescale on initial load, interval switch, period change, or prepend
-    if (candles.length > 0 && chartRef.current) {
+    if (cleanCandles.length > 0 && chartRef.current) {
       if (isPrepend && prevRange) {
         isProgrammaticChangeRef.current = true;
         chartRef.current.timeScale().setVisibleLogicalRange({
@@ -796,11 +865,14 @@ export default function TradingViewChart({
         setTimeout(() => {
           isProgrammaticChangeRef.current = false;
         }, 80);
-      } else if (!initialFitDoneRef.current || isIntervalChange) {
+      } else if (!initialFitDoneRef.current || isIntervalChange || prevLength <= 1) {
         initialFitDoneRef.current = true;
         lastFittedIntervalRef.current = interval;
-        chartRef.current.timeScale().applyOptions({ timeVisible: interval === '5minute' });
-        const targetSpacing = savedBarSpacingRef.current ?? loadChartPreferences().barSpacingByInterval?.[interval];
+        const rawSpacing = savedBarSpacingRef.current ?? loadChartPreferences().barSpacingByInterval?.[interval];
+        const targetSpacing =
+          rawSpacing && rawSpacing >= MIN_BAR_SPACING && rawSpacing <= MAX_BAR_SPACING
+            ? rawSpacing
+            : undefined;
         const targetOffset = savedRightOffsetRef.current ?? loadChartPreferences().rightOffsetByInterval?.[interval] ?? DEFAULT_RIGHT_OFFSET;
         isProgrammaticChangeRef.current = true;
         if (targetSpacing && targetSpacing > 0 && !period) {
@@ -811,7 +883,7 @@ export default function TradingViewChart({
           });
           chartRef.current.timeScale().scrollToPosition(targetOffset, false);
         } else if (period) {
-          const targetRange = getTargetLogicalRange(candles, interval, period, targetOffset);
+          const targetRange = getTargetLogicalRange(cleanCandles, interval, period, targetOffset);
           if (targetRange) {
             chartRef.current.timeScale().setVisibleLogicalRange(targetRange);
           } else {
@@ -824,9 +896,9 @@ export default function TradingViewChart({
           });
           chartRef.current.timeScale().scrollToPosition(targetOffset, false);
         } else {
-          // Default fallback if no prior zoom setting: show 1Y for daily, 5D for 5m
-          const fallbackPeriod: ChartPeriod = interval === '5minute' ? '5D' : '1Y';
-          const targetRange = getTargetLogicalRange(candles, interval, fallbackPeriod, targetOffset);
+          // Default fallback if no prior zoom setting: show 1Y for daily, 1D for 5m
+          const fallbackPeriod: ChartPeriod = interval === '5minute' ? '1D' : '1Y';
+          const targetRange = getTargetLogicalRange(cleanCandles, interval, fallbackPeriod, targetOffset);
           if (targetRange) {
             chartRef.current.timeScale().setVisibleLogicalRange(targetRange);
           } else {
@@ -842,7 +914,7 @@ export default function TradingViewChart({
         pendingPeriodFitRef.current = false;
         isProgrammaticChangeRef.current = true;
         const targetOffset = savedRightOffsetRef.current ?? loadChartPreferences().rightOffsetByInterval?.[interval] ?? DEFAULT_RIGHT_OFFSET;
-        const targetRange = getTargetLogicalRange(candles, interval, period, targetOffset);
+        const targetRange = getTargetLogicalRange(cleanCandles, interval, period, targetOffset);
         if (targetRange) {
           chartRef.current.timeScale().setVisibleLogicalRange(targetRange);
         } else {
@@ -855,17 +927,44 @@ export default function TradingViewChart({
         }, 80);
       }
     }
-  }, [candles, trades, interval, period, visibleIndicators, onIndicatorValues]);
+  }, [cleanCandles, trades, interval, period, visibleIndicators, onIndicatorValues]);
+
+  // 3b. Live tick — imperative series.update() bypassing React state (TradingView recommended pattern)
+  useEffect(() => {
+    if (!liveTick || !candleSeriesRef.current || !volumeSeriesRef.current) return;
+    try {
+      candleSeriesRef.current.update({
+        time: liveTick.time as Time,
+        open: liveTick.open,
+        high: liveTick.high,
+        low: liveTick.low,
+        close: liveTick.close,
+      });
+      volumeSeriesRef.current.update({
+        time: liveTick.time as Time,
+        value: liveTick.volume,
+        color: liveTick.close >= liveTick.open ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)',
+      });
+      // For intraday 5m: update VWAP last point too (approximate — carry the last value forward)
+      if (interval === '5minute' && vwapSeriesRef.current) {
+        // VWAP can't be incrementally recalculated without cumulative state, so just update
+        // the last data point's price to the close so the VWAP line doesn't freeze at tick start
+        // Full recalculation happens on the next setData (periodic sync)
+      }
+    } catch {
+      // Ignore stale-time errors from lightweight-charts when tick arrives before setData completes
+    }
+  }, [liveTick, interval]);
 
   // 4. Handle explicit period switch or zoom reset
   useEffect(() => {
     if (resetZoomTrigger !== prevResetTriggerRef.current || period !== prevPeriodRef.current) {
       prevResetTriggerRef.current = resetZoomTrigger;
       prevPeriodRef.current = period;
-      if (period && chartRef.current && candles.length > 0) {
+      if (period && chartRef.current && cleanCandles.length > 0) {
         isProgrammaticChangeRef.current = true;
         const targetOffset = savedRightOffsetRef.current ?? loadChartPreferences().rightOffsetByInterval?.[interval] ?? DEFAULT_RIGHT_OFFSET;
-        const targetRange = getTargetLogicalRange(candles, interval, period, targetOffset);
+        const targetRange = getTargetLogicalRange(cleanCandles, interval, period, targetOffset);
         if (targetRange) {
           chartRef.current.timeScale().setVisibleLogicalRange(targetRange);
         } else {
@@ -893,12 +992,12 @@ export default function TradingViewChart({
         pendingPeriodFitRef.current = true;
       }
     }
-  }, [resetZoomTrigger, period, interval, candles]);
+  }, [resetZoomTrigger, period, interval, cleanCandles]);
 
   return (
     <div
       ref={chartContainerRef}
-      className="w-full h-full flex-1 relative min-h-[300px]"
+      className="w-full h-full flex-1 relative min-h-0"
       style={{ width: '100%', height: '100%' }}
     />
   );

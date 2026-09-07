@@ -34,30 +34,23 @@ export async function getStockCandles(
         ]);
 
         // Merge and deduplicate by timestamp
-        const candleMap = new Map<string, UpstoxCandle>();
-        for (const c of historicalRes.candles) {
-            candleMap.set(c.timestamp, c);
-        }
-        for (const c of intradayRes.candles) {
-            candleMap.set(c.timestamp, c);
-        }
-
-        const merged = Array.from(candleMap.values()).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-
-        // Offset timestamp by IST (+05:30 = 19,800s) so Lightweight Charts UTC timescale displays IST time
         const IST_OFFSET_SECONDS = 19800;
+        const candleMap = new Map<number, CandleData>();
 
-        return merged.map(c => {
+        for (const c of [...historicalRes.candles, ...intradayRes.candles]) {
             const utcSeconds = Math.floor(new Date(c.timestamp).getTime() / 1000);
-            return {
-                time: utcSeconds + IST_OFFSET_SECONDS,
+            const timeNum = utcSeconds + IST_OFFSET_SECONDS;
+            candleMap.set(timeNum, {
+                time: timeNum,
                 open: c.open,
                 high: c.high,
                 low: c.low,
                 close: c.close,
                 volume: c.volume,
-            };
-        });
+            });
+        }
+
+        return Array.from(candleMap.values()).sort((a, b) => (a.time as number) - (b.time as number));
     }
 
     // Daily / Weekly / Monthly timeframe
@@ -80,16 +73,21 @@ export async function getStockCandles(
         return { candles: [] };
     });
 
-    // Transform Upstox candles → Lightweight Charts format (YYYY-MM-DD)
-    return candles.map(c => ({
-        time: c.timestamp.slice(0, 10), // YYYY-MM-DD
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-        volume: c.volume,
-    }))
-    .sort((a, b) => (a.time as string).localeCompare(b.time as string));
+    // Deduplicate Upstox candles by date (YYYY-MM-DD) and sort ascending
+    const candleMap = new Map<string, CandleData>();
+    for (const c of candles) {
+        const dateStr = c.timestamp.slice(0, 10);
+        candleMap.set(dateStr, {
+            time: dateStr,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+            volume: c.volume,
+        });
+    }
+
+    return Array.from(candleMap.values()).sort((a, b) => (a.time as string).localeCompare(b.time as string));
 }
 
 /**

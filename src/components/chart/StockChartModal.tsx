@@ -13,17 +13,25 @@ import {
   ChartInterval,
   ChartPeriod,
   DEFAULT_RIGHT_OFFSET,
+  MIN_BAR_SPACING,
+  MAX_BAR_SPACING,
+  getDefaultPeriodForInterval,
   loadChartPreferences,
   saveChartPreferences,
+  sanitizeCandles,
 } from '@/lib/chart-types';
 import { getStockCandles, getStockTrades, getStockInfo } from '@/app/actions/chart';
 import ChartControls from './ChartControls';
-import { VisibleIndicators, IndicatorValues } from './TradingViewChart';
+import { VisibleIndicators, IndicatorValues, LiveTick } from './TradingViewChart';
+import { useLiveData } from '@/context/LiveDataContext';
+import type { PriceUpdate } from '@/hooks/useUpstoxStream';
+import { isMarketOpen } from '@/lib/market-status-utils';
+import { todayISTYmd } from '@/lib/tz';
 
 const TradingViewChart = dynamic(() => import('./TradingViewChart'), {
   loading: () => (
     <div className="h-full min-h-[380px] bg-slate-900/60 rounded-xl animate-pulse flex items-center justify-center text-gray-500 text-sm">
-      Loading chart...
+      Loading chart engine...
     </div>
   ),
   ssr: false,
@@ -62,10 +70,10 @@ function StockChartModalContent({
   const [initialPrefs] = useState(() => loadChartPreferences());
   const [interval, setInterval] = useState<ChartInterval>(initialPrefs.interval);
   const [period, setPeriod] = useState<ChartPeriod | null>(() => {
-    if (initialPrefs.barSpacingByInterval?.[initialPrefs.interval]) {
-      return initialPrefs.periodByInterval?.[initialPrefs.interval] ?? null;
-    }
-    return initialPrefs.periodByInterval?.[initialPrefs.interval] ?? initialPrefs.period ?? null;
+    const saved = initialPrefs.periodByInterval?.[initialPrefs.interval];
+    if (saved !== undefined) return saved;
+    if (initialPrefs.barSpacingByInterval?.[initialPrefs.interval]) return null;
+    return initialPrefs.period ?? getDefaultPeriodForInterval(initialPrefs.interval);
   });
   const [visibleIndicators, setVisibleIndicators] = useState<VisibleIndicators>(initialPrefs.visibleIndicators);
   const [isLogScale, setIsLogScale] = useState<boolean>(() => initialPrefs.isLogScale ?? false);
@@ -79,10 +87,16 @@ function StockChartModalContent({
     });
   }, []);
 
+  const { subscribeToPrices, subscribeToInstruments, initialize } = useLiveData();
   const [candles, setCandles] = useState<CandleData[]>([]);
+  // Mirror candles in a ref so live-tick handler can read latest without stale closures
+  const candlesRef = useRef<CandleData[]>([]);
+  useEffect(() => { candlesRef.current = candles; }, [candles]);
+  const [liveTick, setLiveTick] = useState<LiveTick | null>(null);
   const [trades, setTrades] = useState<TradeMarker[]>([]);
   const [stockInfo, setStockInfo] = useState<{
     symbol: string;
+    instrumentKey?: string;
     currentPrice?: number;
     change?: number;
     changePercent?: number;
@@ -92,6 +106,11 @@ function StockChartModalContent({
     pnl?: number;
     pnlPercent?: number;
   } | null>(null);
+  const [livePrice, setLivePrice] = useState<{
+    price: number;
+    change?: number;
+    changePercent?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const loadingOlderRef = useRef(false);
@@ -100,6 +119,125 @@ function StockChartModalContent({
   const [indicatorValues, setIndicatorValues] = useState<IndicatorValues>({});
   const [hoveredIndicator, setHoveredIndicator] = useState<keyof VisibleIndicators | null>(null);
   const [hoveredCandle, setHoveredCandle] = useState<CandleBarStats | null>(null);
+
+  // Initialize live data connection
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  // Reset live price when symbol changes
+  useEffect(() => {
+    setLivePrice(null);
+  }, [symbol]);
+
+  // Register instrumentKey with Upstox live WebSocket
+  useEffect(() => {
+    if (!symbol) return;
+    const upperSymbol = symbol.toUpperCase();
+    if (stockInfo?.instrumentKey) {
+      subscribeToInstruments([{ instrumentKey: stockInfo.instrumentKey, symbol: upperSymbol }]);
+    }
+  }, [symbol, stockInfo?.instrumentKey, subscribeToInstruments]);
+
+  // Throttled application of live price updates to the active candlestick
+  const latestLtpRef = useRef<number | null>(null);
+  const candleUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef(interval);
+  useEffect(() => { intervalRef.current = interval; }, [interval]);
+
+  /**
+   * Build a LiveTick from the latest known candle + current LTP.
+   * This does NOT touch React state — it produces the small object
+   * that TradingViewChart consumes via series.update().
+   */
+  const buildLiveTick = useCallback((ltp: number): LiveTick | null => {
+    const prevCandles = candlesRef.current;
+    if (!prevCandles || prevCandles.length === 0) return null;
+    const last = prevCandles[prevCandles.length - 1];
+    const now = new Date();
+    const iv = intervalRef.current;
+
+    if (iv === '5minute') {
+      const IST_OFFSET_SECONDS = 19800;
+      const nowSeconds = Math.floor(now.getTime() / 1000) + IST_OFFSET_SECONDS;
+      const current5mBucket = Math.floor(nowSeconds / 300) * 300;
+      const lastTimeNum = Number(last.time);
+
+      if (current5mBucket > lastTimeNum) {
+        // New 5m candle has opened
+        return { time: current5mBucket, open: ltp, high: ltp, low: ltp, close: ltp, volume: 0 };
+      }
+      // Update the current 5m candle
+      return {
+        time: lastTimeNum,
+        open: last.open,
+        high: Math.max(last.high, ltp),
+        low: Math.min(last.low, ltp),
+        close: ltp,
+        volume: last.volume,
+      };
+    }
+
+    if (iv === 'day') {
+      const todayYmd = todayISTYmd(now);
+      const lastTimeStr = String(last.time).slice(0, 10);
+      if (todayYmd > lastTimeStr) {
+        // Today's candle hasn't been fetched yet — synthesize it
+        return { time: todayYmd, open: ltp, high: ltp, low: ltp, close: ltp, volume: 0 };
+      }
+    }
+
+    // Week / month or same-day daily: just update last candle's close/high/low
+    return {
+      time: last.time,
+      open: last.open,
+      high: Math.max(last.high, ltp),
+      low: Math.min(last.low, ltp),
+      close: ltp,
+      volume: last.volume,
+    };
+  }, []);
+
+  const handleLivePriceUpdate = useCallback((ltp: number) => {
+    latestLtpRef.current = ltp;
+    // Throttle to ~200ms so we don't flood the chart on rapid ticks
+    if (!candleUpdateTimerRef.current) {
+      candleUpdateTimerRef.current = setTimeout(() => {
+        candleUpdateTimerRef.current = null;
+        const currentLtp = latestLtpRef.current;
+        if (currentLtp !== null) {
+          const tick = buildLiveTick(currentLtp);
+          if (tick) setLiveTick(tick);
+        }
+      }, 200);
+    }
+  }, [buildLiveTick]);
+
+  // Subscribe to WebSocket live price updates
+  useEffect(() => {
+    if (!symbol) return;
+    const upperSymbol = symbol.toUpperCase();
+
+    const unsubscribe = subscribeToPrices((updates: PriceUpdate[]) => {
+      const match = updates.find(u => u.symbol.toUpperCase() === upperSymbol);
+      if (match && match.ltp > 0) {
+        setLivePrice({
+          price: match.ltp,
+          change: match.change,
+          changePercent: match.changePercent,
+        });
+        handleLivePriceUpdate(match.ltp);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (candleUpdateTimerRef.current) {
+        clearTimeout(candleUpdateTimerRef.current);
+        candleUpdateTimerRef.current = null;
+      }
+    };
+  }, [symbol, subscribeToPrices, handleLivePriceUpdate]);
 
   const activeCandleStats: CandleBarStats | null = hoveredCandle ?? (candles.length > 0 ? {
     open: candles[candles.length - 1].open,
@@ -120,10 +258,15 @@ function StockChartModalContent({
   const handleIntervalChange = useCallback((newInterval: ChartInterval) => {
     setInterval(newInterval);
     setCandles([]);
+    setLiveTick(null);
     setHoveredCandle(null);
     const prefs = loadChartPreferences();
-    const savedPeriod = prefs.periodByInterval?.[newInterval] ?? null;
-    setPeriod(savedPeriod);
+    const savedPeriod = prefs.periodByInterval?.[newInterval];
+    const hasManualZoom = Boolean(prefs.barSpacingByInterval?.[newInterval]);
+    const nextPeriod = savedPeriod !== undefined
+      ? savedPeriod
+      : (hasManualZoom ? null : getDefaultPeriodForInterval(newInterval));
+    setPeriod(nextPeriod);
     saveChartPreferences({ interval: newInterval });
   }, []);
 
@@ -139,14 +282,15 @@ function StockChartModalContent({
   }, [interval]);
 
   const handleZoomChange = useCallback((barSpacing: number, isUserManualZoom = true, rightOffset?: number) => {
-    // When user manually zooms, scales, or pans the chart, deselect period button to reflect custom timeframe
-    if (isUserManualZoom) {
-      setPeriod(null);
-    }
+    // Only user manual zooms/pans should deselect period and persist barSpacing
+    if (!isUserManualZoom) return;
+
+    setPeriod(null);
     saveChartPreferences({
-      ...(isUserManualZoom ? { period: null, periodByInterval: { [interval]: null } } : {}),
+      period: null,
+      periodByInterval: { [interval]: null },
       barSpacingByInterval: {
-        [interval]: barSpacing,
+        [interval]: Math.min(MAX_BAR_SPACING, Math.max(MIN_BAR_SPACING, barSpacing)),
       },
       ...(typeof rightOffset === 'number' ? {
         rightOffsetByInterval: {
@@ -224,8 +368,9 @@ function StockChartModalContent({
       }
 
       const data = await getStockCandles(symbol, interval, fromDate, toDate);
-      setCandles(data);
-      if (data.length === 0) {
+      const cleanData = sanitizeCandles(data);
+      setCandles(cleanData);
+      if (cleanData.length === 0) {
         setError('No historical candlestick data available for this symbol.');
         hasMoreOlderRef.current = false;
       } else if (interval === '5minute') {
@@ -233,7 +378,7 @@ function StockChartModalContent({
       } else {
         // If oldest candle is within 45 days of requested 10-year start date, older history may exist.
         const requestedFromTime = new Date(fromDate).getTime();
-        const actualOldestTime = new Date(String(data[0].time).slice(0, 10)).getTime();
+        const actualOldestTime = new Date(String(cleanData[0].time).slice(0, 10)).getTime();
         const daysDiff = (actualOldestTime - requestedFromTime) / (1000 * 60 * 60 * 24);
         hasMoreOlderRef.current = daysDiff <= 45;
       }
@@ -282,7 +427,7 @@ function StockChartModalContent({
         const daysDiff = (actualOldestTime - requestedFromTime) / (1000 * 60 * 60 * 24);
         hasMoreOlderRef.current = daysDiff <= 45;
 
-        setCandles(prev => [...filteredOlder, ...prev]);
+        setCandles(prev => sanitizeCandles([...filteredOlder, ...prev]));
       }
     } catch (err) {
       console.error('Error fetching older candles:', err);
@@ -297,9 +442,58 @@ function StockChartModalContent({
     fetchCandles();
   }, [fetchCandles]);
 
-  // Price & change calculations
-  const currentPrice = stockInfo?.currentPrice ?? holding?.currentPrice;
-  const changePercent = stockInfo?.changePercent ?? holding?.dayChangePercent;
+  // Periodic background candle sync during market hours (every 20 seconds)
+  const silentFetchCandles = useCallback(async () => {
+    if (!symbol) return;
+    try {
+      const toDateObj = new Date();
+      const toDate = toDateObj.toISOString().split('T')[0];
+      let fromDate: string;
+
+      if (interval === '5minute') {
+        const fromDateObj = new Date(toDateObj);
+        fromDateObj.setDate(fromDateObj.getDate() - 5);
+        fromDate = fromDateObj.toISOString().split('T')[0];
+      } else {
+        const fromDateObj = new Date(toDateObj);
+        fromDateObj.setDate(fromDateObj.getDate() - 30);
+        fromDate = fromDateObj.toISOString().split('T')[0];
+      }
+
+      const [freshCandles, freshInfo] = await Promise.all([
+        getStockCandles(symbol, interval, fromDate, toDate).catch(() => []),
+        getStockInfo(symbol).catch(() => null),
+      ]);
+
+      if (freshInfo) {
+        setStockInfo(freshInfo);
+      }
+
+      if (freshCandles.length > 0) {
+        setCandles(prev => {
+          if (!prev || prev.length === 0) return sanitizeCandles(freshCandles);
+          return sanitizeCandles([...prev, ...freshCandles]);
+        });
+      }
+    } catch {
+      // Silent failure for background poll
+    }
+  }, [symbol, interval]);
+
+  useEffect(() => {
+    if (!symbol) return;
+    const timer = window.setInterval(() => {
+      if (isMarketOpen()) {
+        silentFetchCandles();
+      }
+    }, 20_000);
+
+    return () => window.clearInterval(timer);
+  }, [symbol, silentFetchCandles]);
+
+  // Price & change calculations (live WebSocket price takes priority)
+  const currentPrice = livePrice?.price ?? stockInfo?.currentPrice ?? holding?.currentPrice;
+  const changePercent = livePrice?.changePercent ?? stockInfo?.changePercent ?? holding?.dayChangePercent;
   const isPositive = (changePercent ?? 0) >= 0;
 
   return (
@@ -328,39 +522,44 @@ function StockChartModalContent({
 
         {/* Header */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-white/10 flex items-center justify-between gap-3 shrink-0 bg-slate-800/40">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg sm:text-2xl font-bold text-white tracking-wide">{symbol}</h2>
-                {holding?.sector && (
-                  <span className="text-[10px] sm:text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md truncate max-w-[140px] sm:max-w-[200px]">
-                    {holding.sector}
-                  </span>
-                )}
-                {holding?.marketCapCategory && (
-                  <span className="text-[10px] sm:text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md">
-                    {holding.marketCapCategory}
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-wrap">
+            <h2 className="text-lg sm:text-2xl font-bold text-white tracking-wide leading-none">{symbol}</h2>
+            {currentPrice !== undefined && (
+              <div className="flex items-baseline gap-1.5 sm:gap-2 leading-none">
+                <span className="text-base sm:text-xl font-bold text-gray-100 font-mono">
+                  ₹{currentPrice.toFixed(2)}
+                </span>
+                {changePercent !== undefined && (
+                  <span
+                    className={`text-xs sm:text-sm font-bold tabular-nums ${
+                      isPositive ? 'text-emerald-400' : 'text-rose-500'
+                    }`}
+                  >
+                    {isPositive ? '+' : ''}
+                    {changePercent.toFixed(2)}%
                   </span>
                 )}
               </div>
-              {currentPrice !== undefined && (
-                <div className="flex items-baseline gap-2 mt-0.5">
-                  <span className="text-base sm:text-lg font-bold text-gray-100 font-mono">
-                    ₹{currentPrice.toFixed(2)}
-                  </span>
-                  {changePercent !== undefined && (
-                    <span
-                      className={`text-xs sm:text-sm font-bold tabular-nums ${
-                        isPositive ? 'text-emerald-400' : 'text-rose-500'
-                      }`}
-                    >
-                      {isPositive ? '+' : ''}
-                      {changePercent.toFixed(2)}%
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            )}
+            {holding?.marketCapCategory && (
+              <span className="text-[10px] sm:text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md leading-none">
+                {holding.marketCapCategory}
+              </span>
+            )}
+            {holding?.sector && (
+              <span className="text-[10px] sm:text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md truncate max-w-[120px] sm:max-w-[200px] leading-none">
+                {holding.sector}
+              </span>
+            )}
+            {isMarketOpen() && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-semibold leading-none">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                </span>
+                <span>LIVE</span>
+              </div>
+            )}
           </div>
 
           {/* Right Controls: External links and Close */}
@@ -467,6 +666,7 @@ function StockChartModalContent({
                 resetZoomTrigger={resetZoomTrigger}
                 onNearStartOfData={handleLoadOlderCandles}
                 onHoverCandle={setHoveredCandle}
+                liveTick={liveTick}
               />
             )}
           </div>
