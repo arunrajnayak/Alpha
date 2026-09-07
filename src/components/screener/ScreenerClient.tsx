@@ -39,23 +39,13 @@ const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
   'micro':     { label: 'Micro', cls: 'text-lime-400' },
 };
 
-function getRankAccent(rank: number, inPortfolio: boolean, isPrefiltered: boolean = false): string {
-  if (isPrefiltered) {
-    if (rank <= 30) return 'rgb(34,197,94)';
-    if (rank <= 50) return 'rgb(234,179,8)';
-    return 'rgba(239,68,68,0.6)';
-  }
+function getRankAccent(rank: number, inPortfolio: boolean): string {
   if (inPortfolio) return 'rgb(99,102,241)';
   if (rank <= 50) return 'rgb(34,197,94)';
   return 'rgba(239,68,68,0.6)';
 }
 
-function getRankTextColor(rank: number, isPrefiltered: boolean = false): string {
-  if (isPrefiltered) {
-    if (rank <= 30) return 'text-green-400';
-    if (rank <= 50) return 'text-yellow-400';
-    return 'text-red-400';
-  }
+function getRankTextColor(rank: number): string {
   if (rank <= 50) return 'text-green-400';
   return 'text-red-400';
 }
@@ -123,16 +113,17 @@ function BadgeTooltip({ label, badgeCls, lines, icon, iconOnly }: BadgeTooltipPr
             {/* Lines */}
             <div className="px-3 py-2.5 flex flex-col gap-2">
               {lines.map((line, i) => {
-                const isAsm = line.startsWith('⚠');
-                const isLock = line.startsWith('🔒');
+                const isAsm = line.startsWith('⚠') || line.includes('ASM');
+                const isLock = line.startsWith('🔒') || line.includes('Min hold');
+                const cleanLine = line.replace(/^[⚠🔒]\s*/, '');
                 return (
                   <div key={i} className="flex items-start gap-2">
-                    <span className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
+                    <span className={`mt-[5px] shrink-0 w-1.5 h-1.5 rounded-full ${
                       isLock ? 'bg-amber-400' : isAsm ? 'bg-orange-400' : 'bg-zinc-500'
                     }`} />
-                    <span className={`text-[11px] leading-snug ${
+                    <span className={`text-[11px] leading-4 ${
                       isLock ? 'text-amber-300' : isAsm ? 'text-orange-300' : 'text-zinc-300'
-                    }`}>{line}</span>
+                    }`}>{cleanLine}</span>
                   </div>
                 );
               })}
@@ -656,7 +647,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         ? 'rgb(234,179,8)'
                         : row.isUnranked
                           ? 'rgb(63,63,70)'
-                          : getRankAccent(row.rank, row.inPortfolio, activeTab === 'prefiltered');
+                          : getRankAccent(row.rank, row.inPortfolio);
 
                 const rowBg = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
@@ -673,8 +664,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     key={row.symbol}
                     onClick={() => {
                       if (isClickableTab) {
-                        setSelectedSymbol(row.symbol);
-                        setSelectedCompany(row.companyName);
+                        setChartSymbol(row.symbol);
                       }
                     }}
                     className={`group transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
@@ -688,7 +678,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           isAllTab
                             ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
                             : 'text-zinc-400'
-                            : getRankTextColor(row.rank, activeTab === 'prefiltered')
+                            : getRankTextColor(row.rank)
                         }`}>
                           {row.rank}
                         </span>
@@ -740,8 +730,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             })() : []),
                             exit.by50Dma && !exit.byFilter ? 'Below 50 DMA' : '',
                             exit.byDrawdown ? 'Drawdown > 25% since entry' : '',
-                            exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
-                            row.asmInfo ? `⚠ ${formatAsmLabel(row.asmInfo)}` : '',
+                            exit.protected ? 'Min hold not met (< 14 days)' : '',
+                            row.asmInfo ? formatAsmLabel(row.asmInfo) : '',
                           ].filter(Boolean) as string[];
                           return (
                             <BadgeTooltip
@@ -766,7 +756,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             exit.is5PctCircuit ? '5% daily circuit limit' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',
                             exit.byDrawdownWarn && !exit.byDrawdown ? 'Drawdown > 20% since entry' : '',
-                            row.asmInfo ? `⚠ ${formatAsmLabel(row.asmInfo)}` : '',
+                            row.asmInfo ? formatAsmLabel(row.asmInfo) : '',
                           ].filter(Boolean) as string[];
                           return (
                             <BadgeTooltip
@@ -783,8 +773,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                           const warnLines = [
                             row.isBE ? 'BE series (Trade-to-Trade)' : '',
                             is5PctCircuit ? '5% daily circuit limit' : '',
-                            row.asmInfo ? `⚠ ${formatAsmLabel(row.asmInfo)}` : '',
-                            row.asmInfo && !row.isBE && !is5PctCircuit ? 'Surveillance measure with trading restrictions' : '',
+                            row.asmInfo ? formatAsmLabel(row.asmInfo) : '',
                           ].filter(Boolean) as string[];
                           return (
                             <BadgeTooltip
@@ -796,16 +785,17 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             />
                           );
                         })()}
-                        {/* Chart modal button — placed at last */}
+                        {/* Rank trend modal button — placed at last */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setChartSymbol(row.symbol);
+                            setSelectedSymbol(row.symbol);
+                            setSelectedCompany(row.companyName);
                           }}
                           className="p-0.5 transition-all duration-150 hover:scale-110 hover:brightness-125 cursor-pointer shrink-0"
-                          title={`Open ${row.symbol} chart`}
-                          aria-label={`Open ${row.symbol} chart`}
+                          title={`Open ${row.symbol} rank trend`}
+                          aria-label={`Open ${row.symbol} rank trend`}
                         >
                           <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none">
                             <defs>
