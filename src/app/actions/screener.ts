@@ -358,38 +358,38 @@ export async function getScreenerData(
         const instData = instrumentMap.get(sym);
         const isBE = instData?.instrumentType === 'BE' || sym.endsWith('-BE');
 
-        let unrankedReason = 'Dropped from screener universe';
+        let unrankedReason = 'Outside screener universe';
         if (isBE) {
-          unrankedReason = 'BE category (settlement restrictions)';
+          unrankedReason = 'BE category (Trade-to-Trade)';
         } else if (marketCapCr > 0 && marketCapCr < PARAMS.mcapMinCr) {
-          unrankedReason = `Market cap below threshold (₹${marketCapCr.toFixed(0)} Cr < ₹${PARAMS.mcapMinCr} Cr)`;
+          unrankedReason = `Market cap < ₹1,000 Cr (₹${marketCapCr.toFixed(0)} Cr)`;
         } else if (closes.length < 269) {
-          unrankedReason = `Insufficient price history (${closes.length} of 269 days)`;
+          unrankedReason = `Price history < 269 days (${closes.length}/269)`;
         } else if (closes.length >= 269 && compositeScore === 0) {
-          unrankedReason = 'Missing/invalid price data';
+          unrankedReason = 'Missing price data';
         } else {
           // If in active all ranking but not filtered, determine which filter failed
           if (activeAllSymbols.has(sym)) {
             const failedFilters: string[] = [];
             if (d200 === null || price < d200) {
-              failedFilters.push('Price < 200 DMA');
+              failedFilters.push('Below 200 DMA');
             }
             if (price < PARAMS.minPrice) {
               failedFilters.push(`Price < ₹${PARAMS.minPrice}`);
             }
             if (athProximity < 0.70) {
-              failedFilters.push(`ATH proximity < 70% (${(athProximity * 100).toFixed(0)}%)`);
+              failedFilters.push('> 30% below ATH');
             }
             if (medianTurnoverCr < PARAMS.volumeThresholdCr) {
-              failedFilters.push(`Median daily turnover < ₹${PARAMS.volumeThresholdCr} Cr (₹${medianTurnoverCr.toFixed(1)} Cr)`);
+              failedFilters.push(`Turnover < ₹${PARAMS.volumeThresholdCr} Cr`);
             }
             if (failedFilters.length > 0) {
-              unrankedReason = `Failed filters: ${failedFilters.join(', ')}`;
+              unrankedReason = failedFilters.join(', ');
             } else {
               unrankedReason = 'Outside top rankings';
             }
           } else {
-            unrankedReason = 'Excluded from screener universe';
+            unrankedReason = 'Outside screener universe';
           }
         }
 

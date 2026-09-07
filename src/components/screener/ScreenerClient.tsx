@@ -25,14 +25,18 @@ function formatMcap(cr: number): string {
 }
 
 const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
-  'Large Cap': { label: 'Large', cls: 'text-blue-400' },
-  'Large':     { label: 'Large', cls: 'text-blue-400' },
-  'Mid Cap':   { label: 'Mid',   cls: 'text-orange-400' },
-  'Mid':       { label: 'Mid',   cls: 'text-orange-400' },
-  'Small Cap': { label: 'Small', cls: 'text-cyan-400' },
-  'Small':     { label: 'Small', cls: 'text-cyan-400' },
-  'Micro Cap': { label: 'Micro', cls: 'text-amber-400' },
-  'Micro':     { label: 'Micro', cls: 'text-amber-400' },
+  'Large Cap': { label: 'Large', cls: 'text-cyan-400' },
+  'Large':     { label: 'Large', cls: 'text-cyan-400' },
+  'large':     { label: 'Large', cls: 'text-cyan-400' },
+  'Mid Cap':   { label: 'Mid',   cls: 'text-violet-400' },
+  'Mid':       { label: 'Mid',   cls: 'text-violet-400' },
+  'mid':       { label: 'Mid',   cls: 'text-violet-400' },
+  'Small Cap': { label: 'Small', cls: 'text-fuchsia-400' },
+  'Small':     { label: 'Small', cls: 'text-fuchsia-400' },
+  'small':     { label: 'Small', cls: 'text-fuchsia-400' },
+  'Micro Cap': { label: 'Micro', cls: 'text-lime-400' },
+  'Micro':     { label: 'Micro', cls: 'text-lime-400' },
+  'micro':     { label: 'Micro', cls: 'text-lime-400' },
 };
 
 function getRankAccent(rank: number, inPortfolio: boolean, isPrefiltered: boolean = false): string {
@@ -56,6 +60,11 @@ function getRankTextColor(rank: number, isPrefiltered: boolean = false): string 
   return 'text-red-400';
 }
 
+function formatAsmLabel(asm: { type: 'ST' | 'LT'; stage: string }) {
+  const typeStr = asm.type === 'LT' ? 'Long-Term' : 'Short-Term';
+  return `${typeStr} ASM (Stage ${asm.stage})`;
+}
+
 // ─── Badge Tooltip ───────────────────────────────────────────────────────────
 
 interface BadgeTooltipProps {
@@ -63,10 +72,11 @@ interface BadgeTooltipProps {
   badgeCls: string;
   lines: string[];
   icon?: React.ReactNode;
+  headerIcon?: React.ReactNode;
   iconOnly?: boolean;
 }
 
-function BadgeTooltip({ label, badgeCls, lines, icon, iconOnly }: BadgeTooltipProps) {
+function BadgeTooltip({ label, badgeCls, lines, icon, headerIcon, iconOnly }: BadgeTooltipProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -106,7 +116,7 @@ function BadgeTooltip({ label, badgeCls, lines, icon, iconOnly }: BadgeTooltipPr
           >
             {/* Header */}
             <div className="px-3 py-2 border-b border-zinc-800/80 flex items-center gap-1.5">
-              {icon && <span className="text-zinc-400 flex items-center">{icon}</span>}
+              {(headerIcon || icon) && <span className="text-zinc-400 flex items-center">{headerIcon || icon}</span>}
               <span className="text-[10px] font-black tracking-widest uppercase" style={{ color: 'inherit' }}>
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold tracking-wider ${badgeCls.includes('bg-') ? badgeCls : `border ${badgeCls} bg-zinc-800/60`}`}>{label}</span>
               </span>
@@ -717,6 +727,91 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             </span>
                           ) : null;
                         })()}
+                        {/* Exit / Warning / Caution signal badges */}
+                        {exit && activeTab === 'portfolio' && exit.signalType === 'red' && (() => {
+                          const exitLines = [
+                            exit.isUnranked
+                               ? (exit.unrankedReason || 'Outside screener universe')
+                               : exit.byRank ? (row.rank > 0 ? `Rank #${row.rank} (> 60)` : 'Rank > 60') : '',
+                            ...(exit.byFilter ? (() => {
+                              const f: string[] = [];
+                              if (!row.dmaSwatches.above200) f.push('Below 200 DMA');
+                              if (row.athProximity < 0.75) f.push('> 25% below ATH');
+                              return f.length > 0 ? f : ['Below 200 DMA or > 25% below ATH'];
+                            })() : []),
+                            exit.by50Dma && !exit.byFilter ? 'Below 50 DMA' : '',
+                            exit.byDrawdown ? 'Drawdown > 25% since entry' : '',
+                            exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
+                            row.asmInfo ? `⚠ ${formatAsmLabel(row.asmInfo)}` : '',
+                          ].filter(Boolean) as string[];
+                          return (
+                            <BadgeTooltip
+                              label={exit.protected ? 'LOCKED' : 'EXIT'}
+                              badgeCls={exit.protected
+                                ? 'text-amber-400 hover:text-amber-300'
+                                : 'text-red-400 hover:text-red-300'}
+                              lines={exitLines}
+                              iconOnly
+                              icon={exit.protected ? (
+                                <LockOutlinedIcon sx={{ fontSize: 16 }} />
+                              ) : (
+                                <LogoutIcon sx={{ fontSize: 16 }} />
+                              )}
+                            />
+                          );
+                        })()}
+                        {exit && activeTab === 'portfolio' && exit.signalType === 'yellow' && (() => {
+                          const cautionLines = [
+                            exit.byRank && !exit.isUnranked ? (row.rank > 0 ? `Rank #${row.rank} (51–60 watch zone)` : 'Rank 51–60 (watch zone)') : '',
+                            exit.isBE ? 'BE series (Trade-to-Trade)' : '',
+                            exit.is5PctCircuit ? '5% daily circuit limit' : '',
+                            exit.by50Dma ? 'Below 50 DMA' : '',
+                            exit.byDrawdownWarn && !exit.byDrawdown ? 'Drawdown > 20% since entry' : '',
+                            row.asmInfo ? `⚠ ${formatAsmLabel(row.asmInfo)}` : '',
+                          ].filter(Boolean) as string[];
+                          return (
+                            <BadgeTooltip
+                              label="CAUTION"
+                              badgeCls="text-amber-400 hover:text-amber-300"
+                              lines={cautionLines}
+                              iconOnly
+                              headerIcon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
+                              icon={
+                                <span className="inline-flex items-center gap-1 leading-none">
+                                  <WarningAmberIcon sx={{ fontSize: 16 }} />
+                                  {exit.isBE && <span className="text-[10px] font-bold tracking-wide">BE</span>}
+                                  {exit.is5PctCircuit && <span className="text-[10px] font-bold tracking-wide">5%</span>}
+                                </span>
+                              }
+                            />
+                          );
+                        })()}
+                        {/* Warning badge (ASM / BE / 5% Circuit) — shown outside portfolio tab */}
+                        {activeTab !== 'portfolio' && (row.asmInfo || row.isBE || is5PctCircuit) && (() => {
+                          const warnLines = [
+                            row.isBE ? 'BE series (Trade-to-Trade)' : '',
+                            is5PctCircuit ? '5% daily circuit limit' : '',
+                            row.asmInfo ? `⚠ ${formatAsmLabel(row.asmInfo)}` : '',
+                            row.asmInfo && !row.isBE && !is5PctCircuit ? 'Surveillance measure with trading restrictions' : '',
+                          ].filter(Boolean) as string[];
+                          return (
+                            <BadgeTooltip
+                              label="WARNING"
+                              badgeCls="text-amber-400 hover:text-amber-300"
+                              lines={warnLines}
+                              iconOnly
+                              headerIcon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
+                              icon={
+                                <span className="inline-flex items-center gap-1 leading-none">
+                                  <WarningAmberIcon sx={{ fontSize: 16 }} />
+                                  {row.isBE && <span className="text-[10px] font-bold tracking-wide">BE</span>}
+                                  {is5PctCircuit && <span className="text-[10px] font-bold tracking-wide">5%</span>}
+                                </span>
+                              }
+                            />
+                          );
+                        })()}
+                        {/* Chart modal button — placed at last */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -741,86 +836,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             />
                           </svg>
                         </button>
-                        {/* Exit / Warning / Caution signal badges */}
-                        {exit && activeTab === 'portfolio' && exit.signalType === 'red' && (() => {
-                          const exitLines = [
-                            exit.isUnranked
-                               ? (exit.unrankedReason ? `Dropped: ${exit.unrankedReason}` : 'Dropped from screener universe')
-                               : exit.byRank ? 'Rank > 50' : '',
-                            exit.byFilter ? 'Below 200 DMA or outside 25% of ATH' : '',
-                            exit.by50Dma ? 'Below 50 DMA' : '',
-                            exit.byDrawdown ? 'Dropped > 25% since entry' : '',
-                            exit.protected ? '🔒 Min hold not met (< 14 days)' : '',
-                            row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
-                          ].filter(Boolean) as string[];
-                          return (
-                            <BadgeTooltip
-                              label={exit.protected ? 'LOCKED' : 'EXIT'}
-                              badgeCls={exit.protected
-                                ? 'text-amber-400 hover:text-amber-300'
-                                : 'text-red-400 hover:text-red-300'}
-                              lines={exitLines}
-                              iconOnly
-                              icon={exit.protected ? (
-                                <LockOutlinedIcon sx={{ fontSize: 16 }} />
-                              ) : (
-                                <LogoutIcon sx={{ fontSize: 16 }} />
-                              )}
-                            />
-                          );
-                        })()}
-                        {exit && activeTab === 'portfolio' && exit.signalType === 'yellow' && (() => {
-                          const cautionLines = [
-                            exit.byRank && !exit.isUnranked ? 'Rank 51–60 (watch zone)' : '',
-                            exit.isBE ? 'Moved to BE (T+0) settlement category' : '',
-                            exit.is5PctCircuit ? '5% daily circuit limit' : '',
-                            exit.by50Dma ? 'Below 50 DMA' : '',
-                            exit.byDrawdownWarn && !exit.byDrawdown ? 'Dropped > 20% since entry (warn zone)' : '',
-                            row.asmInfo ? `⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}` : '',
-                          ].filter(Boolean) as string[];
-                          return (
-                            <BadgeTooltip
-                              label="CAUTION"
-                              badgeCls="text-amber-400 hover:text-amber-300"
-                              lines={cautionLines}
-                              iconOnly
-                              icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
-                            />
-                          );
-                        })()}
-                        {/* ASM badge — only shown outside portfolio tab */}
-                        {row.asmInfo && activeTab !== 'portfolio' && (
-                          <BadgeTooltip
-                            label={`ASM ${row.asmInfo.type}-${row.asmInfo.stage}`}
-                            badgeCls="text-amber-400 hover:text-amber-300"
-                            lines={[`⚠ ASM ${row.asmInfo.type}-${row.asmInfo.stage}: ${row.asmInfo.desc}`]}
-                            iconOnly
-                            icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
-                          />
-                        )}
-                        {/* BE badge — shown outside portfolio tab */}
-                        {row.isBE && activeTab !== 'portfolio' && (
-                          <BadgeTooltip
-                            label="BE"
-                            badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
-                            lines={[
-                              'Trade-to-Trade (BE Series)',
-                              'Compulsory delivery settlement (no intraday trading)',
-                              '100% upfront margin required (higher surveillance)',
-                            ]}
-                          />
-                        )}
-                        {/* 5% Circuit badge — shown outside portfolio tab */}
-                        {is5PctCircuit && activeTab !== 'portfolio' && (
-                          <BadgeTooltip
-                            label="5% CIRCUIT"
-                            badgeCls="bg-amber-500/20 text-amber-300 border-amber-500/40"
-                            lines={[
-                              '5% Daily Circuit Band Limit',
-                              'Daily price band restricted to ±5% (higher lock-in / exit liquidity risk)',
-                            ]}
-                          />
-                        )}
                       </div>
                       <div className="text-[11px] text-zinc-500 truncate leading-tight mt-0.5">
                         {row.companyName}
