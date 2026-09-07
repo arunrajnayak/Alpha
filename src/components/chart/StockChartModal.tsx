@@ -105,7 +105,10 @@ function StockChartModalContent({
     invested?: number;
     pnl?: number;
     pnlPercent?: number;
+    todayOHLC?: { open: number; high: number; low: number; close: number; volume: number };
   } | null>(null);
+  // Tracks the running live daily candle OHLC across ticks (so high/low accumulate correctly)
+  const liveBarRef = useRef<LiveTick | null>(null);
   const [livePrice, setLivePrice] = useState<{
     price: number;
     change?: number;
@@ -125,9 +128,14 @@ function StockChartModalContent({
     initialize();
   }, [initialize]);
 
-  // Reset live price when symbol changes
+  // Mirror stockInfo in a ref for use in buildLiveTick without stale closure
+  const stockInfoRef = useRef(stockInfo);
+  useEffect(() => { stockInfoRef.current = stockInfo; }, [stockInfo]);
+
+  // Reset live price and liveBarRef when symbol changes
   useEffect(() => {
     setLivePrice(null);
+    liveBarRef.current = null;
   }, [symbol]);
 
   // Register instrumentKey with Upstox live WebSocket
@@ -165,10 +173,12 @@ function StockChartModalContent({
 
       if (current5mBucket > lastTimeNum) {
         // New 5m candle has opened
-        return { time: current5mBucket, open: ltp, high: ltp, low: ltp, close: ltp, volume: 0 };
+        const tick: LiveTick = { time: current5mBucket, open: ltp, high: ltp, low: ltp, close: ltp, volume: 0 };
+        liveBarRef.current = tick;
+        return tick;
       }
-      // Update the current 5m candle
-      return {
+      // Update the current 5m candle — running high/low from last known candle
+      const tick: LiveTick = {
         time: lastTimeNum,
         open: last.open,
         high: Math.max(last.high, ltp),
@@ -176,26 +186,69 @@ function StockChartModalContent({
         close: ltp,
         volume: last.volume,
       };
+      liveBarRef.current = tick;
+      return tick;
     }
 
     if (iv === 'day') {
       const todayYmd = todayISTYmd(now);
       const lastTimeStr = String(last.time).slice(0, 10);
+
       if (todayYmd > lastTimeStr) {
-        // Today's candle hasn't been fetched yet — synthesize it
-        return { time: todayYmd, open: ltp, high: ltp, low: ltp, close: ltp, volume: 0 };
+        // Today's candle not yet in historical data — need to synthesize it
+        const todayOHLC = stockInfoRef.current?.todayOHLC;
+        const prev = liveBarRef.current;
+
+        let open: number;
+        let high: number;
+        let low: number;
+        let volume: number;
+
+        if (prev && String(prev.time).slice(0, 10) === todayYmd) {
+          // Accumulate from existing live bar for today
+          open = prev.open;
+          high = Math.max(prev.high, ltp);
+          low = Math.min(prev.low, ltp);
+          volume = prev.volume;
+        } else if (todayOHLC) {
+          // Initialize from the real OHLC data fetched via /market-quote/ohlc
+          open = todayOHLC.open;
+          high = Math.max(todayOHLC.high, ltp);
+          low = Math.min(todayOHLC.low, ltp);
+          volume = todayOHLC.volume;
+        } else {
+          // No reference data — best effort: open=ltp (first tick of day)
+          open = ltp;
+          high = ltp;
+          low = ltp;
+          volume = 0;
+        }
+
+        const tick: LiveTick = { time: todayYmd, open, high, low, close: ltp, volume };
+        liveBarRef.current = tick;
+        return tick;
       }
     }
 
-    // Week / month or same-day daily: just update last candle's close/high/low
-    return {
+    // Daily (same-day bar present in history), week, or month:
+    // Accumulate high/low from liveBarRef if it's for the same bar, else from last historical candle
+    const prev = liveBarRef.current;
+    const lastTimeKey = String(last.time).slice(0, 10);
+    const prevTimeKey = prev ? String(prev.time).slice(0, 10) : null;
+
+    const baseHigh = (prevTimeKey === lastTimeKey && prev) ? prev.high : last.high;
+    const baseLow = (prevTimeKey === lastTimeKey && prev) ? prev.low : last.low;
+
+    const tick: LiveTick = {
       time: last.time,
       open: last.open,
-      high: Math.max(last.high, ltp),
-      low: Math.min(last.low, ltp),
+      high: Math.max(baseHigh, ltp),
+      low: Math.min(baseLow, ltp),
       close: ltp,
       volume: last.volume,
     };
+    liveBarRef.current = tick;
+    return tick;
   }, []);
 
   const handleLivePriceUpdate = useCallback((ltp: number) => {
@@ -259,6 +312,7 @@ function StockChartModalContent({
     setInterval(newInterval);
     setCandles([]);
     setLiveTick(null);
+    liveBarRef.current = null;
     setHoveredCandle(null);
     const prefs = loadChartPreferences();
     const savedPeriod = prefs.periodByInterval?.[newInterval];

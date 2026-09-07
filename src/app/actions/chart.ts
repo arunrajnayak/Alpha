@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getHistoricalCandles, getIntradayCandles, UpstoxCandle } from '@/lib/upstox-client';
-import { getInstrumentKey, getLiveQuotes } from '@/lib/upstox';
+import { getInstrumentKey, getLiveQuotes, getOHLC } from '@/lib/upstox';
 import type { CandleData, TradeMarker, ChartInterval } from '@/lib/chart-types';
 
 /**
@@ -139,6 +139,8 @@ export async function getStockTrades(symbol: string): Promise<TradeMarker[]> {
 
 /**
  * Fetch stock info for the header: current price, change, portfolio status.
+ * Also returns today's OHLC from the market-quote/ohlc endpoint for accurate
+ * live candle rendering on the daily chart.
  */
 export async function getStockInfo(symbol: string): Promise<{
     symbol: string;
@@ -152,21 +154,30 @@ export async function getStockInfo(symbol: string): Promise<{
     invested?: number;
     pnl?: number;
     pnlPercent?: number;
+    todayOHLC?: { open: number; high: number; low: number; close: number; volume: number };
 } | null> {
     const upperSymbol = symbol.toUpperCase();
     const instrumentKey = await getInstrumentKey(upperSymbol);
 
     let currentPrice: number | undefined;
     let previousClose: number | undefined;
+    let todayOHLC: { open: number; high: number; low: number; close: number; volume: number } | undefined;
 
-    // Get live price from Upstox
+    // Get live price and today's OHLC from Upstox in parallel
     if (instrumentKey) {
         try {
-            const quotes = await getLiveQuotes([instrumentKey]);
+            const [quotes, ohlcData] = await Promise.all([
+                getLiveQuotes([instrumentKey]),
+                getOHLC([instrumentKey], '1d').catch(() => new Map()),
+            ]);
             const quote = quotes.get(instrumentKey);
             if (quote) {
                 currentPrice = quote.last_price;
                 previousClose = quote.previous_close;
+            }
+            const ohlc = ohlcData.get(instrumentKey);
+            if (ohlc) {
+                todayOHLC = ohlc;
             }
         } catch {
             // Fall back to latest ScreenerPrice if live quotes fail
@@ -237,5 +248,6 @@ export async function getStockInfo(symbol: string): Promise<{
         invested: inPortfolio ? totalInvested : undefined,
         pnl,
         pnlPercent,
+        todayOHLC,
     };
 }
