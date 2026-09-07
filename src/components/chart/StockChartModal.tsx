@@ -130,7 +130,28 @@ function StockChartModalContent({
 
   // Mirror stockInfo in a ref for use in buildLiveTick without stale closure
   const stockInfoRef = useRef(stockInfo);
-  useEffect(() => { stockInfoRef.current = stockInfo; }, [stockInfo]);
+  useEffect(() => {
+    stockInfoRef.current = stockInfo;
+
+    // Race-condition correction: if todayOHLC arrives AFTER the first WebSocket tick
+    // already seeded liveBarRef with open=ltp (because stockInfo wasn't ready yet),
+    // patch liveBarRef with the real session open/high/low and push a corrected liveTick.
+    if (stockInfo?.todayOHLC && intervalRef.current === 'day') {
+      const tod = stockInfo.todayOHLC;
+      const todayYmd = todayISTYmd(new Date());
+      const curr = liveBarRef.current;
+      if (curr && String(curr.time).slice(0, 10) === todayYmd) {
+        const corrected: LiveTick = {
+          ...curr,
+          open: tod.open,
+          high: Math.max(tod.high, curr.high, curr.close),
+          low: Math.min(tod.low, curr.low, curr.close),
+        };
+        liveBarRef.current = corrected;
+        setLiveTick({ ...corrected });
+      }
+    }
+  }, [stockInfo]);
 
   // Reset live price and liveBarRef when symbol changes
   useEffect(() => {
@@ -231,21 +252,45 @@ function StockChartModalContent({
     }
 
     // Daily (same-day bar present in history), week, or month:
-    // Accumulate high/low from liveBarRef if it's for the same bar, else from last historical candle
+    // Accumulate high/low from liveBarRef if it's for the same bar, else seed from historical or todayOHLC.
     const prev = liveBarRef.current;
     const lastTimeKey = String(last.time).slice(0, 10);
     const prevTimeKey = prev ? String(prev.time).slice(0, 10) : null;
+    const todayYmdSameDay = iv === 'day' ? todayISTYmd(now) : null;
+    const todayOHLCSameDay = (todayYmdSameDay === lastTimeKey) ? stockInfoRef.current?.todayOHLC : undefined;
 
-    const baseHigh = (prevTimeKey === lastTimeKey && prev) ? prev.high : last.high;
-    const baseLow = (prevTimeKey === lastTimeKey && prev) ? prev.low : last.low;
+    let baseOpen: number;
+    let baseHigh: number;
+    let baseLow: number;
+    let baseVolume: number;
+
+    if (prevTimeKey === lastTimeKey && prev) {
+      // Continue accumulating from the existing live bar for this bar
+      baseOpen = prev.open;
+      baseHigh = prev.high;
+      baseLow = prev.low;
+      baseVolume = prev.volume;
+    } else if (todayOHLCSameDay) {
+      // First tick for a daily bar that's in history — prefer real-time OHLC over historical (may be stale)
+      baseOpen = todayOHLCSameDay.open;
+      baseHigh = todayOHLCSameDay.high;
+      baseLow = todayOHLCSameDay.low;
+      baseVolume = todayOHLCSameDay.volume;
+    } else {
+      // Weekly/monthly or no todayOHLC — seed from historical candle
+      baseOpen = last.open;
+      baseHigh = last.high;
+      baseLow = last.low;
+      baseVolume = last.volume;
+    }
 
     const tick: LiveTick = {
       time: last.time,
-      open: last.open,
+      open: baseOpen,
       high: Math.max(baseHigh, ltp),
       low: Math.min(baseLow, ltp),
       close: ltp,
-      volume: last.volume,
+      volume: baseVolume,
     };
     liveBarRef.current = tick;
     return tick;
