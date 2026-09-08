@@ -41,6 +41,12 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } }
 };
 
+const viewportConfig = {
+  once: true,
+  amount: 0.1,
+  margin: '0px 0px -40px 0px',
+};
+
 export default function LivePage() {
   const {
     data,
@@ -160,12 +166,9 @@ export default function LivePage() {
   }
 
   return (
-    <motion.main
+    <main
       id="live-dashboard-content"
       className="flex flex-col gap-4 md:gap-8 pb-24 md:pb-8"
-      variants={containerVariants}
-      initial={false}
-      animate="visible"
     >
         {/* Header Section */}
         <LiveHeader
@@ -200,11 +203,18 @@ export default function LivePage() {
             itemVariants={itemVariants}
             privacyMode={privacyMode}
             isMobile={isMobile}
+            downloading={downloading}
         />
 
         {/* Portfolio Heatmap */}
         {data.allHoldings && data.allHoldings.length > 0 && (
-          <motion.div variants={itemVariants}>
+          <motion.div
+            variants={itemVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportConfig}
+            animate={downloading ? "visible" : undefined}
+          >
             <PortfolioHeatmap 
                 data={{ allHoldings: data.allHoldings.map(h => ({ ...h, formattedValue: formatNumber(h.currentValue, 0, 0) })) }} 
                 isMobile={isMobile} 
@@ -214,7 +224,14 @@ export default function LivePage() {
         )}
 
         {/* Bottom Section: Movers + Performance Rank */}
-        <motion.div className="grid grid-cols-1 lg:grid-cols-3 gap-8" variants={containerVariants}>
+        <motion.div
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportConfig}
+          animate={downloading ? "visible" : undefined}
+        >
             <LiveMovers
                 topGainers={data.topGainers}
                 topLosers={data.topLosers}
@@ -230,7 +247,14 @@ export default function LivePage() {
         </motion.div>
 
         {/* Market Overview Section */}
-        <motion.div variants={itemVariants} id="market-overview" className="pt-4 md:pt-6">
+        <motion.div
+          variants={itemVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportConfig}
+          id="market-overview"
+          className="pt-4 md:pt-6"
+        >
           <div className="flex items-center gap-3 mb-4 md:mb-6">
             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
             <h2 className="text-lg md:text-xl font-bold whitespace-nowrap">
@@ -240,6 +264,6 @@ export default function LivePage() {
           </div>
           <MarketOverviewSection embedded />
         </motion.div>
-    </motion.main>
+    </main>
   );
 }

@@ -20,6 +20,25 @@ import dynamic from 'next/dynamic';
 import SectorAllocationWrapper from '@/components/portfolio/SectorAllocationWrapper';
 import MarketCapAreaChart from '@/components/portfolio/MarketCapAreaChartWrapper';
 import SectorHistoryChart from '@/components/portfolio/SectorHistoryChartWrapper';
+import { motion, type Variants } from 'framer-motion';
+
+const sectionVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: 'easeOut',
+    },
+  },
+};
+
+const viewportConfig = {
+  once: true,
+  amount: 0.1,
+  margin: '0px 0px -40px 0px',
+};
 
 // Heavy chart components — lazy loaded to avoid blocking initial page render
 const DrawdownChart = dynamic(() => import('@/components/portfolio/DrawdownChart'), {
@@ -113,7 +132,13 @@ export default function DashboardPage() {
       )}
       
       {/* Header Greeting */}
-      <div className="flex items-center gap-3">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="flex items-center gap-3"
+      >
         <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
           <span className="gradient-text">Hello, {APP_CONFIG.USER_NAME}</span>
         </h1>
@@ -122,10 +147,16 @@ export default function DashboardPage() {
         }`}>
             <FontAwesomeIcon icon={isWeekPositive ? faRocket : faArrowTrendDown} className="text-sm" />
         </div>
-      </div>
+      </motion.div>
 
       {/* Row 1: Big Cards (Value, NAV, DD) */}
-      <div className="flex-none h-auto md:h-[240px]">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="flex-none h-auto md:h-[240px]"
+      >
         <MainChartCards
            totalCurrentValue={totalCurrentValue}
            totalInvested={totalInvested}
@@ -134,10 +165,16 @@ export default function DashboardPage() {
            dashboardHistory={dashboardHistory}
            privacyMode={privacyMode}
         />
-      </div>
+      </motion.div>
 
       {/* Rows 2+3 combined: 5-col × 2-row grid */}
-      <div className="grid grid-cols-1 md:grid-cols-5 md:grid-rows-2 gap-4 md:gap-6 flex-none h-auto md:h-[390px]">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="grid grid-cols-1 md:grid-cols-5 md:grid-rows-2 gap-4 md:gap-6 flex-none h-auto md:h-[390px]"
+      >
 
         {/* Card 1 — P/L Summary: col-span-2, row-span-2 */}
         <div className="md:col-span-2 md:row-span-2 h-full min-h-[240px] md:min-h-0">
@@ -177,10 +214,16 @@ export default function DashboardPage() {
         <div className="md:col-span-1 md:row-span-1 h-full min-h-[150px] md:min-h-0">
           <WinLossCard winPercent={portfolioStats.winPercent} lossPercent={portfolioStats.lossPercent} />
         </div>
-      </div>
+      </motion.div>
 
       {/* Row 3: Market Cap, Returns, Avg Gain/Loss */}
-      <div className="grid grid-cols-1 md:grid-cols-8 gap-4 md:gap-8 flex-none h-auto md:h-[200px]">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="grid grid-cols-1 md:grid-cols-8 gap-4 md:gap-8 flex-none h-auto md:h-[200px]"
+      >
           {/* Market Cap - 3 Cols */}
           <div className="col-span-1 md:col-span-3 h-full">
               <MarketCapCard 
@@ -209,10 +252,16 @@ export default function DashboardPage() {
                   avgLoserLoss={portfolioStats.avgLoserLoss} 
               />
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 4: Sector Allocation & Drawdown Chart */}
-      <div className="flex flex-col md:flex-row gap-6 md:gap-8 h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="flex flex-col md:flex-row gap-6 md:gap-8 h-auto flex-none"
+      >
           {/* Sector Allocation (40% width) */}
           <div className="w-full md:w-[40%] h-[500px]">
               <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
@@ -236,10 +285,16 @@ export default function DashboardPage() {
                     </ChartErrorBoundary>
               </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 5: Equity Curve */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Equity Curve">
@@ -247,10 +302,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 5.1: XIRR & CAGR Chart */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="XIRR & CAGR Chart">
@@ -258,10 +319,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 5.5: Invested vs Current Value Chart */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Invested vs Current Chart">
@@ -269,10 +336,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 5.6: Daily Gain/Loss Bar Chart */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Daily P&L Chart">
@@ -280,10 +353,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 5.7: Rolling Returns Chart */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Rolling Returns Chart">
@@ -291,10 +370,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 6: Market Cap History */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center">
@@ -308,10 +393,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 7: Sector History */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Sector History">
@@ -319,10 +410,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 8: Performance Heatmap */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Performance Heatmap">
@@ -330,10 +427,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
-      {/* Row 8: Monthly Returns */}
-      <div className="w-full h-auto flex-none">
+      {/* Row 8.5: Monthly Returns */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Monthly Returns Heatmap">
@@ -341,10 +444,16 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
 
       {/* Row 9: Holding Period vs Returns */}
-      <div className="w-full h-auto flex-none">
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
                 <div className="flex-1 min-h-[500px]">
                      <ChartErrorBoundary componentName="Holding Period vs Returns Chart">
@@ -352,7 +461,7 @@ export default function DashboardPage() {
                      </ChartErrorBoundary>
                 </div>
           </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

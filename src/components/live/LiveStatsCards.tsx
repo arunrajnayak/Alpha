@@ -33,7 +33,14 @@ const LiveStatsCards = memo(function LiveStatsCards({
     const isPositive = data.dayGain >= 0;
 
     return (
-        <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" variants={containerVariants}>
+        <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.1, margin: "0px 0px -40px 0px" }}
+            animate={downloading ? "visible" : undefined}
+        >
             {/* Total Equity Card */}
             <motion.div variants={itemVariants} className="relative overflow-hidden rounded-2xl border border-violet-500/20 shadow-xl h-[160px] bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-900">
                 <div className="absolute inset-0 opacity-30" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.15) 50%, transparent 100%)', animation: 'shimmer 3s ease-in-out infinite' }} />
