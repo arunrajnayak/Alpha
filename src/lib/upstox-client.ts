@@ -322,19 +322,13 @@ export async function getLiveQuoteV3(instrumentKeys: string[], retryOnAuth = tru
                      
                     const value = val as any;
                     
-                    // Try multiple strategies to find the original request key:
-                    // 1. Use instrument_token from response (most reliable)
-                    // 2. Look up the response key in our lookup map
-                    // 3. Convert colon to pipe format
-                    let mappedKey = value.instrument_token;
-                    
-                    if (!mappedKey) {
-                        mappedKey = requestKeyLookup.get(responseKey);
-                    }
-                    
-                    if (!mappedKey) {
-                        mappedKey = responseKey.replace(/:/g, '|');
-                    }
+                    // Map response key back to request key
+                    const mappedKey = 
+                        (value.instrument_token && requestKeyLookup.get(value.instrument_token)) ||
+                        requestKeyLookup.get(responseKey) ||
+                        requestKeyLookup.get(responseKey.replace(/:/g, '|')) ||
+                        value.instrument_token ||
+                        responseKey.replace(/:/g, '|');
                     
                     result.set(mappedKey, {
                         last_price: value.last_price,
@@ -342,16 +336,6 @@ export async function getLiveQuoteV3(instrumentKeys: string[], retryOnAuth = tru
                         previous_close: value.cp, // 'cp' is Previous Close (Close Price)
                         timestamp: value.ltt ? parseInt(value.ltt, 10) : undefined
                     });
-                    
-                    // Also store with the response key format for flexibility
-                    if (responseKey !== mappedKey) {
-                        result.set(responseKey.replace(/:/g, '|'), {
-                            last_price: value.last_price,
-                            instrument_token: value.instrument_token || mappedKey,
-                            previous_close: value.cp,
-                            timestamp: value.ltt ? parseInt(value.ltt, 10) : undefined
-                        });
-                    }
                 }
             }
         } catch (error) {
@@ -427,22 +411,17 @@ export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string
         if (json.data) {
             for (const [responseKey, value] of Object.entries(json.data)) {
                 const quoteVal = value as UpstoxQuote;
-                // Normalize key: API returns colon-separated keys (NSE_INDEX:Nifty 50)
-                // but we request with pipe-separated keys (NSE_INDEX|Nifty 50)
                 const normalizedKey = responseKey.replace(/:/g, '|');
                 
                 // Try to find the original request key
-                const originalKey = quoteVal.instrument_token ||
-                                   requestKeyLookup.get(responseKey) || 
-                                   requestKeyLookup.get(normalizedKey) || 
-                                   normalizedKey;
+                const mappedKey = 
+                    (quoteVal.instrument_token && requestKeyLookup.get(quoteVal.instrument_token)) ||
+                    requestKeyLookup.get(responseKey) || 
+                    requestKeyLookup.get(normalizedKey) || 
+                    quoteVal.instrument_token ||
+                    normalizedKey;
                 
-                result.set(originalKey, quoteVal);
-                
-                // Also store with normalized key if different
-                if (normalizedKey !== originalKey) {
-                    result.set(normalizedKey, quoteVal);
-                }
+                result.set(mappedKey, quoteVal);
             }
         }
     }

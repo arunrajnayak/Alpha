@@ -12,6 +12,9 @@ import { getInstrumentKeys } from '@/lib/instrument-service';
 import { getFullQuotes, getLiveQuotes } from '@/lib/upstox/client';
 import { hasValidToken } from '@/lib/upstox-client';
 import { logger } from '@/lib/logger';
+import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
+import { isTradingHoliday } from '@/lib/market-holidays-cache';
+import { istDayOfWeek } from '@/lib/tz';
 
 const marketLogger = logger.scope('Market');
 
@@ -46,6 +49,7 @@ export interface MarketOverviewData {
   topGainers: ConstituentQuote[];
   topLosers: ConstituentQuote[];
   lastUpdated: string;
+  marketStatus?: 'OPEN' | 'CLOSED' | 'PRE_OPEN';
   tokenStatus?: {
     hasToken: boolean;
     message?: string;
@@ -90,6 +94,20 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
         lastUpdated: new Date().toISOString(),
         tokenStatus
       };
+    }
+
+    // Check market status
+    const isHoliday = await isTradingHoliday(new Date());
+    const day = istDayOfWeek(new Date());
+    const isTradingDayToday = day >= 1 && day <= 5 && !isHoliday;
+    const isPreOpen = isTradingDayToday && isPreOpenSession();
+    const isRegularOpen = isTradingDayToday && isMarketOpen();
+
+    let marketStatus: 'OPEN' | 'CLOSED' | 'PRE_OPEN' = 'CLOSED';
+    if (isRegularOpen) {
+      marketStatus = 'OPEN';
+    } else if (isPreOpen) {
+      marketStatus = 'PRE_OPEN';
     }
 
     // 1. Get constituent symbols and weights
@@ -158,27 +176,49 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       keyToSymbol.set(key.replace(/\|/g, ':'), sym);
     }
 
-    // 5. Build constituent list using net_change from Full Quote API
+    // 5. Build constituent list from unique symbols
     const constituents: ConstituentQuote[] = [];
+    const seenSymbols = new Set<string>();
     
     // Equal weight fallback: if no weights from CSV, use 1/N
     const hasWeights = Object.keys(weights).length > 0;
     const equalWeight = 100 / symbols.length;
     
-    for (const [key, quote] of fullQuotesMap.entries()) {
-      const symbol = keyToSymbol.get(key) || quote.symbol || key.split('|')[1] || key;
-      const sym = symbol.toUpperCase();
-      const prevClose = quote.ohlc?.close || 0;
-      
-      // Use net_change directly from API — it's the authoritative change value
-      const change = quote.net_change || 0;
+    for (const rawSymbol of symbols) {
+      const sym = rawSymbol.toUpperCase();
+      if (seenSymbols.has(sym)) continue;
+      seenSymbols.add(sym);
+
+      const key = symbolToKey.get(rawSymbol) || symbolToKey.get(sym);
+      if (!key) continue;
+
+      const quote = fullQuotesMap.get(key) || 
+                    fullQuotesMap.get(key.replace(/\|/g, ':')) || 
+                    fullQuotesMap.get(key.replace(/:/g, '|'));
+      if (!quote) continue;
+
+      // In Upstox V3 Full Quote:
+      // prev_close_price is the true previous day close (ohlc.close is the current session close/LTP!)
+      const prevClose = quote.prev_close_price || 
+        (quote.last_price > 0 && quote.net_change !== undefined ? quote.last_price - quote.net_change : 0) || 
+        quote.ohlc?.close || 0;
+
+      // Handle Pre-Open IEP
+      const iep = quote.indicative_equilibrium_price && quote.indicative_equilibrium_price > 0
+        ? quote.indicative_equilibrium_price
+        : undefined;
+
+      const activePrice = (isPreOpen && iep) ? iep : (quote.last_price || iep || prevClose);
+      const change = (isPreOpen && iep && prevClose > 0)
+        ? (iep - prevClose)
+        : (quote.net_change !== undefined && quote.net_change !== null ? quote.net_change : (activePrice - prevClose));
       const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
       constituents.push({
         symbol: sym,
-        name: quote.symbol || symbol,
+        name: quote.symbol || sym,
         instrumentKey: key,
-        lastPrice: quote.last_price,
+        lastPrice: activePrice,
         change,
         changePercent,
         open: quote.ohlc?.open || 0,
@@ -214,7 +254,8 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
     let indexChangePercent = 0;
 
     const indexQuote = indexQuoteMap.get(config.upstoxKey) || 
-      indexQuoteMap.get(config.upstoxKey.replace(/\|/g, ':'));
+      indexQuoteMap.get(config.upstoxKey.replace(/\|/g, ':')) ||
+      indexQuoteMap.get(config.upstoxKey.replace(/:/g, '|'));
     
     if (indexQuote) {
       indexValue = indexQuote.last_price;
@@ -235,6 +276,7 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       topGainers,
       topLosers,
       lastUpdated: new Date().toISOString(),
+      marketStatus,
       tokenStatus,
     };
 
@@ -257,12 +299,26 @@ export async function fetchAllIndexSummaries(): Promise<{
     changePercent: number;
     instrumentKey: string;
   }>;
+  marketStatus?: 'OPEN' | 'CLOSED' | 'PRE_OPEN';
   tokenStatus?: { hasToken: boolean; message?: string };
 }> {
   try {
+    const isHoliday = await isTradingHoliday(new Date());
+    const day = istDayOfWeek(new Date());
+    const isTradingDayToday = day >= 1 && day <= 5 && !isHoliday;
+    const isPreOpen = isTradingDayToday && isPreOpenSession();
+    const isRegularOpen = isTradingDayToday && isMarketOpen();
+
+    let marketStatus: 'OPEN' | 'CLOSED' | 'PRE_OPEN' = 'CLOSED';
+    if (isRegularOpen) {
+      marketStatus = 'OPEN';
+    } else if (isPreOpen) {
+      marketStatus = 'PRE_OPEN';
+    }
+
     const hasToken = await hasValidToken();
     if (!hasToken) {
-      return { summaries: [], tokenStatus: { hasToken: false, message: 'No valid Upstox token.' } };
+      return { summaries: [], marketStatus, tokenStatus: { hasToken: false, message: 'No valid Upstox token.' } };
     }
 
     const indexKeys = Object.entries(INDEX_CONFIG).map(([name, config]) => ({
@@ -303,7 +359,7 @@ export async function fetchAllIndexSummaries(): Promise<{
       }
     }
 
-    return { summaries, tokenStatus: { hasToken: true } };
+    return { summaries, marketStatus, tokenStatus: { hasToken: true } };
   } catch (error) {
     marketLogger.error('Error fetching index summaries:', error);
     return { summaries: [] };

@@ -25,3 +25,34 @@ export const isMarketOpen = (): boolean => {
 
   return false;
 };
+
+/**
+ * Pre-Open session is 09:00 to 09:15 AM IST on weekdays
+ */
+export const isPreOpenSession = (date = new Date()): boolean => {
+  const day = istDayOfWeek(date);
+  const { hour, minute } = istTimeParts(date);
+  const totalMinutes = hour * 60 + minute;
+
+  if (day >= 1 && day <= 5) {
+    return totalMinutes >= 9 * 60 && totalMinutes < 9 * 60 + 15;
+  }
+  return false;
+};
+
+/**
+ * True if before 09:00 AM IST (before pre-open starts)
+ */
+export const isPreMarketClosed = (date = new Date()): boolean => {
+  const { hour, minute } = istTimeParts(date);
+  const totalMinutes = hour * 60 + minute;
+  return totalMinutes < 9 * 60;
+};
+
+/**
+ * Active trading or pre-open discovery hours
+ */
+export const isMarketActive = (date = new Date()): boolean => {
+  return isMarketOpen() || isPreOpenSession(date);
+};
+

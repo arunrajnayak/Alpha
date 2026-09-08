@@ -11,8 +11,9 @@ import { isMarketOpenAsync } from '@/lib/marketHours';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
 import { subDays } from 'date-fns';
 import { logger } from '@/lib/logger';
-import { istTimeParts, istDayOfWeek, todayUTCMidnightForISTDay } from '@/lib/tz';
+import { istDayOfWeek, todayUTCMidnightForISTDay } from '@/lib/tz';
 import { getFullQuotes } from '@/lib/upstox/client';
+import { isPreOpenSession, isPreMarketClosed } from '@/lib/market-status-utils';
 
 const liveActionsLogger = logger.scope('LiveActions');
 
@@ -41,20 +42,6 @@ export interface BreadthByCategory {
 }
 
 export type MarketStatus = 'OPEN' | 'CLOSED' | 'PRE_OPEN' | 'UNKNOWN';
-
-// Helper to check if we're in the Pre-Open Session (09:00 AM - 09:15 AM IST)
-function isPreOpenSession(): boolean {
-  const { hour, minute } = istTimeParts();
-  const totalMinutes = hour * 60 + minute;
-  return totalMinutes >= 9 * 60 && totalMinutes < 9 * 60 + 15;
-}
-
-// Helper to check if we're in pre-market closed hours (before 09:00 AM IST)
-function isPreMarketClosed(): boolean {
-  const { hour, minute } = istTimeParts();
-  const totalMinutes = hour * 60 + minute;
-  return totalMinutes < 9 * 60;
-}
 
 // Helper to get today's date in IST as a Date object at start of day (UTC).
 // This matches how trading-day rows are stored in the DB.

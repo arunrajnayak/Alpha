@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TopMoversProps {
@@ -57,7 +57,26 @@ function MoverRow({ stock, index, type }: { stock: { symbol: string; changePerce
 }
 
 export default memo(function TopMovers({ topGainers, topLosers, totalConstituents, isMobile }: TopMoversProps) {
-  if (topGainers.length === 0 && topLosers.length === 0) return null;
+  // Deduplicate gainers/losers by symbol to prevent any duplicate key errors in AnimatePresence
+  const uniqueGainers = useMemo(() => {
+    const seen = new Set<string>();
+    return (topGainers || []).filter(stock => {
+      if (!stock.symbol || seen.has(stock.symbol)) return false;
+      seen.add(stock.symbol);
+      return true;
+    });
+  }, [topGainers]);
+
+  const uniqueLosers = useMemo(() => {
+    const seen = new Set<string>();
+    return (topLosers || []).filter(stock => {
+      if (!stock.symbol || seen.has(stock.symbol)) return false;
+      seen.add(stock.symbol);
+      return true;
+    });
+  }, [topLosers]);
+
+  if (uniqueGainers.length === 0 && uniqueLosers.length === 0) return null;
 
   const display = isMobile ? 5 : (totalConstituents < 200 ? 5 : 10);
 
@@ -73,11 +92,11 @@ export default memo(function TopMovers({ topGainers, topLosers, totalConstituent
         </div>
         <div className="divide-y divide-white/[0.03]">
           <AnimatePresence mode="popLayout">
-            {topGainers.slice(0, display).map((stock, i) => (
-              <MoverRow key={stock.symbol} stock={stock} index={i} type="gain" />
+            {uniqueGainers.slice(0, display).map((stock, i) => (
+              <MoverRow key={`${stock.symbol}-gain`} stock={stock} index={i} type="gain" />
             ))}
           </AnimatePresence>
-          {topGainers.length === 0 && (
+          {uniqueGainers.length === 0 && (
             <p className="text-gray-500 text-sm py-4 text-center">No gainers</p>
           )}
         </div>
@@ -93,11 +112,11 @@ export default memo(function TopMovers({ topGainers, topLosers, totalConstituent
         </div>
         <div className="divide-y divide-white/[0.03]">
           <AnimatePresence mode="popLayout">
-            {topLosers.slice(0, display).map((stock, i) => (
-              <MoverRow key={stock.symbol} stock={stock} index={i} type="loss" />
+            {uniqueLosers.slice(0, display).map((stock, i) => (
+              <MoverRow key={`${stock.symbol}-loss`} stock={stock} index={i} type="loss" />
             ))}
           </AnimatePresence>
-          {topLosers.length === 0 && (
+          {uniqueLosers.length === 0 && (
             <p className="text-gray-500 text-sm py-4 text-center">No losers</p>
           )}
         </div>

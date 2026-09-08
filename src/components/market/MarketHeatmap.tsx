@@ -46,16 +46,25 @@ export default memo(function MarketHeatmap({
     return 500;
   }, [count, isMobile]);
 
-  const treeData = useMemo(() => ({
-    name: 'Market',
-    color: 'transparent',
-    children: (constituents || []).map(c => ({
-      name: c.symbol,
-      value: Math.max(c.weight, 0.01),
-      changePercent: c.changePercent,
-      lastPrice: c.lastPrice,
-    })),
-  }), [constituents]);
+  const treeData = useMemo(() => {
+    const seen = new Set<string>();
+    const uniqueConstituents = (constituents || []).filter(c => {
+      if (!c.symbol || seen.has(c.symbol)) return false;
+      seen.add(c.symbol);
+      return true;
+    });
+
+    return {
+      name: 'Market',
+      color: 'transparent',
+      children: uniqueConstituents.map(c => ({
+        name: c.symbol,
+        value: Math.max(c.weight, 0.01),
+        changePercent: c.changePercent,
+        lastPrice: c.lastPrice,
+      })),
+    };
+  }, [constituents]);
 
   if (!constituents || constituents.length === 0) return null;
 

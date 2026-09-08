@@ -282,17 +282,14 @@ export async function getFullQuotes(
       for (const [responseKey, value] of Object.entries(json.data)) {
         const val = value as UpstoxFullQuote;
         const normalizedKey = responseKey.replace(/:/g, '|');
-        const originalKey =
-          val.instrument_token ||
+        const mappedKey =
+          (val.instrument_token && requestKeyLookup.get(val.instrument_token)) ||
           requestKeyLookup.get(responseKey) ||
           requestKeyLookup.get(normalizedKey) ||
+          val.instrument_token ||
           normalizedKey;
 
-        result.set(originalKey, val);
-
-        if (normalizedKey !== originalKey) {
-          result.set(normalizedKey, val);
-        }
+        result.set(mappedKey, val);
       }
     }
   }

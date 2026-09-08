@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { fetchMarketOverview, fetchAllIndexSummaries } from '@/app/actions/market-overview';
 import type { MarketOverviewData } from '@/app/actions/market-overview';
-import { isMarketOpen } from '@/lib/market-status-utils';
+import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSidebar from '@/components/market/IndexSidebar';
@@ -185,7 +185,7 @@ export default function MarketOverviewClient({
     startTransition(() => {
       // 1. Update Index Summaries
       setIndexSummaries(prev => prev.map(idx => {
-        const update = updateMap.get(idx.instrumentKey);
+        const update = updateMap.get(idx.instrumentKey) || updateMap.get(idx.name) || updateMap.get(idx.shortName);
         if (!update || !update.ltp || update.ltp <= 0) return idx;
 
         const prevClose = update.previousClose || idx.value - idx.change;
@@ -207,17 +207,20 @@ export default function MarketOverviewClient({
         let anyConstituentChanged = false;
 
         const updatedConstituents = currentData.constituents.map(c => {
-          const update = updateMap.get(c.instrumentKey);
-          if (!update || !update.ltp || update.ltp <= 0) return c;
+          const update = updateMap.get(c.instrumentKey) || updateMap.get(c.symbol);
+          if (!update) return c;
+
+          const activePrice = (update.iep && update.iep > 0) ? update.iep : update.ltp;
+          if (!activePrice || activePrice <= 0) return c;
 
           anyConstituentChanged = true;
           const prevClose = update.previousClose || c.prevClose;
-          const change = update.ltp - prevClose;
+          const change = activePrice - prevClose;
           const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
           return {
             ...c,
-            lastPrice: update.ltp,
+            lastPrice: activePrice,
             change,
             changePercent,
             prevClose,
@@ -327,9 +330,14 @@ export default function MarketOverviewClient({
   // Web Socket Hook - use the shared stream from LiveDataContext
   const { streamStatus, subscribeToPrices, subscribeToInstruments, initialize, data: liveContextData } = useLiveData();
   useEffect(() => { initialize(); }, [initialize]);
-  // Prefer Upstox API-driven market status; fall back to sync check if data not loaded yet
-  const isMarketCurrentlyOpen = liveContextData?.marketStatus ? liveContextData.marketStatus === 'OPEN' : isMarketOpen();
-  const showStreaming = isVisible && isMarketCurrentlyOpen && !!tokenStatus?.hasToken;
+
+  // Prefer API-driven market status; fall back to sync check if data not loaded yet
+  const currentMarketStatus = data?.marketStatus || liveContextData?.marketStatus;
+  const isMarketCurrentlyActive = currentMarketStatus
+    ? (currentMarketStatus === 'OPEN' || currentMarketStatus === 'PRE_OPEN')
+    : (isMarketOpen() || isPreOpenSession());
+
+  const showStreaming = isVisible && isMarketCurrentlyActive && !!tokenStatus?.hasToken;
 
   useEffect(() => {
     if (showStreaming) {
@@ -380,8 +388,8 @@ export default function MarketOverviewClient({
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
   // Track API-driven market status in ref for interval callbacks
-  const marketOpenRef = useRef(isMarketCurrentlyOpen);
-  useEffect(() => { marketOpenRef.current = isMarketCurrentlyOpen; }, [isMarketCurrentlyOpen]);
+  const marketActiveRef = useRef(isMarketCurrentlyActive);
+  useEffect(() => { marketActiveRef.current = isMarketCurrentlyActive; }, [isMarketCurrentlyActive]);
 
   useEffect(() => {
     // Clear any existing interval before creating a new one
@@ -391,14 +399,14 @@ export default function MarketOverviewClient({
       // When streaming, WebSocket drives constituent data.
       // Only sync index summaries every 60s (lightweight) for SectoralHeatmap/IndexCards.
       dataRefreshRef.current = setInterval(() => {
-        if (marketOpenRef.current) {
+        if (marketActiveRef.current) {
           loadSummaries(false);
         }
       }, 60000);
     } else {
       // When NOT streaming, poll full data every 10s as fallback
       dataRefreshRef.current = setInterval(() => {
-        if (marketOpenRef.current) {
+        if (marketActiveRef.current) {
           loadSummaries(false);
           loadData(selectedIndexRef.current, false);
         }
@@ -665,18 +673,22 @@ export default function MarketOverviewClient({
             <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
               <span className="gradient-text">Market Overview</span>
             </h1>
-            {isStreaming && (
+            {(currentMarketStatus === 'PRE_OPEN') ? (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                PRE-OPEN
+              </span>
+            ) : isStreaming ? (
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-medium text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 LIVE
               </span>
-            )}
-            {streamStatus === 'connecting' && (
+            ) : streamStatus === 'connecting' ? (
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                 CONNECTING
               </span>
-            )}
+            ) : null}
           </div>
           {lastUpdated && (
             <p className="text-[11px] text-gray-500 mt-0.5">Last updated: {lastUpdated}</p>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import protobuf from 'protobufjs';
 import { upstoxLogger } from '@/lib/logger';
+import { isPreOpenSession } from '@/lib/market-status-utils';
 
 // ============================================================================
 // Types
@@ -344,7 +345,9 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
 
         if (!ltpc) continue;
 
-        const symbol = symbolMapRef.current[key];
+        const symbol = symbolMapRef.current[key] 
+          || symbolMapRef.current[key.replace(/:/g, '|')]
+          || symbolMapRef.current[key.replace(/\|/g, ':')];
         if (!symbol) continue;
 
         // Parse IEP (Indicative Equilibrium Price) if present
@@ -356,15 +359,16 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
 
         // In pre-open / CAS session, or if continuous trades haven't begun (ltp === 0),
         // IEP is the discovered equilibrium price
-        const ltp = (ltpc.ltp && ltpc.ltp > 0) ? ltpc.ltp : (iep || 0);
-        const previousClose = ltpc.cp || ltp;
-        const change = ltp - previousClose;
+        const isPreOpen = isPreOpenSession();
+        const effectiveLtp = (isPreOpen && iep) ? iep : ((ltpc.ltp && ltpc.ltp > 0) ? ltpc.ltp : (iep || 0));
+        const previousClose = ltpc.cp || effectiveLtp;
+        const change = effectiveLtp - previousClose;
         const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
 
         updates.push({
           symbol,
           instrumentKey: key,
-          ltp,
+          ltp: effectiveLtp,
           previousClose,
           change,
           changePercent,
