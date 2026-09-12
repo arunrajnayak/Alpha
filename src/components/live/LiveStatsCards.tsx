@@ -40,9 +40,10 @@ const LiveStatsCards = memo(function LiveStatsCards({
             whileInView="visible"
             viewport={{ once: true, amount: 0.1, margin: "0px 0px -40px 0px" }}
             animate={downloading ? "visible" : undefined}
+            data-motion-section
         >
             {/* Total Equity Card */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-2xl border border-violet-500/20 shadow-xl h-[160px] bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-900">
+            <motion.div variants={itemVariants} data-motion-section className="relative overflow-hidden rounded-2xl border border-violet-500/20 shadow-xl h-[160px] bg-gradient-to-br from-slate-900 via-violet-950/40 to-slate-900">
                 <div className="absolute inset-0 opacity-30" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.15) 50%, transparent 100%)', animation: 'shimmer 3s ease-in-out infinite' }} />
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-violet-500/20 rounded-full blur-3xl" />
                 <div className="relative z-10 p-5 h-full flex flex-col justify-between">
@@ -64,7 +65,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
             </motion.div>
 
             {/* Day P&L Card */}
-            <motion.div variants={itemVariants} className={`relative overflow-hidden rounded-2xl border shadow-xl h-[160px] ${isPositive ? 'border-emerald-500/30 bg-gradient-to-br from-slate-900 via-emerald-900/40 to-slate-900' : 'border-red-500/30 bg-gradient-to-br from-slate-900 via-red-900/40 to-slate-900'}`}>
+            <motion.div variants={itemVariants} data-motion-section className={`relative overflow-hidden rounded-2xl border shadow-xl h-[160px] ${isPositive ? 'border-emerald-500/30 bg-gradient-to-br from-slate-900 via-emerald-900/40 to-slate-900' : 'border-red-500/30 bg-gradient-to-br from-slate-900 via-red-900/40 to-slate-900'}`}>
                 <div className="absolute inset-0 opacity-40" style={{ background: isPositive ? 'linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.2) 50%, transparent 100%)' : 'linear-gradient(90deg, transparent 0%, rgba(239, 68, 68, 0.2) 50%, transparent 100%)', animation: 'shimmer 3s ease-in-out infinite' }} />
                 <div className="relative z-10 p-5 h-full flex flex-col justify-between">
                     <div className="flex items-start justify-between">
@@ -91,7 +92,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
             </motion.div>
 
             {/* Market Breadth Card */}
-            <motion.div variants={itemVariants} className="relative rounded-2xl border border-white/10 shadow-xl overflow-hidden h-[160px] bg-gradient-to-b from-red-950/80 to-red-900/60">
+            <motion.div variants={itemVariants} data-motion-section className="relative rounded-2xl border border-white/10 shadow-xl overflow-hidden h-[160px] bg-gradient-to-b from-red-950/80 to-red-900/60">
                 <div className="absolute inset-0 opacity-30 z-20" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.15) 50%, transparent 100%)', animation: 'shimmer 3s ease-in-out infinite' }} />
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl z-0" />
                 {(() => {
@@ -103,7 +104,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
                                 className="absolute bottom-0 left-0 right-0"
                                 initial={{ height: 0 }}
                                 animate={{ height: `${advPct}%` }}
-                                transition={{ duration: 1.2, ease: "easeOut" }}
+                                transition={{ duration: downloading ? 0 : 1.2, ease: "easeOut" }}
                             >
                                 <svg className="absolute -top-3 left-0 w-[200%] h-6" viewBox="0 0 1200 30" preserveAspectRatio="none" style={{ animation: 'liquidWave 3s ease-in-out infinite' }}>
                                     <path d="M0,15 C150,30 350,0 600,15 C850,30 1050,0 1200,15 L1200,30 L0,30 Z" fill="url(#liquidGradient)" />
@@ -149,7 +150,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
             </motion.div>
 
             {/* Breadth by MCap Card */}
-            <motion.div variants={itemVariants} className="relative overflow-hidden rounded-2xl border border-slate-700/50 shadow-xl h-[160px] bg-gradient-to-br from-slate-900 via-slate-800/50 to-slate-900">
+            <motion.div variants={itemVariants} data-motion-section className="relative overflow-hidden rounded-2xl border border-slate-700/50 shadow-xl h-[160px] bg-gradient-to-br from-slate-900 via-slate-800/50 to-slate-900">
                 <div className="relative z-10 p-4 h-full flex flex-col">
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Breadth by MCap</p>
                     <div className="flex-1 flex flex-col justify-center gap-2.5">

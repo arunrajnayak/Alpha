@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLiveData } from '@/context/LiveDataContext';
 import { formatNumber } from '@/lib/format';
-import { motion } from 'framer-motion';
+import { motion, MotionConfig, type Variants } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import { LiveHeader, LiveStatsCards, LiveMovers, PerformanceRank, IntradayPnLChart } from '@/components/live';
 
@@ -29,17 +29,6 @@ const MarketOverviewSection = dynamic(() => import('./market/MarketOverviewClien
   ),
   ssr: false,
 });
-
-// Animation variants - extracted for reuse
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } }
-};
 
 const viewportConfig = {
   once: true,
@@ -76,11 +65,45 @@ export default function LivePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // When downloading snapshot, collapse animations to duration 0 and clear staggers
+  const containerVariants: Variants = useMemo(() => ({
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: downloading
+        ? { duration: 0, staggerChildren: 0 }
+        : { staggerChildren: 0.1 }
+    }
+  }), [downloading]);
+
+  const itemVariants: Variants = useMemo(() => ({
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: downloading
+        ? { duration: 0 }
+        : { duration: 0.5, ease: "easeOut" as const }
+    }
+  }), [downloading]);
+
   const handleDownloadSnapshot = useCallback(async () => {
     setDownloading(true);
     try {
-      // Small delay to ensure UI updates before capture (e.g. hiding buttons)
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // 1. Wait for React to flush state updates to DOM
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      // 2. Wait for web fonts to be fully loaded
+      if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      // 3. Double requestAnimationFrame to ensure browser has recalculated styles & painted
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
 
       const element = document.getElementById('live-dashboard-content');
       const marketOverview = document.getElementById('market-overview');
@@ -97,6 +120,12 @@ export default function LivePage() {
           height: contentHeight,
           width: contentWidth,
           backgroundColor: '#0f172a',
+          filter: (node) => {
+            if (node instanceof HTMLElement && node.id === 'market-overview') {
+              return false;
+            }
+            return true;
+          },
         });
         if (marketOverview) marketOverview.style.display = '';
 
@@ -166,10 +195,15 @@ export default function LivePage() {
   }
 
   return (
-    <main
-      id="live-dashboard-content"
-      className="flex flex-col gap-4 md:gap-8 pb-24 md:pb-8"
+    <MotionConfig
+      reducedMotion={downloading ? "always" : "user"}
+      transition={downloading ? { duration: 0 } : undefined}
     >
+      <main
+        id="live-dashboard-content"
+        data-downloading={downloading ? "true" : undefined}
+        className={`flex flex-col gap-4 md:gap-8 pb-24 md:pb-8 ${downloading ? 'snapshot-capturing' : ''}`}
+      >
         {/* Header Section */}
         <LiveHeader
             marketOpen={marketOpen}
@@ -214,11 +248,13 @@ export default function LivePage() {
             whileInView="visible"
             viewport={viewportConfig}
             animate={downloading ? "visible" : undefined}
+            data-motion-section
           >
             <PortfolioHeatmap 
                 data={{ allHoldings: data.allHoldings.map(h => ({ ...h, formattedValue: formatNumber(h.currentValue, 0, 0) })) }} 
                 isMobile={isMobile} 
                 privacyMode={privacyMode} 
+                downloading={downloading}
             />
           </motion.div>
         )}
@@ -231,6 +267,7 @@ export default function LivePage() {
           whileInView="visible"
           viewport={viewportConfig}
           animate={downloading ? "visible" : undefined}
+          data-motion-section
         >
             <LiveMovers
                 topGainers={data.topGainers}
@@ -238,11 +275,13 @@ export default function LivePage() {
                 privacyMode={privacyMode}
                 isMobile={isMobile}
                 itemVariants={itemVariants}
+                downloading={downloading}
             />
             <PerformanceRank
                 dayGainPercent={data.dayGainPercent}
                 indices={data.indices}
                 itemVariants={itemVariants}
+                downloading={downloading}
             />
         </motion.div>
 
@@ -264,6 +303,25 @@ export default function LivePage() {
           </div>
           <MarketOverviewSection embedded />
         </motion.div>
-    </main>
+      </main>
+
+      <style jsx global>{`
+        .snapshot-capturing [data-motion-section],
+        .snapshot-capturing [data-motion-item] {
+          opacity: 1 !important;
+          transform: none !important;
+          transition: none !important;
+          animation: none !important;
+        }
+        .snapshot-capturing * {
+          animation-play-state: paused !important;
+          transition-duration: 0s !important;
+        }
+        .snapshot-capturing .snapshot-hide {
+          opacity: 0 !important;
+          visibility: hidden !important;
+        }
+      `}</style>
+    </MotionConfig>
   );
 }

@@ -14,6 +14,7 @@ interface LiveMoversProps {
     privacyMode: boolean;
     isMobile: boolean;
     itemVariants: Variants;
+    downloading?: boolean;
 }
 
 const LiveMovers = memo(function LiveMovers({
@@ -21,7 +22,8 @@ const LiveMovers = memo(function LiveMovers({
     topLosers,
     privacyMode,
     isMobile,
-    itemVariants
+    itemVariants,
+    downloading,
 }: LiveMoversProps) {
     const validGainers = topGainers.filter(stock => stock.dayChangePercent > 0);
     const validLosers = topLosers.filter(stock => stock.dayChangePercent < 0);
@@ -29,7 +31,7 @@ const LiveMovers = memo(function LiveMovers({
     return (
         <>
             {/* Top Gainers */}
-            <motion.div variants={itemVariants} className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
+            <motion.div variants={itemVariants} data-motion-section className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
                 <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
                     <h3 className="text-lg font-semibold text-green-400 flex items-center gap-2">
                         <FontAwesomeIcon icon={faArrowTrendUp} /> Top Gainers
@@ -40,11 +42,12 @@ const LiveMovers = memo(function LiveMovers({
                         {validGainers.map((stock, index) => (
                             <motion.div 
                                 key={stock.symbol} 
-                                layout 
-                                initial={{ opacity: 0, y: 20 }} 
+                                data-motion-item
+                                layout={!downloading}
+                                initial={downloading ? false : { opacity: 0, y: 20 }} 
                                 animate={{ opacity: 1, y: 0 }} 
                                 exit={{ opacity: 0, y: -20 }} 
-                                transition={{ duration: 0.3, delay: index * 0.05 }} 
+                                transition={downloading ? { duration: 0 } : { duration: 0.3, delay: index * 0.05 }} 
                                 className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors"
                             >
                                 <div className="flex items-center gap-3">
@@ -79,7 +82,7 @@ const LiveMovers = memo(function LiveMovers({
             </motion.div>
 
             {/* Top Losers */}
-            <motion.div variants={itemVariants} className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
+            <motion.div variants={itemVariants} data-motion-section className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
                 <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
                     <h3 className="text-lg font-semibold text-red-400 flex items-center gap-2">
                         <FontAwesomeIcon icon={faArrowTrendDown} /> Top Losers
@@ -90,11 +93,12 @@ const LiveMovers = memo(function LiveMovers({
                         {validLosers.map((stock, index) => (
                             <motion.div 
                                 key={stock.symbol} 
-                                layout 
-                                initial={{ opacity: 0, y: 20 }} 
+                                data-motion-item
+                                layout={!downloading}
+                                initial={downloading ? false : { opacity: 0, y: 20 }} 
                                 animate={{ opacity: 1, y: 0 }} 
                                 exit={{ opacity: 0, y: -20 }} 
-                                transition={{ duration: 0.3, delay: index * 0.05 }} 
+                                transition={downloading ? { duration: 0 } : { duration: 0.3, delay: index * 0.05 }} 
                                 className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl transition-colors"
                             >
                                 <div className="flex items-center gap-3">

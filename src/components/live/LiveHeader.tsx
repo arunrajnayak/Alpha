@@ -63,6 +63,7 @@ const LiveHeader = memo(function LiveHeader({
             whileInView="visible"
             viewport={{ once: true, amount: 0.1, margin: "0px 0px -40px 0px" }}
             animate={downloading ? "visible" : undefined}
+            data-motion-section
         >
             <div className="flex flex-row items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">

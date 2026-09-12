@@ -24,6 +24,7 @@ interface PortfolioHeatmapProps {
   };
   isMobile: boolean;
   privacyMode: boolean;
+  downloading?: boolean;
 }
 
 export function getHeatmapColor(percent: number | undefined): string {
@@ -57,7 +58,7 @@ export function getCapColor(cap: string | undefined): string {
   return 'bg-slate-700/50 text-gray-400 border border-white/5';
 }
 
-export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: PortfolioHeatmapProps) {
+export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode, downloading }: PortfolioHeatmapProps) {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
 
   const allHoldings = useMemo(() => data?.allHoldings || [], [data?.allHoldings]);
@@ -159,9 +160,9 @@ export default memo(function PortfolioHeatmap({ data, isMobile, privacyMode }: P
               return (
                 <motion.g
                   key={node.id}
-                  initial={{ opacity: 0, scale: 0.9, x: node.x, y: node.y }}
+                  initial={downloading ? false : { opacity: 0, scale: 0.9, x: node.x, y: node.y }}
                   animate={{ opacity: 1, scale: 1, x: node.x, y: node.y }}
-                  transition={{
+                  transition={downloading ? { duration: 0 } : {
                     type: "spring",
                     damping: 20,
                     stiffness: 300,

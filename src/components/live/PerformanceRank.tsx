@@ -17,12 +17,14 @@ interface PerformanceRankProps {
     dayGainPercent: number;
     indices: IndexData[];
     itemVariants: Variants;
+    downloading?: boolean;
 }
 
 const PerformanceRank = memo(function PerformanceRank({
     dayGainPercent,
     indices,
-    itemVariants
+    itemVariants,
+    downloading,
 }: PerformanceRankProps) {
     // Combine portfolio with indices and sort by performance
     const allItems = [
@@ -32,7 +34,7 @@ const PerformanceRank = memo(function PerformanceRank({
     allItems.sort((a, b) => b.percentChange - a.percentChange);
 
     return (
-        <motion.div variants={itemVariants} className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
+        <motion.div variants={itemVariants} data-motion-section className="bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden">
             <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
                 <h3 className="text-lg font-semibold text-blue-400 flex items-center gap-2">
                     <FontAwesomeIcon icon={faScaleBalanced} /> Performance Rank
@@ -47,11 +49,12 @@ const PerformanceRank = memo(function PerformanceRank({
                             {allItems.map((item, index) => (
                                 <motion.div 
                                     key={item.symbol} 
-                                    layout 
-                                    initial={{ opacity: 0, x: -20 }} 
+                                    data-motion-item
+                                    layout={!downloading}
+                                    initial={downloading ? false : { opacity: 0, x: -20 }} 
                                     animate={{ opacity: 1, x: 0 }} 
                                     exit={{ opacity: 0, x: 20 }} 
-                                    transition={{ duration: 0.3 }} 
+                                    transition={downloading ? { duration: 0 } : { duration: 0.3 }} 
                                     className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors ${
                                         item.isPortfolio 
                                             ? 'bg-blue-500/10 border border-blue-500/30' 

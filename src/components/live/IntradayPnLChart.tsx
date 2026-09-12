@@ -183,6 +183,7 @@ const IntradayPnLChart = memo(function IntradayPnLChart({
       whileInView="visible"
       viewport={{ once: true, amount: 0.1, margin: "0px 0px -40px 0px" }}
       animate={downloading ? "visible" : undefined}
+      data-motion-section
       className={`relative overflow-hidden rounded-2xl border shadow-xl bg-gradient-to-br from-slate-900 via-slate-800/50 to-slate-900 ${
         isPositive ? 'border-emerald-500/20' : 'border-red-500/20'
       }`}
