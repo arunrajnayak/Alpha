@@ -1,9 +1,9 @@
 'use client';
 
 import { keepPreviousData, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 
 // Create async persister for localStorage (non-blocking)
 const createPersister = () => {
@@ -54,30 +54,29 @@ function getQueryClient() {
 
 export function QueryProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => getQueryClient());
-  const [persister] = useState(() => createPersister());
 
-  // If we have a persister (client-side), use persistent provider
-  if (persister) {
-    return (
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{
-          persister,
-          maxAge: 24 * 60 * 60 * 1000, // 24 hours
-          buster: process.env.NEXT_PUBLIC_APP_VERSION ?? 'v1', // Tied to app version — bump package.json version to bust stale cache
-        }}
-        onSuccess={() => {
-          // Resume any paused mutations and revalidate active queries on restore
-          void queryClient.resumePausedMutations();
-          void queryClient.invalidateQueries({ refetchType: 'active' });
-        }}
-      >
-        {children}
-      </PersistQueryClientProvider>
-    );
-  }
+  useEffect(() => {
+    const persister = createPersister();
+    if (!persister) return;
 
-  // Server-side fallback
+    const [unsubscribe, promise] = persistQueryClient({
+      queryClient,
+      persister,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      buster: process.env.NEXT_PUBLIC_APP_VERSION ?? 'v1',
+    });
+
+    void promise.then(() => {
+      // Resume any paused mutations and revalidate active queries on restore
+      void queryClient.resumePausedMutations();
+      void queryClient.invalidateQueries({ refetchType: 'active' });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}

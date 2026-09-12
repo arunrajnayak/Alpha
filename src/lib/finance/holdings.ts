@@ -1,5 +1,5 @@
 import { prisma, chunkArray } from '@/lib/db';
-import { startOfDay, format, differenceInDays } from 'date-fns';
+import { startOfDay, format, differenceInDays, parse as parseDateFns } from 'date-fns';
 import xirr from 'xirr';
 import { unstable_cache } from 'next/cache';
 import { getInstrumentKeys } from '../instrument-service';
@@ -188,7 +188,6 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
         for (const action of demergerActions) {
           if (action.series !== 'EQ' || !holdingSymbols.has(action.symbol)) continue;
           // Parse NSE date "24-Apr-2025"
-          const { parse: parseDateFns } = await import('date-fns');
           const exDate = parseDateFns(action.exDate, 'dd-MMM-yyyy', new Date());
           if (isNaN(exDate.getTime())) continue;
           const daysUntil = differenceInDays(exDate, now);

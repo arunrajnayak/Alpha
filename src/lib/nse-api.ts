@@ -68,12 +68,29 @@ const NSE_HEADERS: Record<string, string> = {
 // NSE Session Management
 // ============================================================================
 
+let nseCookieCache: { cookies: string; expiry: number } | null = null;
+
 /**
- * Get NSE session cookies required for API calls
+ * Get NSE session cookies required for API calls (cached for 5 minutes)
  */
-async function getNSECookies(): Promise<string | null> {
-    const homeRes = await fetch('https://www.nseindia.com', { headers: NSE_HEADERS });
-    return homeRes.headers.get('set-cookie');
+async function getNSECookies(forceRefresh = false): Promise<string | null> {
+    if (!forceRefresh && nseCookieCache && Date.now() < nseCookieCache.expiry) {
+        return nseCookieCache.cookies;
+    }
+    try {
+        const homeRes = await fetch('https://www.nseindia.com', {
+            headers: NSE_HEADERS,
+            signal: AbortSignal.timeout(3500),
+        });
+        const cookies = homeRes.headers.get('set-cookie');
+        if (cookies) {
+            nseCookieCache = { cookies, expiry: Date.now() + 5 * 60 * 1000 };
+        }
+        return cookies;
+    } catch (err) {
+        apiLogger.warn(`[NSE] Failed to obtain cookies: ${(err as Error).message}`);
+        return nseCookieCache ? nseCookieCache.cookies : null;
+    }
 }
 
 // ============================================================================
@@ -278,6 +295,8 @@ export async function fetchNSEIndexHistory(
 // Corporate Actions
 // ============================================================================
 
+const corpActionsCache = new Map<string, { data: NSECorporateAction[]; expiry: number }>();
+
 /**
  * Fetch corporate actions from NSE
  * @param fromDate Start date for corporate actions
@@ -289,43 +308,69 @@ export async function fetchNSECorporateActions(
     toDate: Date,
     subject?: string, // e.g. 'DEMERGER' to filter by action type
 ): Promise<NSECorporateAction[] | null> {
-    try {
-        const fromDateStr = formatDateDMY(fromDate);
-        const toDateStr = formatDateDMY(toDate);
+    const fromDateStr = formatDateDMY(fromDate);
+    const toDateStr = formatDateDMY(toDate);
+    const cacheKey = `${fromDateStr}_${toDateStr}_${subject || 'ALL'}`;
 
+    const cached = corpActionsCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+        return cached.data;
+    }
+
+    try {
         apiLogger.info(`[NSE] Fetching corporate actions from ${fromDateStr} to ${toDateStr}${subject ? ` (subject=${subject})` : ''}...`);
 
         // 1. Get Cookies
         const cookies = await getNSECookies();
-        if (!cookies) throw new Error('No cookies received from NSE homepage');
+        if (!cookies) {
+            apiLogger.warn('[NSE] No cookies received from NSE homepage for corporate actions');
+            return cached ? cached.data : null;
+        }
 
         // 2. Fetch corporate actions
         const apiHeaders = {
             ...NSE_HEADERS,
             'Cookie': cookies,
             'Referer': 'https://www.nseindia.com/companies-listing/corporate-filings-actions',
-            'Accept': '*/*',
+            'Accept': 'application/json, text/plain, */*',
             'X-Requested-With': 'XMLHttpRequest'
         };
 
         let apiUrl = `https://www.nseindia.com/api/corporates-corporateActions?index=equities&from_date=${fromDateStr}&to_date=${toDateStr}`;
         if (subject) apiUrl += `&subject=${encodeURIComponent(subject)}`;
-        const apiRes = await fetch(apiUrl, { headers: apiHeaders });
+        const apiRes = await fetch(apiUrl, {
+            headers: apiHeaders,
+            signal: AbortSignal.timeout(4000),
+        });
 
         if (!apiRes.ok) {
             const txt = await apiRes.text();
             apiLogger.warn(`[NSE] Corporate actions fetch failed ${apiRes.status}: ${txt.substring(0, 100)}`);
-            return null;
+            return cached ? cached.data : null;
         }
 
-        const json = await apiRes.json() as NSECorporateAction[];
-        apiLogger.info(`[NSE] Successfully fetched ${json.length} corporate actions`);
-        return json;
+        const contentType = apiRes.headers.get('content-type') || '';
+        const text = await apiRes.text();
+
+        // Check if response is HTML (e.g. Akamai/Cloudflare challenge or error)
+        if (text.trim().startsWith('<') || (!contentType.includes('json') && !text.trim().startsWith('[') && !text.trim().startsWith('{'))) {
+            apiLogger.warn(`[NSE] Corporate actions returned HTML/non-JSON response (${contentType}, status: ${apiRes.status})`);
+            return cached ? cached.data : null;
+        }
+
+        const json = JSON.parse(text) as NSECorporateAction[];
+        if (Array.isArray(json)) {
+            corpActionsCache.set(cacheKey, { data: json, expiry: Date.now() + 2 * 60 * 60 * 1000 }); // 2 hours
+            apiLogger.info(`[NSE] Successfully fetched ${json.length} corporate actions`);
+            return json;
+        }
+
+        return cached ? cached.data : null;
 
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : String(e);
-        apiLogger.error(`[NSE] Error fetching corporate actions:`, message);
-        return null;
+        apiLogger.warn(`[NSE] Error fetching corporate actions: ${message}`);
+        return cached ? cached.data : null;
     }
 }
 

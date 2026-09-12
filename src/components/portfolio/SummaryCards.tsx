@@ -26,6 +26,7 @@ interface ChartCardsProps {
     currentNAV: number;
     currentDD: number;
     totalInvested: number;
+    costBasis?: number;
     dashboardHistory: {
         date: string;
         totalEquity: number;
@@ -173,6 +174,7 @@ PnLCard.displayName = 'PnLCard';
 export const MainChartCards = memo(function MainChartCards({
     totalCurrentValue,
     totalInvested,
+    costBasis,
     currentNAV,
     currentDD,
     dashboardHistory,
@@ -192,9 +194,20 @@ export const MainChartCards = memo(function MainChartCards({
             <h2 className="text-4xl font-bold text-violet-400 mb-2 z-10 relative">
                 {privacyMode ? '****' : <AnimatedNumber value={totalCurrentValue} prefix="₹" formatOptions={{ maximumFractionDigits: 0 }} />}
             </h2>
-            <p className="text-sm text-gray-500 z-10 relative font-medium">
-                Invested: <span className="text-gray-400">{privacyMode ? '****' : <>₹<AnimatedNumber value={totalInvested} formatOptions={{ maximumFractionDigits: 0 }} /></>}</span>
-            </p>
+            <div className="flex items-center gap-1.5 text-sm text-gray-500 z-10 relative font-medium flex-wrap">
+                <span>Invested:</span>
+                <span className="text-gray-400 font-semibold">
+                    {privacyMode ? '****' : <>₹<AnimatedNumber value={totalInvested} formatOptions={{ maximumFractionDigits: 0 }} /></>}
+                </span>
+                {costBasis !== undefined && Math.abs(costBasis - totalInvested) > 1 && (
+                  <span
+                    className="text-[11px] text-gray-500 cursor-help"
+                    title={`Cost basis of current holdings: ₹${Math.round(costBasis).toLocaleString('en-IN')}`}
+                  >
+                    ({privacyMode ? '****' : <>Cost: ₹<AnimatedNumber value={costBasis} formatOptions={{ maximumFractionDigits: 0 }} /></>})
+                  </span>
+                )}
+            </div>
           </div>
           <ChartWidget data={dashboardHistory} dataKey="totalEquity" color="#8b5cf6" domain={['dataMin', 'dataMax']} />
         </div>

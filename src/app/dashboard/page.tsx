@@ -20,6 +20,7 @@ import dynamic from 'next/dynamic';
 import SectorAllocationWrapper from '@/components/portfolio/SectorAllocationWrapper';
 import MarketCapAreaChart from '@/components/portfolio/MarketCapAreaChartWrapper';
 import SectorHistoryChart from '@/components/portfolio/SectorHistoryChartWrapper';
+import DashboardLoading from './loading';
 import { motion, type Variants } from 'framer-motion';
 
 const sectionVariants: Variants = {
@@ -88,7 +89,7 @@ export default function DashboardPage() {
   );
 
   if (isLoading && !data) {
-    return null; // Next.js loading.tsx handles the skeleton
+    return <DashboardLoading />;
   }
 
   if (!data) {
@@ -106,6 +107,7 @@ export default function DashboardPage() {
     sectorAllocations,
     totalCurrentValue,
     totalInvested,
+    costBasis,
     totalRealizedPnL,
     totalUnrealizedPnL,
     totalCharges,
@@ -160,6 +162,7 @@ export default function DashboardPage() {
         <MainChartCards
            totalCurrentValue={totalCurrentValue}
            totalInvested={totalInvested}
+           costBasis={costBasis}
            currentNAV={dashboardStats.currentNAV}
            currentDD={dashboardStats.currentDD}
            dashboardHistory={dashboardHistory}

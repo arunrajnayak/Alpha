@@ -49,7 +49,10 @@ export async function fetchDashboardData() {
   ]);
 
   const totalCurrentValue = holdings.reduce((sum, h) => sum + h.currentValue, 0);
-  const totalInvested = holdings.reduce((sum, h) => sum + h.invested, 0);
+  const costBasis = holdings.reduce((sum, h) => sum + h.invested, 0);
+  const latestSnapshot = snapshots[snapshots.length - 1];
+  // Net invested capital from latest daily snapshot (matches /snapshots table and chart)
+  const totalInvested = latestSnapshot?.investedCapital ?? costBasis;
   const totalPnL = historicalHoldings.reduce((sum, h) => sum + h.totalPnl, 0);
   const totalRealizedPnL = historicalHoldings.reduce((sum, h) => sum + h.realizedPnl, 0);
   const totalUnrealizedPnL = historicalHoldings.reduce((sum, h) => sum + h.unrealizedPnl, 0);
@@ -96,7 +99,6 @@ export async function fetchDashboardData() {
     dayChangePercent: 0
   })).sort((a, b) => b.value - a.value);
 
-  const latestSnapshot = snapshots[snapshots.length - 1];
   const cagrValue = latestSnapshot && latestSnapshot.cagr != null ? latestSnapshot.cagr * 100 : null;
 
   let niftyCagr: number | null = null;
@@ -142,6 +144,7 @@ export async function fetchDashboardData() {
     sectorAllocations,
     totalCurrentValue,
     totalInvested,
+    costBasis,
     totalPnL,
     totalRealizedPnL,
     totalUnrealizedPnL,
