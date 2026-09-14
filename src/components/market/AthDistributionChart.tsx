@@ -13,11 +13,11 @@ import {
 } from 'recharts';
 import type { DistributionBucket } from '@/app/actions/market-breadth';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMountain } from '@fortawesome/free-solid-svg-icons';
+import { faTrophy } from '@fortawesome/free-solid-svg-icons';
 
 interface AthDistributionChartProps {
   distribution: DistributionBucket[];
-  totalStocks: number;
+  totalStocks?: number;
   loading?: boolean;
 }
 
@@ -74,7 +74,6 @@ const CustomTooltip = ({
 
 export default function AthDistributionChart({
   distribution,
-  totalStocks,
   loading = false,
 }: AthDistributionChartProps) {
   const chartData = useMemo(() => {
@@ -88,18 +87,9 @@ export default function AthDistributionChart({
 
   if (loading && distribution.length === 0) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[320px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[420px] animate-pulse" />
     );
   }
-
-  // Calculate near ATH (within 20%) and deep drawdowns (>=50%)
-  const nearAthCount = distribution
-    .filter((b) => ['0-5%', '5-10%', '10-15%', '15-20%'].includes(b.label))
-    .reduce((acc, curr) => acc + curr.count, 0);
-
-  const deepDrawdownCount = distribution
-    .filter((b) => ['50-60%', '60-70%', '70-80%', '80-90%', '90-100%'].includes(b.label))
-    .reduce((acc, curr) => acc + curr.count, 0);
 
   return (
     <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
@@ -108,48 +98,29 @@ export default function AthDistributionChart({
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-              <FontAwesomeIcon icon={faMountain} className="w-3.5 h-3.5" />
+              <FontAwesomeIcon icon={faTrophy} className="w-3.5 h-3.5" />
             </div>
-            <h3 className="font-semibold text-sm md:text-base text-white tracking-tight">
+            <h3 className="font-semibold text-base md:text-lg text-white tracking-tight">
               Distance Away from ATH
             </h3>
-          </div>
-
-          <div className="flex items-center gap-4 text-xs font-mono">
-            <div className="text-right">
-              <span className="text-[10px] uppercase text-gray-500 block font-sans">
-                Near ATH (&le;20%)
-              </span>
-              <span className="font-bold text-emerald-400">
-                {nearAthCount} ({totalStocks > 0 ? ((nearAthCount / totalStocks) * 100).toFixed(1) : 0}%)
-              </span>
-            </div>
-            <div className="text-right border-l border-white/10 pl-4">
-              <span className="text-[10px] uppercase text-gray-500 block font-sans">
-                Deep Drawdown (&gt;50%)
-              </span>
-              <span className="font-bold text-rose-400">
-                {deepDrawdownCount} ({totalStocks > 0 ? ((deepDrawdownCount / totalStocks) * 100).toFixed(1) : 0}%)
-              </span>
-            </div>
           </div>
         </div>
 
         {/* Big Histogram Chart with Count on Bars */}
-        <div className="h-[250px] md:h-[280px] w-full mt-2">
+        <div className="h-[340px] md:h-[400px] w-full mt-3">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 24, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 28, right: 10, left: -20, bottom: 0 }}>
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                tick={{ fill: '#94a3b8', fontSize: 10 }}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
                 interval={0}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: '#64748b', fontSize: 10 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 allowDecimals={false}
               />
               <Tooltip
@@ -161,7 +132,7 @@ export default function AthDistributionChart({
                   dataKey="count"
                   position="top"
                   fill="#cbd5e1"
-                  fontSize={10}
+                  fontSize={11}
                   fontFamily="monospace"
                   fontWeight={600}
                   formatter={(val: unknown) =>
@@ -175,19 +146,6 @@ export default function AthDistributionChart({
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* Footer Insight */}
-      <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
-        <span className="text-emerald-400">
-          {nearAthCount} stocks within 20% of ATH
-        </span>
-        <span className="text-gray-500 font-sans text-[10px]">
-          {nearAthCount > deepDrawdownCount ? 'Expansion Regime' : 'Corrective / Distribution Regime'}
-        </span>
-        <span className="text-rose-400">
-          {deepDrawdownCount} stocks &gt; 50% off ATH
-        </span>
       </div>
     </div>
   );
