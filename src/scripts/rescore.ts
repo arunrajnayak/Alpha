@@ -109,7 +109,7 @@ async function main() {
     const isEtf = isETFWhitelisted(symbol);
 
     if ((!mcap || mcap < PARAMS.mcapMinCr) && !isEtf) continue;
-    if (candles.length < 269) continue;
+    if (candles.length < 248) continue;
 
     const closes  = candles.map(c => c.close);
     const highs   = candles.map(c => c.high);

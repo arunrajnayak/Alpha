@@ -62,7 +62,7 @@ saveRankingHistory()← append to RankingHistory (50-day rolling window)
 | Turnover | median(close × volume, 126d) ≥ ₹1 Cr | `ScreenerPrice` |
 | Circuit band | ≥ 9% (5% circuit tagged Caution) | NSE instrument data |
 | Series | EQ & BE included (BE tagged Caution) | Instrument master |
-| Data history | ≥ 269 trading days | `ScreenerPrice` row count |
+| Data history | ≥ 248 trading days (~12m) | `ScreenerPrice` row count |
 
 ## Exit & Warning Signal Logic (src/app/actions/screener.ts)
 

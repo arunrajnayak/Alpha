@@ -374,7 +374,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
       // Circuit filter only applies to pre-filtered list (not all-universe)
 
       const candles = pricesBySymbol.get(inst.symbol);
-      if (!candles || candles.length < 269) continue;
+      if (!candles || candles.length < 248) continue;
 
       const closes = candles.map(c => c.close);
       const highs = candles.map(c => c.high);

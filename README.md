@@ -422,7 +422,7 @@ Composite Score = avgSharpe = mean(Sharpe_12m, Sharpe_6m, Sharpe_3m)
 | Volume | Median daily turnover ≥ ₹1 Cr (126-day lookback) |
 | Circuit band | ≥ 9% (5% circuit stocks included with Warning tag; excludes 2% circuit) |
 | Series | EQ & BE series included (BE highlighted with Warning/Caution badge) |
-| History | ≥ 269 trading days of data (252 + 21 skip days) |
+| History | ≥ 248 trading days of data (~12 months) |
 
 ### Exit & Warning Signals
 

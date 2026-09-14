@@ -84,7 +84,7 @@ function scoreSymbols(
 
     const dates  = datesBySymbol.get(symbol)!;
     const lastIdx = upperBoundDate(dates, targetDate);
-    if (lastIdx < 268) { skippedHistory++; continue; }
+    if (lastIdx < 247) { skippedHistory++; continue; }
 
     const slice   = prices.slice(0, lastIdx + 1);
     const closes  = slice.map(p => p.close);

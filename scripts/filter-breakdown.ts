@@ -72,7 +72,7 @@ async function main() {
 
     // 2. Price history
     const candles = pricesBySymbol.get(symbol);
-    if (!candles || candles.length < 268) { failHistory++; continue; }
+    if (!candles || candles.length < 248) { failHistory++; continue; }
     afterHistory++;
 
     const closes  = candles.map(c => c.close);
@@ -81,7 +81,7 @@ async function main() {
     const dateIdx = closes.length - 1;
     const effectiveIdx = dateIdx - skipDays;
 
-    if (effectiveIdx < 247) { failHistory++; afterHistory--; continue; }
+    if (dateIdx < 247) { failHistory++; afterHistory--; continue; }
 
     const currentClose = closes[dateIdx];
 

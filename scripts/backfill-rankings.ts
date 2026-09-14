@@ -80,7 +80,7 @@ async function main() {
       const endIdx = prices.findIndex(p => p.date > targetDate);
       const candles = endIdx === -1 ? prices : prices.slice(0, endIdx);
 
-      if (candles.length < 269) continue;
+      if (candles.length < 248) continue;
 
       const mcap = mcapMap.get(symbol);
       if (!mcap || mcap < PARAMS.mcapMinCr) continue;

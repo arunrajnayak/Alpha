@@ -133,7 +133,7 @@ async function main() {
     // price data
     const candles = pricesBySymbol.get(inst.symbol);
     if (!candles || candles.length === 0) { skippedNoData++; continue; }
-    if (candles.length < 268) { skippedInsufficient++; continue; } // 247 effectiveIdx + 21 skip = 268
+    if (candles.length < 248) { skippedInsufficient++; continue; } // 247 dateIdx + 1 = 248 (~12 months)
 
     const closes  = candles.map(c => c.close);
     const highs   = candles.map(c => c.high);

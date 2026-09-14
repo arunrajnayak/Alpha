@@ -1,6 +1,6 @@
 /**
  * Backfill screener prices script.
- * Fetches 13 months of daily candles for all NSE_EQ stocks and populates ScreenerPrice.
+ * Fetches 12+ months of daily candles for all NSE_EQ stocks and populates ScreenerPrice.
  *
  * Usage: npx tsx scripts/seed-screener-prices.ts
  * Estimated time: ~8 minutes for ~2000 stocks (5 concurrent)

@@ -45,7 +45,7 @@ async function main() {
   const candleData = await fetchJSON(candleUrl);
   const candles = candleData.data?.candles || [];
   console.log(`  Candles available: ${candles.length}`);
-  console.log(`  Filter (>=269): ${candles.length >= 269 ? 'PASS ✓' : 'FAIL ✗ — NOT ENOUGH HISTORY'}`);
+  console.log(`  Filter (>=248): ${candles.length >= 248 ? 'PASS ✓' : 'FAIL ✗ — NOT ENOUGH HISTORY'}`);
   if (candles.length > 0) {
     console.log(`  Date range: ${candles[candles.length - 1][0]?.split('T')[0]} → ${candles[0][0]?.split('T')[0]}`);
     const latestClose = candles[0][4]; // [ts, open, high, low, close, volume]
@@ -76,8 +76,8 @@ async function main() {
     if (bandWidth < 0.15) {
       console.log(`VERDICT: STLTECH is excluded because circuit band is ${(bandWidth*100).toFixed(1)}% (< 15% threshold).`);
       console.log(`This applies to BOTH pre-filtered and all lists (pipeline-level filter).`);
-    } else if (candles.length < 269) {
-      console.log(`VERDICT: STLTECH is excluded because only ${candles.length} candles available (< 269 needed).`);
+    } else if (candles.length < 248) {
+      console.log(`VERDICT: STLTECH is excluded because only ${candles.length} candles available (< 248 needed).`);
     } else {
       console.log(`VERDICT: STLTECH passes circuit + candle filters. Issue may be in DB state.`);
     }

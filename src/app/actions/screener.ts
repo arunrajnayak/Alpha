@@ -363,9 +363,9 @@ export async function getScreenerData(
           unrankedReason = 'BE category (Trade-to-Trade)';
         } else if (marketCapCr > 0 && marketCapCr < PARAMS.mcapMinCr) {
           unrankedReason = `Market cap < ₹1,000 Cr (₹${marketCapCr.toFixed(0)} Cr)`;
-        } else if (closes.length < 269) {
-          unrankedReason = `Price history < 269 days (${closes.length}/269)`;
-        } else if (closes.length >= 269 && compositeScore === 0) {
+        } else if (closes.length < 248) {
+          unrankedReason = `Price history < 248 days (${closes.length}/248)`;
+        } else if (closes.length >= 248 && compositeScore === 0) {
           unrankedReason = 'Missing price data';
         } else {
           // If in active all ranking but not filtered, determine which filter failed

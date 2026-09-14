@@ -105,8 +105,8 @@ async function main() {
       // Slice to data available on this date (inclusive)
       const slice = candles.filter(c => c.date <= date);
 
-      // Need at least effectiveIdx(247) + skipDays(21) + 1 = 269 candles
-      if (slice.length < 269) continue;
+      // Need at least dateIdx(247) + 1 = 248 candles (~12 months)
+      if (slice.length < 248) continue;
 
       const closes  = slice.map(c => c.close);
       const highs   = slice.map(c => c.high);

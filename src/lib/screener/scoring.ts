@@ -146,7 +146,7 @@ export interface ScoreResult {
  * @param options  Optional scoring options
  * @param options.skipFilters  When true, skip the 4 entry filters (200 DMA, min price, ATH proximity,
  *                             median turnover) and return a result regardless. Computation prerequisites
- *                             (effectiveIdx >= 247, finite Sharpe values) still apply.
+ *                             (dateIdx >= 247, finite Sharpe values) still apply.
  * @returns ScoreResult or null if stock fails any prerequisite (or a filter when skipFilters is false)
  */
 export function scoreStock(
@@ -162,10 +162,10 @@ export function scoreStock(
   const dateIdx = closes.length - 1;
   const effectiveIdx = dateIdx - skipDays; // engine.py:73
 
-  // Pre-requisite: need at least ~247 days before the skip window (engine.py:74).
-  // Slightly below 252 to accommodate API history limits (~270 trading days available).
+  // Pre-requisite: need at least ~247 trading days (~12 months) of history from today (engine.py:74).
+  // Slightly below 252 to accommodate API history limits and market holidays.
   // All 3 Sharpe windows compute correctly at this threshold.
-  if (effectiveIdx < 247) return null;
+  if (dateIdx < 247) return null;
 
   const currentClose = closes[dateIdx]; // engine.py:77
 

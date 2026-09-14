@@ -90,14 +90,14 @@ export async function patchTodayPrices(
 /**
  * Fetch and store daily candles for all instruments.
  * Incremental: finds last stored date per stock, only fetches missing days.
- * First run: backfills 400 calendar days (~13 months of trading days).
+ * First run: backfills 400 calendar days (~12+ months of trading days).
  */
 export async function fetchAndStoreCandles(
   instruments: InstrumentInfo[],
   toDate?: string, // defaults to todayIST(); pass T-1 during market hours
 ): Promise<{ fetched: number; inserted: number; errors: string[] }> {
   const today = toDate ?? todayIST();
-  const defaultFromDate = daysAgo(400, today); // ~13 months for first run
+  const defaultFromDate = daysAgo(400, today); // ~12+ months (safety buffer) for first run
 
   // Get last stored date per symbol in batch
   const lastDates = await getLastStoredDates(instruments.map(i => i.symbol));
