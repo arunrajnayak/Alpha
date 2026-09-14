@@ -162,62 +162,67 @@ export async function getLiveQuotes(
   const requestKeyLookup = buildKeyLookup(instrumentKeys);
 
   const batches = chunkArray(instrumentKeys, BATCH_SIZE);
+  let shouldRetry401 = false;
 
-  for (const batch of batches) {
-    const url = `${BASE_URL_V3}/market-quote/ltp?instrument_key=${batch
-      .map((k) => encodeURIComponent(k))
-      .join(',')}`;
+  await Promise.all(
+    batches.map(async (batch) => {
+      const url = `${BASE_URL_V3}/market-quote/ltp?instrument_key=${batch
+        .map((k) => encodeURIComponent(k))
+        .join(',')}`;
 
-    try {
-      const response = await fetch(url, {
-        cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
+      try {
+        const response = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
+        if (!response.ok) {
+          if (response.status === 401 && retryOnAuth) {
+            shouldRetry401 = true;
+            return;
+          }
 
-        // Retry on 401 with fresh token
-        if (response.status === 401 && retryOnAuth) {
-          console.log('[Upstox] Got 401, clearing cache and retrying...');
-          clearTokenCache();
-          return getLiveQuotes(instrumentKeys, false);
+          const errorText = await response.text();
+          throw new UpstoxError(
+            `LTP fetch failed: ${response.status} - ${errorText}`,
+            response.status
+          );
         }
 
-        throw new UpstoxError(
-          `LTP fetch failed: ${response.status} - ${errorText}`,
-          response.status
-        );
-      }
+        const json = await response.json();
 
-      const json = await response.json();
+        if (json.data) {
+          for (const [responseKey, val] of Object.entries(json.data)) {
+            const value = val as LTPResponseValue;
 
-      if (json.data) {
-        for (const [responseKey, val] of Object.entries(json.data)) {
-          const value = val as LTPResponseValue;
+            // Map response key back to request key
+            let mappedKey = value.instrument_token;
+            if (!mappedKey) mappedKey = requestKeyLookup.get(responseKey);
+            if (!mappedKey) mappedKey = responseKey.replace(/:/g, '|');
 
-          // Map response key back to request key
-          let mappedKey = value.instrument_token;
-          if (!mappedKey) mappedKey = requestKeyLookup.get(responseKey);
-          if (!mappedKey) mappedKey = responseKey.replace(/:/g, '|');
-
-          result.set(mappedKey, {
-            last_price: value.last_price,
-            instrument_token: value.instrument_token || mappedKey,
-            previous_close: value.cp ?? 0,
-            timestamp: value.ltt ? parseInt(value.ltt, 10) : undefined,
-          });
+            result.set(mappedKey, {
+              last_price: value.last_price,
+              instrument_token: value.instrument_token || mappedKey,
+              previous_close: value.cp ?? 0,
+              timestamp: value.ltt ? parseInt(value.ltt, 10) : undefined,
+            });
+          }
         }
+      } catch (error) {
+        if (error instanceof UpstoxError) throw error;
+        console.error(`[Upstox] Batch fetch failed:`, error);
       }
-    } catch (error) {
-      if (error instanceof UpstoxError) throw error;
-      console.error(`[Upstox] Batch fetch failed:`, error);
-      throw error;
-    }
+    })
+  );
+
+  if (shouldRetry401 && retryOnAuth) {
+    console.log('[Upstox] Got 401, clearing cache and retrying...');
+    clearTokenCache();
+    return getLiveQuotes(instrumentKeys, false);
   }
 
   return result;

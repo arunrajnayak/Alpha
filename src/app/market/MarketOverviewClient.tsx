@@ -9,6 +9,12 @@ import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSidebar from '@/components/market/IndexSidebar';
+import NSEMarketBreadthCard from '@/components/market/NSEMarketBreadthCard';
+import StockMovesDistributionChart from '@/components/market/StockMovesDistributionChart';
+import AthDistributionChart from '@/components/market/AthDistributionChart';
+import MarketHealthDashboard from '@/components/market/MarketHealthDashboard';
+import { fetchNSEMarketBreadth } from '@/app/actions/market-breadth';
+import type { NSEMarketBreadthData, MarketHealthHistoryData } from '@/app/actions/market-breadth';
 import { useLiveData } from '@/context/LiveDataContext';
 import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 import { logger } from '@/lib/logger';
@@ -51,6 +57,8 @@ interface MarketOverviewClientProps {
   initialSummaries?: IndexSummary[];
   initialData?: MarketOverviewData | null;
   initialTokenStatus?: { hasToken: boolean; message?: string } | null;
+  initialBreadthData?: NSEMarketBreadthData | null;
+  initialHealthData?: MarketHealthHistoryData | null;
   embedded?: boolean;
 }
 
@@ -58,11 +66,16 @@ export default function MarketOverviewClient({
   initialSummaries = [],
   initialData = null,
   initialTokenStatus = null,
+  initialBreadthData = null,
+  initialHealthData = null,
   embedded = false,
 }: MarketOverviewClientProps) {
   const [selectedIndex, setSelectedIndex] = useState('NIFTY Total Market');
   const [indexSummaries, setIndexSummaries] = useState<IndexSummary[]>(initialSummaries);
   const [data, setData] = useState<MarketOverviewData | null>(initialData);
+  const [breadthData, setBreadthData] = useState<NSEMarketBreadthData | null>(initialBreadthData);
+  const [breadthLoading, setBreadthLoading] = useState(!initialBreadthData);
+  const [breadthSecondsLeft, setBreadthSecondsLeft] = useState(10);
   const [loading, setLoading] = useState(!initialData); // True when no SSR data
   const [loadError, setLoadError] = useState<string | null>(null); // Track fetch errors for display
   const [summariesLoading, setSummariesLoading] = useState(initialSummaries.length === 0);
@@ -122,6 +135,42 @@ export default function MarketOverviewClient({
       if (showLoading) setSummariesLoading(false);
     }
   }, []);
+
+  // Fetch NSE-wide market breadth & moves distribution (10s live poll)
+  const loadBreadth = useCallback(async (force = false) => {
+    try {
+      const res = await fetchNSEMarketBreadth(force);
+      setBreadthData(res);
+      setBreadthSecondsLeft(10);
+    } catch (err) {
+      marketLogger.error('Failed to load NSE breadth:', err);
+    } finally {
+      setBreadthLoading(false);
+    }
+  }, []);
+
+  // Initial load of breadth if not provided via SSR
+  useEffect(() => {
+    if (!initialBreadthData) {
+      loadBreadth();
+    }
+  }, [initialBreadthData, loadBreadth]);
+
+  // 10s countdown and auto-refresh interval
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!isVisibleRef.current) return;
+      setBreadthSecondsLeft((prev) => {
+        if (prev <= 1) {
+          loadBreadth();
+          return 10;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [loadBreadth]);
 
   // Auto-fetch summaries on mount when no SSR data provided (embedded mode)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -671,7 +720,7 @@ export default function MarketOverviewClient({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
-              <span className="gradient-text">Market Overview</span>
+              <span className="gradient-text">Markets & Health</span>
             </h1>
             {(currentMarketStatus === 'PRE_OPEN') ? (
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-400">
@@ -695,11 +744,11 @@ export default function MarketOverviewClient({
           )}
         </div>
         <button
-          onClick={() => { loadData(selectedIndex); loadSummaries(); }}
-          disabled={loading}
+          onClick={() => { loadData(selectedIndex); loadSummaries(); loadBreadth(true); }}
+          disabled={loading || breadthLoading}
           className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/50 border border-white/5 rounded-lg transition-all disabled:opacity-50"
         >
-          {loading ? (
+          {loading || breadthLoading ? (
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
               Loading...
@@ -713,6 +762,51 @@ export default function MarketOverviewClient({
       {loadError && (
         <motion.div variants={itemVariants} className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs flex items-center gap-2">
           <span>{loadError}</span>
+        </motion.div>
+      )}
+
+      {/* Section 1: All-NSE Market Breadth & Real-time Distributions (10s live poll) */}
+      {!embedded && (
+        <motion.div variants={itemVariants} className="flex flex-col gap-4 md:gap-5">
+          <NSEMarketBreadthCard
+            breadth={breadthData}
+            loading={breadthLoading}
+            refreshSecondsLeft={breadthSecondsLeft}
+            onRefresh={() => loadBreadth(true)}
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+            <StockMovesDistributionChart
+              distribution={breadthData?.distribution || []}
+              medianMove={breadthData?.medianMove || 0}
+              totalStocks={breadthData?.total || 0}
+              loading={breadthLoading}
+            />
+            <AthDistributionChart
+              distribution={breadthData?.athDistribution || []}
+              totalStocks={breadthData?.total || 0}
+              loading={breadthLoading}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {/* Section 2: Market Health Trends (MomoIndia-inspired) */}
+      {!embedded && (
+        <motion.div variants={itemVariants}>
+          <MarketHealthDashboard initialData={initialHealthData} />
+        </motion.div>
+      )}
+
+      {/* Section 3: Index Constituents & Heatmap Header */}
+      {!embedded && (
+        <motion.div variants={itemVariants} className="pt-2">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            <h2 className="text-xs md:text-sm font-semibold uppercase tracking-wider text-gray-400">
+              Index Constituents & Heatmap
+            </h2>
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          </div>
         </motion.div>
       )}
 

@@ -12,24 +12,6 @@ const PortfolioHeatmap = dynamic(() => import('@/components/portfolio/PortfolioH
   ssr: false
 });
 
-const MarketOverviewSection = dynamic(() => import('./market/MarketOverviewClient'), {
-  loading: () => (
-    <div className="flex flex-col gap-4 md:gap-5 animate-pulse">
-      <div className="flex flex-col md:flex-row gap-4 md:gap-5">
-        <div className="hidden md:flex flex-col gap-2 w-[220px] shrink-0">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-[76px] bg-slate-800/50 rounded-xl border border-white/5" />
-          ))}
-        </div>
-        <div className="flex-1">
-          <div className="h-[500px] bg-slate-800/50 rounded-2xl border border-white/5" />
-        </div>
-      </div>
-    </div>
-  ),
-  ssr: false,
-});
-
 const viewportConfig = {
   once: true,
   amount: 0.1,
@@ -283,25 +265,6 @@ export default function LivePage() {
                 itemVariants={itemVariants}
                 downloading={downloading}
             />
-        </motion.div>
-
-        {/* Market Overview Section */}
-        <motion.div
-          variants={itemVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={viewportConfig}
-          id="market-overview"
-          className="pt-4 md:pt-6"
-        >
-          <div className="flex items-center gap-3 mb-4 md:mb-6">
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-            <h2 className="text-lg md:text-xl font-bold whitespace-nowrap">
-              <span className="gradient-text">Market Overview</span>
-            </h2>
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-          </div>
-          <MarketOverviewSection embedded />
         </motion.div>
       </main>
 
