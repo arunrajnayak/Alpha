@@ -353,33 +353,6 @@ export default function DashboardPage() {
           </div>
       </motion.div>
 
-      {/* Row 5.55: Portfolio Compounding Waterfall */}
-      <motion.div
-        variants={sectionVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={viewportConfig}
-        className="w-full h-auto flex-none"
-      >
-          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
-                <div className="flex-1">
-                     <ChartErrorBoundary componentName="Portfolio Compounding Waterfall">
-                       <PortfolioWaterfall
-                         startingCapital={chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0}
-                         netDeposits={Math.max(0, totalInvested - (chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0))}
-                         realizedGains={totalRealizedPnL}
-                         dividends={totalDividends ?? 0}
-                         unrealizedGains={totalUnrealizedPnL}
-                         charges={totalCharges}
-                         tax={totalTax}
-                         currentEquity={totalCurrentValue}
-                         privacyMode={privacyMode}
-                       />
-                     </ChartErrorBoundary>
-                </div>
-          </div>
-      </motion.div>
-
       {/* Row 5.6: Daily Gain/Loss Bar Chart */}
       <motion.div
         variants={sectionVariants}
@@ -534,6 +507,33 @@ export default function DashboardPage() {
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Trade Return Distribution">
                        <TradeReturnHistogram exits={exits} />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 11: Portfolio Compounding Waterfall */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Portfolio Compounding Waterfall">
+                       <PortfolioWaterfall
+                         startingCapital={chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0}
+                         netDeposits={Math.max(0, totalInvested - (chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0))}
+                         realizedGains={totalRealizedPnL}
+                         dividends={totalDividends ?? 0}
+                         unrealizedGains={totalUnrealizedPnL}
+                         charges={totalCharges}
+                         tax={totalTax}
+                         currentEquity={totalCurrentValue}
+                         privacyMode={privacyMode}
+                       />
                      </ChartErrorBoundary>
                 </div>
           </div>
