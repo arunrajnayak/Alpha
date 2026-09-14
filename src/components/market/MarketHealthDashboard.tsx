@@ -21,15 +21,47 @@ interface MarketHealthDashboardProps {
   initialData?: MarketHealthHistoryData | null;
 }
 
-type TimeframePeriod = '1Y' | 'ALL';
+type TimeframePeriod = '6M' | '1Y' | 'ALL';
+
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+];
+
+function formatXAxisDate(val: string): string {
+  if (!val) return '';
+  const parts = val.split('-');
+  if (parts.length >= 3) {
+    const month = MONTH_NAMES[parseInt(parts[1], 10) - 1] || parts[1];
+    const year = parts[0].slice(-2);
+    return `${month} '${year}`;
+  }
+  return val;
+}
+
+function formatTooltipDate(val: unknown): string {
+  if (typeof val !== 'string') return '';
+  const parts = val.split('-');
+  if (parts.length >= 3) {
+    const month = MONTH_NAMES[parseInt(parts[1], 10) - 1] || parts[1];
+    return `${parts[2]} ${month} ${parts[0]}`;
+  }
+  return val;
+}
 
 export default function MarketHealthDashboard({ initialData }: MarketHealthDashboardProps) {
   const [data, setData] = useState<MarketHealthHistoryData | null>(initialData || null);
   const [period, setPeriod] = useState<TimeframePeriod>('1Y');
   const [loading, setLoading] = useState(!initialData);
+  const isFirstMount = React.useRef(true);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      if (initialData) return;
+    }
+
     startTransition(() => {
       setLoading(true);
       fetchMarketHealthHistory(period)
@@ -40,7 +72,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           setLoading(false);
         });
     });
-  }, [period]);
+  }, [period, initialData]);
 
   const stats = data?.currentStats;
 
@@ -79,7 +111,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
 
         {/* Timeframe Toggles */}
         <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-white/5 self-start sm:self-auto">
-          {(['1Y', 'ALL'] as TimeframePeriod[]).map((p) => (
+          {(['6M', '1Y', 'ALL'] as TimeframePeriod[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -151,14 +183,14 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <FontAwesomeIcon icon={faShieldHalved} className="w-3.5 h-3.5 text-purple-400" />
-            <h3 className="text-sm font-semibold text-gray-200">
+            <h3 className="text-sm md:text-base font-semibold text-gray-200">
               Moving Average Breadth (% of Stocks Above DMA)
             </h3>
           </div>
           <span className="text-[10px] text-gray-500 font-mono">50% line = Bull/Bear pivot</span>
         </div>
 
-        <div className="h-[280px] md:h-[320px] w-full">
+        <div className="h-[380px] md:h-[460px] w-full mt-2">
           {loading && !data ? (
             <div className="h-full bg-slate-800/50 rounded-lg animate-pulse" />
           ) : (
@@ -169,17 +201,15 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                   dataKey="date"
                   tickLine={false}
                   axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                  tick={{ fill: '#94a3b8', fontSize: 10 }}
-                  tickFormatter={(val) => {
-                    const parts = val.split('-');
-                    return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : val;
-                  }}
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  minTickGap={35}
+                  tickFormatter={formatXAxisDate}
                 />
                 <YAxis
                   domain={[0, 100]}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  tick={{ fill: '#64748b', fontSize: 11 }}
                   unit="%"
                 />
                 <ReferenceLine y={50} stroke="rgba(255, 255, 255, 0.2)" strokeDasharray="4 4" />
@@ -191,7 +221,8 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                     fontSize: '12px',
                   }}
                   labelStyle={{ color: '#94a3b8', fontWeight: 600 }}
-                  formatter={(val: any) => [
+                  labelFormatter={formatTooltipDate}
+                  formatter={(val: unknown) => [
                     `${val ?? 0}%`,
                     '',
                   ]}

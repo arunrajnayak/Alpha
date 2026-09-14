@@ -602,40 +602,131 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
 // Server Action: fetchMarketHealthHistory
 // ============================================================================
 
+export type MarketHealthPeriod = '6M' | '1Y' | 'ALL';
+
 export async function fetchMarketHealthHistory(
-  period: '1Y' | 'ALL' = '1Y'
+  period: MarketHealthPeriod | '1Y' | 'ALL' = '1Y'
 ): Promise<MarketHealthHistoryData> {
   try {
-    const rawHistory = await prisma.$queryRaw<
-      Array<{
-        computedDate: string;
-        totalStocks: number;
-        pctAbove200Dma: number;
-        pctAbove100Dma: number;
-        pctAbove50Dma: number;
-        pctAbove20Dma: number;
-        pctNearAth10: number;
-        pctNearAth20: number;
-        pctNearAth30: number;
-      }>
-    >`
-      SELECT 
-        computedDate,
-        COUNT(*) as totalStocks,
-        ROUND(AVG(aboveDma200Pct > 0) * 100, 1) as pctAbove200Dma,
-        ROUND(AVG(aboveDma100) * 100, 1) as pctAbove100Dma,
-        ROUND(AVG(aboveDma50) * 100, 1) as pctAbove50Dma,
-        ROUND(AVG(aboveDma20) * 100, 1) as pctAbove20Dma,
-        ROUND(AVG(athProximity >= 0.90) * 100, 1) as pctNearAth10,
-        ROUND(AVG(athProximity >= 0.80) * 100, 1) as pctNearAth20,
-        ROUND(AVG(athProximity >= 0.70) * 100, 1) as pctNearAth30
-      FROM "MomentumScore"
-      WHERE rankType = 'all'
-      GROUP BY computedDate
-      ORDER BY computedDate ASC
-    `;
+    let combinedHistory: Array<{
+      date: string;
+      totalStocks: number;
+      pctAbove200Dma: number;
+      pctAbove100Dma: number;
+      pctAbove50Dma: number;
+      pctAbove20Dma: number;
+      pctNearAth10: number;
+      pctNearAth20: number;
+      pctNearAth30: number;
+    }> = [];
 
-    if (!rawHistory || rawHistory.length === 0) {
+    // 1. Try reading precomputed history from AppConfig
+    try {
+      const config = await prisma.appConfig.findUnique({
+        where: { key: 'market_health_history_daily' },
+      });
+      if (config?.value) {
+        combinedHistory = JSON.parse(config.value);
+      }
+    } catch (err) {
+      breadthLogger.warn('Failed to read precomputed market health history from AppConfig:', err);
+    }
+
+    const lastCachedDate = combinedHistory.length > 0 ? combinedHistory[combinedHistory.length - 1].date : null;
+
+    // 2. Query MomentumScore for any dates newer than our cached history (or all if no cache)
+    if (lastCachedDate) {
+      const newerRows = await prisma.$queryRaw<
+        Array<{
+          computedDate: string;
+          totalStocks: number;
+          pctAbove200Dma: number;
+          pctAbove100Dma: number;
+          pctAbove50Dma: number;
+          pctAbove20Dma: number;
+          pctNearAth10: number;
+          pctNearAth20: number;
+          pctNearAth30: number;
+        }>
+      >`
+        SELECT 
+          computedDate,
+          COUNT(*) as totalStocks,
+          ROUND(AVG(aboveDma200Pct > 0) * 100, 1) as pctAbove200Dma,
+          ROUND(AVG(aboveDma100) * 100, 1) as pctAbove100Dma,
+          ROUND(AVG(aboveDma50) * 100, 1) as pctAbove50Dma,
+          ROUND(AVG(aboveDma20) * 100, 1) as pctAbove20Dma,
+          ROUND(AVG(athProximity >= 0.90) * 100, 1) as pctNearAth10,
+          ROUND(AVG(athProximity >= 0.80) * 100, 1) as pctNearAth20,
+          ROUND(AVG(athProximity >= 0.70) * 100, 1) as pctNearAth30
+        FROM "MomentumScore"
+        WHERE rankType = 'all' AND computedDate > ${lastCachedDate}
+        GROUP BY computedDate
+        ORDER BY computedDate ASC
+      `;
+
+      if (newerRows && newerRows.length > 0) {
+        for (const h of newerRows) {
+          combinedHistory.push({
+            date: h.computedDate,
+            totalStocks: Number(h.totalStocks),
+            pctAbove200Dma: Number(h.pctAbove200Dma),
+            pctAbove100Dma: Number(h.pctAbove100Dma),
+            pctAbove50Dma: Number(h.pctAbove50Dma),
+            pctAbove20Dma: Number(h.pctAbove20Dma),
+            pctNearAth10: Number(h.pctNearAth10),
+            pctNearAth20: Number(h.pctNearAth20),
+            pctNearAth30: Number(h.pctNearAth30),
+          });
+        }
+      }
+    } else {
+      // Fallback if AppConfig cache is empty: read directly from MomentumScore
+      const rawHistory = await prisma.$queryRaw<
+        Array<{
+          computedDate: string;
+          totalStocks: number;
+          pctAbove200Dma: number;
+          pctAbove100Dma: number;
+          pctAbove50Dma: number;
+          pctAbove20Dma: number;
+          pctNearAth10: number;
+          pctNearAth20: number;
+          pctNearAth30: number;
+        }>
+      >`
+        SELECT 
+          computedDate,
+          COUNT(*) as totalStocks,
+          ROUND(AVG(aboveDma200Pct > 0) * 100, 1) as pctAbove200Dma,
+          ROUND(AVG(aboveDma100) * 100, 1) as pctAbove100Dma,
+          ROUND(AVG(aboveDma50) * 100, 1) as pctAbove50Dma,
+          ROUND(AVG(aboveDma20) * 100, 1) as pctAbove20Dma,
+          ROUND(AVG(athProximity >= 0.90) * 100, 1) as pctNearAth10,
+          ROUND(AVG(athProximity >= 0.80) * 100, 1) as pctNearAth20,
+          ROUND(AVG(athProximity >= 0.70) * 100, 1) as pctNearAth30
+        FROM "MomentumScore"
+        WHERE rankType = 'all'
+        GROUP BY computedDate
+        ORDER BY computedDate ASC
+      `;
+
+      if (rawHistory && rawHistory.length > 0) {
+        combinedHistory = rawHistory.map((h) => ({
+          date: h.computedDate,
+          totalStocks: Number(h.totalStocks),
+          pctAbove200Dma: Number(h.pctAbove200Dma),
+          pctAbove100Dma: Number(h.pctAbove100Dma),
+          pctAbove50Dma: Number(h.pctAbove50Dma),
+          pctAbove20Dma: Number(h.pctAbove20Dma),
+          pctNearAth10: Number(h.pctNearAth10),
+          pctNearAth20: Number(h.pctNearAth20),
+          pctNearAth30: Number(h.pctNearAth30),
+        }));
+      }
+    }
+
+    if (combinedHistory.length === 0) {
       return {
         history: [],
         currentStats: {
@@ -652,12 +743,13 @@ export async function fetchMarketHealthHistory(
       };
     }
 
-    // Filter by period (1Y = 250 trading days, ALL = entire history)
-    let sliceLength = rawHistory.length;
-    if (period === '1Y') sliceLength = 250;
+    // 3. Filter by period (6M = 125 trading days, 1Y = 250 trading days, ALL = entire history)
+    let sliceLength = combinedHistory.length;
+    if (period === '6M') sliceLength = 125;
+    else if (period === '1Y') sliceLength = 250;
 
-    const filtered = rawHistory.slice(-Math.min(sliceLength, rawHistory.length));
-    const latest = rawHistory[rawHistory.length - 1];
+    const filtered = combinedHistory.slice(-Math.min(sliceLength, combinedHistory.length));
+    const latest = combinedHistory[combinedHistory.length - 1];
 
     // Determine market health regime
     let regime: MarketHealthHistoryData['currentStats']['regime'] = 'Neutral';
@@ -671,7 +763,7 @@ export async function fetchMarketHealthHistory(
 
     return {
       history: filtered.map((h) => ({
-        date: h.computedDate,
+        date: h.date,
         totalStocks: Number(h.totalStocks),
         pctAbove200Dma: Number(h.pctAbove200Dma),
         pctAbove100Dma: Number(h.pctAbove100Dma),

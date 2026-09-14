@@ -482,6 +482,53 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   pipelineLogger.info(`[${elapsed()}] All-universe rankings stored`);
   await progress(90, 'All stored');
 
+  // ── Step 10b: Update daily market health history in AppConfig ─────────────
+  try {
+    const total = allScored.length;
+    if (total > 0) {
+      const above200 = allScored.filter(s => s.score.aboveDma200Pct >= 0).length;
+      const above100 = allScored.filter(s => s.score.aboveDma100).length;
+      const above50 = allScored.filter(s => s.score.aboveDma50).length;
+      const above20 = allScored.filter(s => s.score.aboveDma20).length;
+      const near10 = allScored.filter(s => s.score.athProximity >= 0.90).length;
+      const near20 = allScored.filter(s => s.score.athProximity >= 0.80).length;
+      const near30 = allScored.filter(s => s.score.athProximity >= 0.70).length;
+
+      const todayStats = {
+        date: today,
+        totalStocks: total,
+        pctAbove200Dma: Number(((above200 / total) * 100).toFixed(1)),
+        pctAbove100Dma: Number(((above100 / total) * 100).toFixed(1)),
+        pctAbove50Dma: Number(((above50 / total) * 100).toFixed(1)),
+        pctAbove20Dma: Number(((above20 / total) * 100).toFixed(1)),
+        pctNearAth10: Number(((near10 / total) * 100).toFixed(1)),
+        pctNearAth20: Number(((near20 / total) * 100).toFixed(1)),
+        pctNearAth30: Number(((near30 / total) * 100).toFixed(1)),
+      };
+
+      const existingConfig = await prisma.appConfig.findUnique({
+        where: { key: 'market_health_history_daily' },
+      });
+      let historyList: Array<{ date: string; [key: string]: unknown }> = [];
+      if (existingConfig?.value) {
+        try {
+          historyList = JSON.parse(existingConfig.value);
+        } catch {}
+      }
+      historyList = historyList.filter(h => h.date !== today);
+      historyList.push(todayStats);
+
+      await prisma.appConfig.upsert({
+        where: { key: 'market_health_history_daily' },
+        create: { key: 'market_health_history_daily', value: JSON.stringify(historyList) },
+        update: { value: JSON.stringify(historyList) },
+      });
+      pipelineLogger.info(`[${elapsed()}] Market health history synced for ${today}`);
+    }
+  } catch (err) {
+    pipelineLogger.warn('Failed to update market_health_history_daily in AppConfig:', err);
+  }
+
   // ── Step 11: Prune old RankingHistory ──────────────────────────────────────
   try {
     for (const rt of ['filtered', 'all'] as const) {
