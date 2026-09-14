@@ -42,14 +42,21 @@ interface ChartDataPoint {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const BUCKETS: Bucket[] = [
-  { label: '< -20%',      min: -Infinity,  max: -20,    color: '#dc2626' },  // red-600
-  { label: '-20 to -10%', min: -20,        max: -10,    color: '#ef4444' },  // red-500
-  { label: '-10 to -5%',  min: -10,        max: -5,     color: '#f87171' },  // red-400
-  { label: '-5 to 0%',    min: -5,         max: 0,      color: '#fca5a5' },  // red-300
-  { label: '0 to +10%',   min: 0,          max: 10,     color: '#6ee7b7' },  // emerald-300
-  { label: '+10 to +25%', min: 10,         max: 25,     color: '#34d399' },  // emerald-400
-  { label: '+25 to +50%', min: 25,         max: 50,     color: '#10b981' },  // emerald-500
-  { label: '> +50%',      min: 50,         max: Infinity, color: '#059669' }, // emerald-600
+  { label: '< -30%',       min: -Infinity, max: -30,   color: '#7f1d1d' },  // red-900
+  { label: '-30 to -25%',  min: -30,       max: -25,   color: '#991b1b' },  // red-800
+  { label: '-25 to -20%',  min: -25,       max: -20,   color: '#b91c1c' },  // red-700
+  { label: '-20 to -15%',  min: -20,       max: -15,   color: '#dc2626' },  // red-600
+  { label: '-15 to -10%',  min: -15,       max: -10,   color: '#ef4444' },  // red-500
+  { label: '-10 to -5%',   min: -10,       max: -5,    color: '#f87171' },  // red-400
+  { label: '-5 to 0%',     min: -5,        max: 0,     color: '#fca5a5' },  // red-300
+  { label: '0 to +5%',     min: 0,         max: 5,     color: '#a7f3d0' },  // emerald-200
+  { label: '+5 to +10%',   min: 5,         max: 10,    color: '#6ee7b7' },  // emerald-300
+  { label: '+10 to +20%',  min: 10,        max: 20,    color: '#34d399' },  // emerald-400
+  { label: '+20 to +30%',  min: 20,        max: 30,    color: '#10b981' },  // emerald-500
+  { label: '+30 to +40%',  min: 30,        max: 40,    color: '#059669' },  // emerald-600
+  { label: '+40 to +60%',  min: 40,        max: 60,    color: '#047857' },  // emerald-700
+  { label: '+60 to +100%', min: 60,        max: 100,   color: '#065f46' },  // emerald-800
+  { label: '> +100%',      min: 100,       max: Infinity, color: '#064e3b' }, // emerald-900
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -156,7 +163,7 @@ export default function TradeReturnHistogram({ exits }: TradeReturnHistogramProp
 
   if (!exits || exits.length === 0) {
     return (
-      <div className="h-[360px] flex flex-col items-center justify-center text-gray-500 gap-3">
+      <div className="h-[500px] flex flex-col items-center justify-center text-gray-500 gap-3">
         <FontAwesomeIcon icon={faChartBar} className="text-4xl text-gray-700" />
         <p className="text-sm">No exits to display</p>
       </div>
@@ -171,10 +178,7 @@ export default function TradeReturnHistogram({ exits }: TradeReturnHistogramProp
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-rose-500/20 flex items-center justify-center flex-shrink-0">
             <FontAwesomeIcon icon={faChartBar} className="text-emerald-400 text-lg" />
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-200 leading-tight">Return Distribution</h3>
-            <p className="text-[11px] text-gray-500">Frequency of realized trade returns</p>
-          </div>
+          <h3 className="text-sm font-bold text-gray-200 leading-tight">Return Distribution</h3>
         </div>
         <ToggleButtonGroup
           value={mode}
@@ -223,30 +227,20 @@ export default function TradeReturnHistogram({ exits }: TradeReturnHistogramProp
         />
       </div>
 
-      {/* Skewness insight */}
-      {stats.total >= 5 && (
-        <div className={`text-xs px-3 py-2 rounded-lg border ${stats.avgWin > Math.abs(stats.avgLoss)
-          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-          : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
-        }`}>
-          {stats.avgWin > Math.abs(stats.avgLoss)
-            ? `✓ Positive skew — avg winner (${stats.avgWin.toFixed(1)}%) larger than avg loser (${Math.abs(stats.avgLoss).toFixed(1)}%). Classic momentum profile.`
-            : `⚠ Negative skew — avg loser (${Math.abs(stats.avgLoss).toFixed(1)}%) exceeds avg winner (${stats.avgWin.toFixed(1)}%). Review stop-loss discipline.`
-          }
-        </div>
-      )}
-
       {/* Chart */}
       <div className="w-full overflow-x-auto">
-        <div style={{ minWidth: 480 }}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 4 }} barCategoryGap="20%">
+        <div style={{ minWidth: 640 }}>
+          <ResponsiveContainer width="100%" height={380}>
+            <BarChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 40 }} barCategoryGap="15%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fill: '#9ca3af', fontSize: 10 }}
+                tick={{ fill: '#9ca3af', fontSize: 9 }}
                 axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                 tickLine={false}
+                angle={-40}
+                textAnchor="end"
+                interval={0}
               />
               <YAxis
                 allowDecimals={false}
@@ -258,8 +252,6 @@ export default function TradeReturnHistogram({ exits }: TradeReturnHistogramProp
                 label={{ value: 'Trades', angle: -90, position: 'insideLeft', offset: 10, style: { fill: '#6b7280', fontSize: 10 } }}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-              {/* Zero / win-loss divider */}
-              <ReferenceLine x="-5 to 0%" stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
               {/* Median reference lines */}
               {medianWin !== 0 && (
                 <ReferenceLine
@@ -285,7 +277,7 @@ export default function TradeReturnHistogram({ exits }: TradeReturnHistogramProp
                   label={{ value: 'Median Loss', position: 'top', fill: '#f87171', fontSize: 10 }}
                 />
               )}
-              <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={60}>
+              <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={52}>
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
