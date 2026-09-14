@@ -24,13 +24,13 @@ import {
   faSignal,
   faEye,
   faEyeSlash,
-  faGlobe,
+  faHeartPulse,
 } from '@fortawesome/free-solid-svg-icons';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMobile?: boolean }[] = [
   { text: 'Live', path: '/', icon: faSignal },
-  { text: 'Markets', path: '/market', icon: faGlobe },
+  { text: 'Markets', path: '/market', icon: faHeartPulse },
   { text: 'Dashboard', path: '/dashboard', icon: faChartLine },
   { text: 'Screener', path: '/screener', icon: faFilter },
   { text: 'Portfolio', path: '/portfolio', icon: faBriefcase },

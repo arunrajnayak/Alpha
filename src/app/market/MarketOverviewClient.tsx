@@ -720,7 +720,7 @@ export default function MarketOverviewClient({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
-              <span className="gradient-text">Markets & Health</span>
+              <span className="gradient-text">Markets health</span>
             </h1>
             {(currentMarketStatus === 'PRE_OPEN') ? (
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-400">

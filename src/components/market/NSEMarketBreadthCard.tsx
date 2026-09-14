@@ -65,7 +65,7 @@ export default function NSEMarketBreadthCard({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm md:text-base text-white tracking-tight">
-                  NSE Market Breadth
+                  Market breadth
                 </h3>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-gray-400 border border-white/5 font-mono">
                   {total} Stocks

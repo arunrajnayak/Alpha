@@ -5,8 +5,8 @@ import { fetchNSEMarketBreadth, fetchMarketHealthHistory } from '@/app/actions/m
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Markets & Health | Alpha',
-  description: 'NSE Market Breadth, Advances/Declines, Moves Distribution, and Market Health Dashboard',
+  title: 'Markets health | Alpha',
+  description: 'Market Breadth, Advances/Declines, Moves Distribution, and Market Health Dashboard',
 };
 
 export default async function MarketPage() {
