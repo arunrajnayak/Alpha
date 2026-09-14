@@ -305,8 +305,8 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 
 | # | Title | Endpoint | Schedule (UTC) | IST | What it does |
 |---|-------|----------|----------------|-----|--------------|
-| 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 4-10 * * 1-5` | Every min, 9:30am–4:00pm | Records P&L every minute for the Intraday chart |
-| 2 | Intraday Breadth | `/api/cron/market-breadth` | `* 4-10 * * 1-5` | Every min, 9:30am–4:00pm | Records all-NSE advances & declines for the Intraday Breadth chart |
+| 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 3-10 * * 1-5` | Every min, 9:15am–4:00pm | Records P&L every minute for the Intraday chart (auto-skips before 9:15am) |
+| 2 | Intraday Breadth | `/api/cron/market-breadth` | `* 3-10 * * 1-5` | Every min, 9:15am–4:00pm | Records all-NSE advances & declines for the Intraday Breadth chart (auto-skips before 9:15am) |
 | 3 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon–Fri | End-of-day portfolio value, NAV, drawdown |
 | 4 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR) |
 | 5 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats |
