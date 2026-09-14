@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -55,6 +56,14 @@ const NIFTY_SHARPE_COLOR = '#8b5cf6'; // violet-500
 
 // ─── Computation ──────────────────────────────────────────────────────────────
 
+function cleanRatio(val: number | null): number | null {
+  if (val === null || !isFinite(val) || isNaN(val)) return null;
+  // Guard against extreme division-by-zero anomalies, but allow true high momentum ratios up to 30
+  if (val > 30) return 30;
+  if (val < -30) return -30;
+  return Number(val.toFixed(2));
+}
+
 function computeRollingRisk(data: DataPoint[], windowDays: number): RollingPoint[] {
   const result: RollingPoint[] = [];
 
@@ -83,8 +92,8 @@ function computeRollingRisk(data: DataPoint[], windowDays: number): RollingPoint
         : 0;
     const downsideStd = Math.sqrt(downsideVariance);
 
-    const sharpe  = std > 0 ? (mean / std) * ANNUALISE : null;
-    const sortino = downsideStd > 0 ? (mean / downsideStd) * ANNUALISE : null;
+    const sharpe  = std > 0.00001 ? (mean / std) * ANNUALISE : null;
+    const sortino = downsideStd > 0.00001 ? (mean / downsideStd) * ANNUALISE : null;
 
     // Nifty daily returns in the same window
     const niftyReturns: number[] = [];
@@ -101,7 +110,7 @@ function computeRollingRisk(data: DataPoint[], windowDays: number): RollingPoint
       const nMean = niftyReturns.reduce((s, v) => s + v, 0) / niftyReturns.length;
       const nVar = niftyReturns.reduce((s, v) => s + (v - nMean) ** 2, 0) / niftyReturns.length;
       const nStd = Math.sqrt(nVar);
-      niftySharpe = nStd > 0 ? (nMean / nStd) * ANNUALISE : null;
+      niftySharpe = nStd > 0.00001 ? (nMean / nStd) * ANNUALISE : null;
     }
 
     const curr = data[i];
@@ -109,9 +118,9 @@ function computeRollingRisk(data: DataPoint[], windowDays: number): RollingPoint
 
     result.push({
       dateStr,
-      sharpe:      sharpe      !== null ? Math.max(-5, Math.min(5, sharpe))      : null,
-      sortino:     sortino     !== null ? Math.max(-5, Math.min(5, sortino))     : null,
-      niftySharpe: niftySharpe !== null ? Math.max(-5, Math.min(5, niftySharpe)) : null,
+      sharpe:      cleanRatio(sharpe),
+      sortino:     cleanRatio(sortino),
+      niftySharpe: cleanRatio(niftySharpe),
     });
   }
 
@@ -130,26 +139,44 @@ const CustomTooltip = ({
   label?: string;
 }) => {
   if (!active || !payload?.length) return null;
+
+  const sharpeEntry = payload.find(p => p.name === 'Portfolio Sharpe');
+  const niftyEntry = payload.find(p => p.name === 'Nifty 50 Sharpe');
+  const alpha =
+    sharpeEntry?.value != null && niftyEntry?.value != null
+      ? sharpeEntry.value - niftyEntry.value
+      : null;
+
   return (
-    <div className="bg-[#0c1220]/98 border border-white/10 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md min-w-[170px]">
+    <div className="bg-[#0c1220]/98 border border-white/10 rounded-xl px-4 py-3 shadow-2xl backdrop-blur-md min-w-[185px]">
       <p className="text-[11px] text-gray-400 mb-2 font-medium">
-        {label ? format(parseISO(label), 'd MMM yyyy') : ''}
+        {label ? format(parseISO(label), 'd MMMM yyyy') : ''}
       </p>
-      {payload.map((entry) =>
-        entry.value !== null && entry.value !== undefined ? (
-          <div key={entry.name} className="flex items-center justify-between gap-4 text-xs mb-1">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-              <span className="text-gray-300">{entry.name}</span>
-            </span>
-            <span
-              className="font-bold tabular-nums"
-              style={{ color: entry.color }}
-            >
-              {entry.value >= 0 ? '+' : ''}{entry.value.toFixed(2)}
-            </span>
-          </div>
-        ) : null
+      <div className="flex flex-col gap-1.5">
+        {payload.map((entry) =>
+          entry.value !== null && entry.value !== undefined ? (
+            <div key={entry.name} className="flex items-center justify-between gap-4 text-xs">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-gray-300">{entry.name}</span>
+              </span>
+              <span
+                className="font-bold tabular-nums"
+                style={{ color: entry.color }}
+              >
+                {entry.value >= 0 ? '+' : ''}{entry.value.toFixed(2)}
+              </span>
+            </div>
+          ) : null
+        )}
+      </div>
+      {alpha !== null && (
+        <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+          <span className="text-gray-400 font-medium">Sharpe Alpha:</span>
+          <span className={`font-bold tabular-nums ${alpha >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {alpha >= 0 ? '+' : ''}{alpha.toFixed(2)}
+          </span>
+        </div>
       )}
     </div>
   );
@@ -168,10 +195,10 @@ const StatChip = ({
   color?: string;
   sub?: string;
 }) => (
-  <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 flex flex-col min-w-[95px]">
+  <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 flex flex-col min-w-[95px] justify-between">
     <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">{label}</span>
     <span className={`text-sm font-bold tabular-nums leading-snug ${color}`}>{value}</span>
-    {sub && <span className="text-[10px] text-gray-500 leading-tight">{sub}</span>}
+    {sub && <span className="text-[10px] text-gray-500 leading-tight mt-0.5">{sub}</span>}
   </div>
 );
 
@@ -211,6 +238,15 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
     currentSharpe != null && currentNiftySharpe != null
       ? currentSharpe - currentNiftySharpe
       : null;
+
+  // Period aggregate stats
+  const allSharpe = useMemo(
+    () => chartData.map(d => d.sharpe).filter((v): v is number => v !== null),
+    [chartData]
+  );
+
+  const peakSharpe = allSharpe.length > 0 ? Math.max(...allSharpe) : null;
+  const avgSharpe  = allSharpe.length > 0 ? allSharpe.reduce((s, v) => s + v, 0) / allSharpe.length : null;
 
   // Days in positive Sharpe territory
   const positiveSharpe = useMemo(
@@ -255,12 +291,12 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
     return 'text-rose-400';
   };
 
-  // Determine y-domain with some padding
+  // Determine y-domain with padding and dynamic ceiling based on actual maximum
   const allValues = chartData.flatMap(d => [d.sharpe, d.sortino, d.niftySharpe]).filter((v): v is number => v !== null);
-  const rawMin = allValues.length > 0 ? Math.min(...allValues) : -2;
+  const rawMin = allValues.length > 0 ? Math.min(...allValues) : -1;
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 3;
-  const yMin = Math.floor(rawMin - 0.3);
-  const yMax = Math.ceil(Math.max(rawMax + 0.3, 2.2));
+  const yMin = Math.floor(Math.min(rawMin - 0.4, -0.5));
+  const yMax = Math.ceil(Math.max(rawMax + 0.6, 2.5));
 
   // Month ticks
   const monthTicks = (() => {
@@ -351,10 +387,27 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
             sub="vs Nifty"
           />
         )}
+        {peakSharpe !== null && (
+          <StatChip
+            label="Peak Sharpe"
+            value={`+${peakSharpe.toFixed(2)}`}
+            color="text-emerald-400"
+            sub="Period High"
+          />
+        )}
+        {avgSharpe !== null && (
+          <StatChip
+            label="Avg Sharpe"
+            value={`${avgSharpe >= 0 ? '+' : ''}${avgSharpe.toFixed(2)}`}
+            color={sharpeColor(avgSharpe)}
+            sub="Period Mean"
+          />
+        )}
         <StatChip
           label="Positive Sharpe"
           value={`${positivePct}% of days`}
           color={Number(positivePct) >= 60 ? 'text-emerald-400' : 'text-yellow-400'}
+          sub="Consistency"
         />
       </div>
 
@@ -362,11 +415,24 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
       <div className="w-full overflow-x-auto">
         <div style={{ minWidth: 480 }}>
           <ResponsiveContainer width="100%" height={380}>
-            <ComposedChart data={chartData} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
+            <ComposedChart data={chartData} margin={{ top: 14, right: 16, left: 0, bottom: 4 }}>
+              <defs>
+                <linearGradient id="sharpeAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.12} />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="sortinoAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.08} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+
               {/* Background band: Sharpe 1–2 (good) */}
-              <ReferenceArea y1={1} y2={2} fill="#10b981" fillOpacity={0.04} />
+              <ReferenceArea y1={1} y2={Math.min(2, yMax)} fill="#10b981" fillOpacity={0.04} />
               {/* Background band: Sharpe > 2 (excellent) */}
-              <ReferenceArea y1={2} y2={yMax} fill="#10b981" fillOpacity={0.07} />
+              {yMax > 2 && <ReferenceArea y1={2} y2={yMax} fill="#10b981" fillOpacity={0.07} />}
+              {/* Background band: Negative Sharpe */}
+              {yMin < 0 && <ReferenceArea y1={yMin} y2={0} fill="#ef4444" fillOpacity={0.03} />}
 
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis
@@ -397,7 +463,7 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
                 strokeDasharray="5 4"
                 strokeOpacity={0.4}
                 strokeWidth={1}
-                label={{ value: 'Good (1)', position: 'insideTopRight', fill: '#10b981', fontSize: 10 }}
+                label={{ value: 'Good (1.0)', position: 'insideTopRight', fill: '#10b981', fontSize: 10 }}
               />
               {/* "Excellent" threshold */}
               <ReferenceLine
@@ -406,8 +472,19 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
                 strokeDasharray="5 4"
                 strokeOpacity={0.5}
                 strokeWidth={1}
-                label={{ value: 'Excellent (2)', position: 'insideTopRight', fill: '#10b981', fontSize: 10 }}
+                label={{ value: 'Excellent (2.0)', position: 'insideTopRight', fill: '#10b981', fontSize: 10 }}
               />
+
+              {/* Subtle Area glow for Portfolio Sharpe */}
+              {visible.sharpe && (
+                <Area
+                  type="monotone"
+                  dataKey="sharpe"
+                  fill="url(#sharpeAreaGrad)"
+                  stroke="none"
+                  isAnimationActive={false}
+                />
+              )}
 
               {visible.sharpe && (
                 <Line
@@ -461,8 +538,8 @@ export default function RollingRiskChart({ data }: { data: DataPoint[] }) {
               key={item.key}
               type="button"
               onClick={() => toggleSeries(item.key)}
-              className={`flex items-center gap-2 py-1 px-2 rounded-md transition-all duration-200 cursor-pointer ${
-                isHidden ? 'opacity-40 grayscale bg-white/5' : 'opacity-85 hover:opacity-100 bg-white/5'
+              className={`flex items-center gap-2 py-1 px-2.5 rounded-lg transition-all duration-200 cursor-pointer ${
+                isHidden ? 'opacity-40 grayscale bg-white/5' : 'opacity-90 hover:opacity-100 bg-white/5 border border-white/5'
               }`}
             >
               <span
