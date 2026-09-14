@@ -110,41 +110,36 @@ export default function IntradayMarketBreadthChart({
   }
 
   return (
-    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-4 md:p-5 shadow-xl relative overflow-hidden">
+    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
       {/* Top Header */}
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
               <FontAwesomeIcon icon={faChartLine} className="w-3.5 h-3.5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm md:text-base text-white tracking-tight">
-                  Intraday Breadth Trend
-                </h3>
-                {isLive ? (
-                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    LIVE
-                  </span>
-                ) : date ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-gray-400 border border-white/5 font-mono">
-                    {date}
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-[11px] text-gray-400">
-                {isToday ? "Today's intraday advances vs declines" : `Session of ${date}`}
-              </p>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm md:text-base text-white tracking-tight">
+                Intraday Breadth Trend
+              </h3>
+              {isLive ? (
+                <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  LIVE
+                </span>
+              ) : date ? (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-gray-400 border border-white/5 font-mono">
+                  {date}
+                </span>
+              ) : null}
             </div>
           </div>
 
           {/* Series Toggle Pills (MUI-style controls) */}
-          <div className="flex items-center gap-1.5 text-xs font-mono">
+          <div className="flex items-center gap-2 text-xs font-mono">
             <button
               onClick={() => setShowAdvances((prev) => !prev)}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
                 showAdvances
                   ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-sm'
                   : 'bg-slate-800/40 text-gray-500 border-white/5 line-through opacity-60'
@@ -154,7 +149,7 @@ export default function IntradayMarketBreadthChart({
             </button>
             <button
               onClick={() => setShowDeclines((prev) => !prev)}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
                 showDeclines
                   ? 'bg-rose-500/15 text-rose-400 border-rose-500/30 shadow-sm'
                   : 'bg-slate-800/40 text-gray-500 border-white/5 line-through opacity-60'
@@ -164,7 +159,7 @@ export default function IntradayMarketBreadthChart({
             </button>
             <button
               onClick={() => setShowNet((prev) => !prev)}
-              className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${
                 showNet
                   ? 'bg-sky-500/15 text-sky-400 border-sky-500/30 shadow-sm'
                   : 'bg-slate-800/40 text-gray-500 border-white/5 opacity-60'
@@ -177,11 +172,11 @@ export default function IntradayMarketBreadthChart({
 
         {/* Chart View */}
         {points && points.length > 0 ? (
-          <div className="h-[170px] w-full mt-1">
+          <div className="h-[250px] md:h-[280px] w-full mt-2">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={points}
-                margin={{ top: 12, right: 10, left: -22, bottom: 0 }}
+                margin={{ top: 16, right: 10, left: -20, bottom: 0 }}
               >
                 <CartesianGrid
                   stroke="rgba(255, 255, 255, 0.05)"
@@ -253,12 +248,12 @@ export default function IntradayMarketBreadthChart({
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-[170px] w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/10 rounded-xl my-2">
+          <div className="h-[250px] md:h-[280px] w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/10 rounded-xl my-2">
             <span className="text-xs text-gray-400 mb-1 font-medium">
               No intraday snapshots recorded yet
             </span>
             <p className="text-[11px] text-gray-500 max-w-xs">
-              Snapshots are recorded every 2–5 minutes between 09:15 AM and 03:30 PM IST on trading days.
+              Snapshots are recorded every minute between 09:15 AM and 03:40 PM IST on trading days.
             </p>
           </div>
         )}
@@ -266,12 +261,12 @@ export default function IntradayMarketBreadthChart({
 
       {/* Footer Info */}
       {latest && (
-        <div className="flex items-center justify-between text-[11px] pt-2 border-t border-white/5 text-gray-400 font-mono">
+        <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
           <span className="text-gray-400">
             Last tick: <span className="text-gray-200 font-semibold">{latest.time}</span>
           </span>
           <span
-            className={latest.netAdvances >= 0 ? 'text-emerald-400' : 'text-rose-400'}
+            className={latest.netAdvances >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}
           >
             Net {latest.netAdvances >= 0 ? `+${latest.netAdvances}` : latest.netAdvances}
           </span>

@@ -824,38 +824,38 @@ export default function MarketOverviewClient({
       {/* Section 1: All-NSE Market Breadth & Real-time Distributions (10s live poll) */}
       {!embedded && (
         <motion.div variants={itemVariants} className="flex flex-col gap-4 md:gap-5">
-          {/* Row 1: Current Breadth Stats + Intraday Line Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            <NSEMarketBreadthCard
-              breadth={breadthData}
-              loading={breadthLoading}
-              isMarketOpen={isMarketCurrentlyActive}
-              refreshSecondsLeft={breadthSecondsLeft}
-              onRefresh={() => { loadBreadth(true); loadIntradayBreadth(); }}
-            />
-            <IntradayMarketBreadthChart
-              points={intradayData?.points || []}
-              date={intradayData?.date}
-              isToday={intradayData?.isToday}
-              isLive={isMarketCurrentlyActive}
-              loading={intradayLoading}
-            />
-          </div>
+          {/* Row 1: Current Breadth Stats (Full Width) */}
+          <NSEMarketBreadthCard
+            breadth={breadthData}
+            loading={breadthLoading}
+            isMarketOpen={isMarketCurrentlyActive}
+            refreshSecondsLeft={breadthSecondsLeft}
+            onRefresh={() => { loadBreadth(true); loadIntradayBreadth(); }}
+          />
 
-          {/* Row 2: Day Moves & ATH Drawdown Distributions */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            <StockMovesDistributionChart
-              distribution={breadthData?.distribution || []}
-              medianMove={breadthData?.medianMove || 0}
-              totalStocks={breadthData?.total || 0}
-              loading={breadthLoading}
-            />
-            <AthDistributionChart
-              distribution={breadthData?.athDistribution || []}
-              totalStocks={breadthData?.total || 0}
-              loading={breadthLoading}
-            />
-          </div>
+          {/* Row 2: Intraday Line Chart (Full Width) */}
+          <IntradayMarketBreadthChart
+            points={intradayData?.points || []}
+            date={intradayData?.date}
+            isToday={intradayData?.isToday}
+            isLive={isMarketCurrentlyActive}
+            loading={intradayLoading}
+          />
+
+          {/* Row 2: Stock Moves Distribution (Full Width) */}
+          <StockMovesDistributionChart
+            distribution={breadthData?.distribution || []}
+            medianMove={breadthData?.medianMove || 0}
+            totalStocks={breadthData?.total || 0}
+            loading={breadthLoading}
+          />
+
+          {/* Row 3: Distance Away from ATH Distribution (Full Width) */}
+          <AthDistributionChart
+            distribution={breadthData?.athDistribution || []}
+            totalStocks={breadthData?.total || 0}
+            loading={breadthLoading}
+          />
         </motion.div>
       )}
 

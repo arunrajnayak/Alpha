@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from 'recharts';
 import type { DistributionBucket } from '@/app/actions/market-breadth';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -75,7 +76,7 @@ const CustomTooltip = ({
   const isZero = data.label === '0%';
 
   return (
-    <div className="bg-[#0c1220]/95 border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl backdrop-blur-md min-w-[130px]">
+    <div className="bg-[#0c1220]/95 border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl backdrop-blur-md min-w-[140px]">
       <span className="text-[11px] text-gray-400 font-medium block mb-1">
         Change: <span className="text-gray-200 font-semibold">{data.label}</span>
       </span>
@@ -88,7 +89,7 @@ const CustomTooltip = ({
           {data.count}
         </span>
         <span className="text-xs text-gray-400 font-mono">
-          ({data.percent}%)
+          stocks ({data.percent}%)
         </span>
       </div>
     </div>
@@ -106,13 +107,13 @@ export default function StockMovesDistributionChart({
       label: b.label,
       count: b.count,
       percent: b.percent,
-      color: BUCKET_COLORS[b.label] || '#38bdf8',
+      color: BUCKET_COLORS[b.label] || '#94a3b8',
     }));
   }, [distribution]);
 
   if (loading && distribution.length === 0) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-4 md:p-5 h-[230px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[320px] animate-pulse" />
     );
   }
 
@@ -126,10 +127,10 @@ export default function StockMovesDistributionChart({
     .reduce((acc, curr) => acc + curr.count, 0);
 
   return (
-    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-4 md:p-5 shadow-xl relative overflow-hidden">
+    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
       {/* Top Header */}
       <div>
-        <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
               <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
@@ -138,11 +139,10 @@ export default function StockMovesDistributionChart({
               <h3 className="font-semibold text-sm md:text-base text-white tracking-tight">
                 Stock Moves Distribution
               </h3>
-              <p className="text-[11px] text-gray-400">Day price change spread</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-mono">
+          <div className="flex items-center gap-4 text-xs font-mono">
             <div className="text-right">
               <span className="text-[10px] uppercase text-gray-500 block font-sans">
                 Median Move
@@ -162,29 +162,40 @@ export default function StockMovesDistributionChart({
           </div>
         </div>
 
-        {/* Histogram Chart */}
-        <div className="h-[140px] w-full mt-2">
+        {/* Big Histogram Chart with Count on Bars */}
+        <div className="h-[250px] md:h-[280px] w-full mt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 4, left: -24, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 24, right: 10, left: -20, bottom: 0 }}>
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                tick={{ fill: '#94a3b8', fontSize: 9 }}
+                tick={{ fill: '#94a3b8', fontSize: 10 }}
                 tickFormatter={(v) => SHORT_LABELS[v] || v}
                 interval={0}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: '#64748b', fontSize: 9 }}
+                tick={{ fill: '#64748b', fontSize: 10 }}
                 allowDecimals={false}
               />
               <Tooltip
                 content={<CustomTooltip />}
                 cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
               />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" radius={[5, 5, 0, 0]}>
+                <LabelList
+                  dataKey="count"
+                  position="top"
+                  fill="#cbd5e1"
+                  fontSize={10}
+                  fontFamily="monospace"
+                  fontWeight={600}
+                  formatter={(val: unknown) =>
+                    typeof val === 'number' && val > 0 ? val.toLocaleString() : ''
+                  }
+                />
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
@@ -195,15 +206,15 @@ export default function StockMovesDistributionChart({
       </div>
 
       {/* Distribution Footer Insight */}
-      <div className="flex items-center justify-between text-[11px] pt-2 border-t border-white/5 text-gray-400 font-mono">
+      <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
         <span className="text-rose-400">
-          {negativeCount} ({totalStocks > 0 ? ((negativeCount / totalStocks) * 100).toFixed(0) : 0}%) negative
+          {negativeCount} stocks ({totalStocks > 0 ? ((negativeCount / totalStocks) * 100).toFixed(0) : 0}%) negative
         </span>
         <span className="text-gray-500 font-sans text-[10px]">
           {negativeCount > positiveCount ? 'Sell-side Skew' : 'Buy-side Skew'}
         </span>
         <span className="text-emerald-400">
-          {positiveCount} ({totalStocks > 0 ? ((positiveCount / totalStocks) * 100).toFixed(0) : 0}%) positive
+          {positiveCount} stocks ({totalStocks > 0 ? ((positiveCount / totalStocks) * 100).toFixed(0) : 0}%) positive
         </span>
       </div>
     </div>

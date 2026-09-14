@@ -15,7 +15,7 @@ import {
 import { fetchMarketHealthHistory } from '@/app/actions/market-breadth';
 import type { MarketHealthHistoryData } from '@/app/actions/market-breadth';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faHeartPulse, faShieldHalved, faMountain } from '@fortawesome/free-solid-svg-icons';
+import { faHeartPulse, faShieldHalved } from '@fortawesome/free-solid-svg-icons';
 
 interface MarketHealthDashboardProps {
   initialData?: MarketHealthHistoryData | null;
@@ -74,9 +74,6 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400">
-              Moving average participation & ATH proximity trends across NSE universe
-            </p>
           </div>
         </div>
 
@@ -149,8 +146,8 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         </div>
       </div>
 
-      {/* Chart 1: Moving Average Breadth Over Time */}
-      <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4">
+      {/* Chart: Moving Average Breadth Over Time */}
+      <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4 md:p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <FontAwesomeIcon icon={faShieldHalved} className="w-3.5 h-3.5 text-purple-400" />
@@ -161,7 +158,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           <span className="text-[10px] text-gray-500 font-mono">50% line = Bull/Bear pivot</span>
         </div>
 
-        <div className="h-[230px] w-full">
+        <div className="h-[280px] md:h-[320px] w-full">
           {loading && !data ? (
             <div className="h-full bg-slate-800/50 rounded-lg animate-pulse" />
           ) : (
@@ -232,89 +229,6 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                   dataKey="pctAbove20Dma"
                   name="% Above 20 DMA"
                   stroke="#06b6d4"
-                  strokeWidth={1.5}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* Chart 2: All-Time High (ATH) Proximity Over Time */}
-      <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <FontAwesomeIcon icon={faMountain} className="w-3.5 h-3.5 text-amber-400" />
-            <h3 className="text-sm font-semibold text-gray-200">
-              All-Time High (ATH) Proximity Spectrum
-            </h3>
-          </div>
-          <span className="text-[10px] text-gray-500 font-mono">% of stocks near ATH</span>
-        </div>
-
-        <div className="h-[210px] w-full">
-          {loading && !data ? (
-            <div className="h-full bg-slate-800/50 rounded-lg animate-pulse" />
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data?.history || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                  tick={{ fill: '#94a3b8', fontSize: 10 }}
-                  tickFormatter={(val) => {
-                    const parts = val.split('-');
-                    return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : val;
-                  }}
-                />
-                <YAxis
-                  domain={[0, 'auto']}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#64748b', fontSize: 10 }}
-                  unit="%"
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0c1220',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                  }}
-                  labelStyle={{ color: '#94a3b8', fontWeight: 600 }}
-                  formatter={(val: any) => [
-                    `${val ?? 0}%`,
-                    '',
-                  ]}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-                  iconType="circle"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctNearAth10"
-                  name="Within 10% of ATH"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctNearAth20"
-                  name="Within 20% of ATH"
-                  stroke="#d97706"
-                  strokeWidth={1.5}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctNearAth30"
-                  name="Within 30% of ATH"
-                  stroke="#92400e"
                   strokeWidth={1.5}
                   dot={false}
                 />

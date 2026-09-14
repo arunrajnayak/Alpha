@@ -296,7 +296,7 @@ function createEmptyBuckets(): DistributionBucket[] {
   ];
 }
 
-// Build empty ATH drawdown buckets template
+// Build empty ATH drawdown buckets template (0-5%, 5-10%, ..., 90-100%)
 function createEmptyATHBuckets(): DistributionBucket[] {
   return [
     { label: '0-5%', min: 0, max: 5, count: 0, percent: 0 },
@@ -306,7 +306,11 @@ function createEmptyATHBuckets(): DistributionBucket[] {
     { label: '20-30%', min: 20, max: 30, count: 0, percent: 0 },
     { label: '30-40%', min: 30, max: 40, count: 0, percent: 0 },
     { label: '40-50%', min: 40, max: 50, count: 0, percent: 0 },
-    { label: '> 50%', min: 50, max: Infinity, count: 0, percent: 0 },
+    { label: '50-60%', min: 50, max: 60, count: 0, percent: 0 },
+    { label: '60-70%', min: 60, max: 70, count: 0, percent: 0 },
+    { label: '70-80%', min: 70, max: 80, count: 0, percent: 0 },
+    { label: '80-90%', min: 80, max: 90, count: 0, percent: 0 },
+    { label: '90-100%', min: 90, max: Infinity, count: 0, percent: 0 },
   ];
 }
 
