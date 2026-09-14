@@ -15,6 +15,7 @@ A self-hosted portfolio tracking application for Indian stock markets with real-
 ## ✨ Features
 
 - **Real-time Dashboard** — Live portfolio P&L with WebSocket price streaming from Upstox
+- **Markets Health** — Real-time NSE market breadth across ~3,400+ active stocks, live intraday advances/declines line chart, stock price move distribution, distance from ATH breakdown, market-cap tier breadth (Large/Mid/Small/Micro), and historical DMA & ATH breadth trends
 - **Momentum Screener** — Daily-ranked NSE universe using composite Sharpe ratio scoring with ATH proximity filters, plus exit signal detection for portfolio holdings
 - **Privacy Mode** — Toggle to hide monetary values on desktop (great for screen sharing)
 - **Performance Analytics** — NAV tracking, XIRR, drawdown, benchmark comparisons (NIFTY 50, NIFTY 500 MOMENTUM 50, etc.)
@@ -393,6 +394,19 @@ Click the **eye icon** in the live dashboard header to toggle privacy mode:
 - **Off**: All values are visible
 - **Mobile**: Values are always shown regardless of privacy setting (since you are on your personal device)
 - The setting persists across sessions via `localStorage`
+
+---
+
+## 🩺 Markets Health
+
+The Markets Health page (`/markets`) provides comprehensive real-time breadth and historical health metrics for the broader Indian equity market across all active NSE stocks:
+
+- **Real-Time Advances & Declines**: Live tally across the entire active NSE equity universe (~3,400+ stocks) with Advance/Decline ratio, percentage breakdowns, and net advances. Automatic polling suspends outside market hours to save API quota.
+- **Intraday Market Breadth Line Chart**: Continuous intraday time-series tracking advances, declines, unchanged stocks, and net advances at 5-minute intervals throughout the trading session (backed by the `/api/cron/market-breadth` cron job).
+- **Stock Moves Distribution**: Histogram categorizing daily performance of all stocks into buckets from $<-15\%$ to $>+15\%$.
+- **Distance from ATH Distribution**: Breakdown of stocks grouped by distance from 52-week or all-time highs (supports 1Y lookback and All-Time lookback).
+- **Market-Cap Tier Breadth**: Granular advance/decline distribution filtered by AMFI classifications: Large Cap, Mid Cap, Small Cap, and Micro Cap.
+- **Market Health Trends**: Historical breadth indicators tracking the percentage of stocks trading above key moving averages (20 DMA, 50 DMA, 200 DMA) and within threshold distances of ATH (within 5%, 10%, 15%, 20% of ATH).
 
 ---
 

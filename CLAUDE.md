@@ -32,12 +32,14 @@ src/
 │   │   ├── actions.ts     # Core portfolio: recalculate, snapshots, revalidation
 │   │   ├── screener.ts    # Screener data fetch + exit signal detection
 │   │   ├── live.ts        # Live dashboard: holdings, intraday P/L
+│   │   ├── market-breadth.ts # Real-time NSE breadth, distributions, DMA/ATH trends
 │   │   ├── settings.ts    # Data lock, config, AMFI upload
 │   │   ├── amfi.ts        # AMFI PDF parsing and classification
 │   │   └── sectors.ts     # Sector mapping
 │   ├── api/
 │   │   ├── cron/          # All cron endpoints (auth via CRON_SECRET)
 │   │   │   ├── intraday-pnl/   # Every-minute P/L recording
+│   │   │   ├── market-breadth/ # Every-5-min intraday breadth recording
 │   │   │   ├── momentum-screener/ # Daily screener pipeline
 │   │   │   ├── corporate-actions/ # NSE split/bonus sync
 │   │   │   ├── sector-refresh/  # Zerodha sector scrape
@@ -48,6 +50,7 @@ src/
 │   │   ├── stream/market/       # Upstox WebSocket proxy/state
 │   │   └── recompute/           # Full portfolio recalculation trigger
 │   ├── live/              # Real-time dashboard page
+│   ├── markets/           # Markets Health page: breadth, intraday line chart, distributions
 │   ├── dashboard/         # Historical performance dashboard
 │   ├── screener/          # Momentum screener page
 │   ├── trades/            # Trade management & import
@@ -80,7 +83,7 @@ src/
 
 **Core**: `Transaction`, `ImportBatch`
 **Snapshots**: `DailyPortfolioSnapshot`, `WeeklyPortfolioSnapshot`, `MonthlyPortfolioSnapshot`
-**Price data**: `StockHistory`, `IndexHistory`, `IntradayPnL`
+**Price data**: `StockHistory`, `IndexHistory`, `IntradayPnL`, `MarketBreadthIntraday`
 **Screener**: `ScreenerPrice`, `StockATH`, `MomentumScore`, `RankingHistory`, `StockMarketCap`, `ScreenerDemerger`
 **Classification**: `AMFIClassification`, `AMFIImportHistory`, `SectorMapping`
 **Auth/Config**: `UpstoxToken`, `AppConfig`, `SymbolMapping`, `Job`
