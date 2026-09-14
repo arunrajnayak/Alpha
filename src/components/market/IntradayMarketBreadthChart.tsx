@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -9,7 +9,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  ReferenceLine,
 } from 'recharts';
 import { motion } from 'framer-motion';
 import type { IntradayBreadthPoint, NSEMarketBreadthData } from '@/app/actions/market-breadth';
@@ -93,10 +92,6 @@ export default function IntradayMarketBreadthChart({
   breadth,
   loading = false,
 }: IntradayMarketBreadthChartProps) {
-  const [showAdvances, setShowAdvances] = useState(true);
-  const [showDeclines, setShowDeclines] = useState(true);
-  const [showNet, setShowNet] = useState(false);
-
   // Latest point from intraday snapshots
   const latest = useMemo(() => {
     if (!points || points.length === 0) return null;
@@ -119,7 +114,7 @@ export default function IntradayMarketBreadthChart({
 
   if (loading && (!points || points.length === 0) && !breadth) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[460px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[500px] animate-pulse" />
     );
   }
 
@@ -132,146 +127,90 @@ export default function IntradayMarketBreadthChart({
         }`}
       />
 
-      {/* Top Header */}
+      {/* Top Header: Title on Left, Stocks Count on Right */}
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center justify-between pb-3 border-b border-white/5">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <FontAwesomeIcon icon={faArrowTrendUp} className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <FontAwesomeIcon icon={faArrowTrendUp} className="w-3.5 h-3.5" />
             </div>
-            <div className="flex items-center gap-2.5">
-              <h3 className="font-semibold text-base md:text-lg text-white tracking-tight">
-                Market breadth
-              </h3>
-              {total > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-md bg-slate-800/80 text-gray-300 border border-white/10 font-mono font-medium">
-                  {total.toLocaleString()} Stocks
-                </span>
-              )}
-            </div>
+            <h3 className="font-semibold text-base md:text-lg text-white tracking-tight">
+              Market breadth
+            </h3>
           </div>
 
-          {/* Series Toggle Pills */}
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <button
-              onClick={() => setShowAdvances((prev) => !prev)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium border transition ${
-                showAdvances
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-sm'
-                  : 'bg-slate-800/40 text-gray-500 border-white/5 line-through opacity-60'
-              }`}
-            >
-              Advances
-            </button>
-            <button
-              onClick={() => setShowDeclines((prev) => !prev)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium border transition ${
-                showDeclines
-                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30 shadow-sm'
-                  : 'bg-slate-800/40 text-gray-500 border-white/5 line-through opacity-60'
-              }`}
-            >
-              Declines
-            </button>
-            <button
-              onClick={() => setShowNet((prev) => !prev)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium border transition ${
-                showNet
-                  ? 'bg-sky-500/15 text-sky-400 border-sky-500/30 shadow-sm'
-                  : 'bg-slate-800/40 text-gray-500 border-white/5 opacity-60'
-              }`}
-            >
-              Net A/D
-            </button>
-          </div>
+          {/* Stocks count badge placed in top right */}
+          {total > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-800/80 text-gray-300 border border-white/10 font-mono font-medium">
+              {total.toLocaleString()} Stocks
+            </span>
+          )}
         </div>
 
-        {/* Big Numbers: Advances vs Declines vs A/D Ratio */}
+        {/* Sleek Blended Advances / A/D / Declines Stats & Slim Progress Bar */}
         {(advances > 0 || declines > 0) && (
-          <div className="grid grid-cols-3 gap-3 py-3.5 px-4 md:px-6 mb-3 bg-slate-800/40 rounded-xl border border-white/5">
-            {/* Advances */}
-            <div className="flex flex-col">
-              <span className="text-[11px] uppercase font-semibold text-emerald-400/80 tracking-wider">
-                Advances
-              </span>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl md:text-3xl font-bold font-mono text-emerald-400">
-                  {advances.toLocaleString()}
-                </span>
-                <span className="text-xs md:text-sm text-emerald-400/70 font-mono">
-                  ({advPercent}%)
-                </span>
+          <div className="pt-3.5 pb-2">
+            <div className="flex items-center justify-between text-xs md:text-sm font-mono mb-2 px-0.5">
+              {/* Advances */}
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]" />
+                <span className="text-gray-400 text-xs font-sans">Advances</span>
+                <span className="font-bold text-emerald-400">{advances.toLocaleString()}</span>
+                <span className="text-emerald-400/70 text-xs">({advPercent}%)</span>
               </div>
-            </div>
 
-            {/* A/D Ratio */}
-            <div className="flex flex-col text-center">
-              <span className="text-[11px] uppercase font-semibold text-gray-400 tracking-wider">
-                A/D Ratio
-              </span>
-              <div className="flex items-baseline justify-center gap-1.5 mt-1">
-                <span
-                  className={`text-2xl md:text-3xl font-bold font-mono ${
-                    adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
+              {/* A/D Ratio */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-400 text-xs font-sans">A/D</span>
+                <span className={`font-bold ${adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {adRatio.toFixed(2)}
                 </span>
-                <span className="text-xs text-gray-500 font-mono">
-                  {netAdvances >= 0 ? `+${netAdvances}` : `${netAdvances}`}
+                <span className="text-gray-500 text-xs">
+                  ({netAdvances >= 0 ? `+${netAdvances}` : netAdvances})
                 </span>
+              </div>
+
+              {/* Declines */}
+              <div className="flex items-center gap-2">
+                <span className="text-rose-400/70 text-xs">({decPercent}%)</span>
+                <span className="font-bold text-rose-400">{declines.toLocaleString()}</span>
+                <span className="text-gray-400 text-xs font-sans">Declines</span>
+                <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.7)]" />
               </div>
             </div>
 
-            {/* Declines */}
-            <div className="flex flex-col text-right">
-              <span className="text-[11px] uppercase font-semibold text-rose-400/80 tracking-wider">
-                Declines
-              </span>
-              <div className="flex items-baseline justify-end gap-2 mt-1">
-                <span className="text-xs md:text-sm text-rose-400/70 font-mono">
-                  ({decPercent}%)
-                </span>
-                <span className="text-2xl md:text-3xl font-bold font-mono text-rose-400">
-                  {declines.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Advance / Decline Bar */}
-        {(advances > 0 || declines > 0) && (
-          <div className="relative h-3 md:h-3.5 w-full rounded-full overflow-hidden flex bg-slate-800/80 shadow-inner mb-3">
-            <motion.div
-              className="h-full bg-emerald-500"
-              style={{ width: `${advPercent}%` }}
-              initial={false}
-              animate={{ width: `${advPercent}%` }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-            />
-            {unchPercent > 0 && (
+            {/* Slim dual-color progress bar */}
+            <div className="relative h-2 w-full rounded-full overflow-hidden flex bg-slate-800/80 shadow-inner">
               <motion.div
-                className="h-full bg-slate-500/80"
-                style={{ width: `${unchPercent}%` }}
+                className="h-full bg-emerald-500"
+                style={{ width: `${advPercent}%` }}
                 initial={false}
-                animate={{ width: `${unchPercent}%` }}
+                animate={{ width: `${advPercent}%` }}
                 transition={{ duration: 0.5, ease: 'easeOut' }}
               />
-            )}
-            <motion.div
-              className="h-full bg-rose-500"
-              style={{ width: `${decPercent}%` }}
-              initial={false}
-              animate={{ width: `${decPercent}%` }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-            />
+              {unchPercent > 0 && (
+                <motion.div
+                  className="h-full bg-slate-500/80"
+                  style={{ width: `${unchPercent}%` }}
+                  initial={false}
+                  animate={{ width: `${unchPercent}%` }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                />
+              )}
+              <motion.div
+                className="h-full bg-rose-500"
+                style={{ width: `${decPercent}%` }}
+                initial={false}
+                animate={{ width: `${decPercent}%` }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+              />
+            </div>
           </div>
         )}
 
-        {/* Chart View (Enlarged) */}
+        {/* Enlarged Intraday Trend Chart */}
         {points && points.length > 0 ? (
-          <div className="h-[320px] md:h-[380px] w-full mt-3">
+          <div className="h-[380px] md:h-[460px] w-full mt-3">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={points}
@@ -286,68 +225,45 @@ export default function IntradayMarketBreadthChart({
                   dataKey="time"
                   tickLine={false}
                   axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
                   interval="preserveStartEnd"
                   minTickGap={30}
                 />
                 <YAxis
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: '#64748b', fontSize: 10 }}
+                  tick={{ fill: '#64748b', fontSize: 11 }}
                   allowDecimals={false}
                 />
-                {showNet && (
-                  <ReferenceLine
-                    y={0}
-                    stroke="rgba(255, 255, 255, 0.2)"
-                    strokeDasharray="2 2"
-                  />
-                )}
                 <Tooltip
                   content={<CustomTooltip />}
                   cursor={{ stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1 }}
                 />
-                {showAdvances && (
-                  <Line
-                    type="monotone"
-                    dataKey="advances"
-                    name="Advances"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 1.5 }}
-                    isAnimationActive={false}
-                  />
-                )}
-                {showDeclines && (
-                  <Line
-                    type="monotone"
-                    dataKey="declines"
-                    name="Declines"
-                    stroke="#ef4444"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#ef4444', stroke: '#fff', strokeWidth: 1.5 }}
-                    isAnimationActive={false}
-                  />
-                )}
-                {showNet && (
-                  <Line
-                    type="monotone"
-                    dataKey="netAdvances"
-                    name="Net Advances"
-                    stroke="#38bdf8"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: '#38bdf8', stroke: '#fff', strokeWidth: 1.5 }}
-                    isAnimationActive={false}
-                  />
-                )}
+                <Line
+                  type="monotone"
+                  dataKey="advances"
+                  name="Advances"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 1.5 }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="declines"
+                  name="Declines"
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#ef4444', stroke: '#fff', strokeWidth: 1.5 }}
+                  isAnimationActive={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-[280px] md:h-[320px] w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/10 rounded-xl my-3">
+          <div className="h-[360px] md:h-[440px] w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/10 rounded-xl my-3">
             <span className="text-xs text-gray-400 mb-1 font-medium">
               No intraday snapshots recorded yet
             </span>
