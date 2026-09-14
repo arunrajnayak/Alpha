@@ -306,7 +306,7 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 | # | Title | Endpoint | Schedule (UTC) | IST | What it does |
 |---|-------|----------|----------------|-----|--------------|
 | 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 4-10 * * 1-5` | Every min, 9:30am–4:00pm | Records P&L every minute for the Intraday chart |
-| 2 | Intraday Breadth | `/api/cron/market-breadth` | `*/5 4-10 * * 1-5` | Every 5 min, 9:30am–4:00pm | Records all-NSE advances & declines for the Intraday Breadth chart |
+| 2 | Intraday Breadth | `/api/cron/market-breadth` | `* 4-10 * * 1-5` | Every min, 9:30am–4:00pm | Records all-NSE advances & declines for the Intraday Breadth chart |
 | 3 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon–Fri | End-of-day portfolio value, NAV, drawdown |
 | 4 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR) |
 | 5 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats |
@@ -399,7 +399,7 @@ Click the **eye icon** in the live dashboard header to toggle privacy mode:
 
 ## 🩺 Markets Health
 
-The Markets Health page (`/markets`) provides comprehensive real-time breadth and historical health metrics for the broader Indian equity market across all active NSE stocks:
+The Markets Health page (`/market`) provides comprehensive real-time breadth and historical health metrics for the broader Indian equity market across all active NSE stocks:
 
 - **Real-Time Advances & Declines**: Live tally across the entire active NSE equity universe (~3,400+ stocks) with Advance/Decline ratio, percentage breakdowns, and net advances. Automatic polling suspends outside market hours to save API quota.
 - **Intraday Market Breadth Line Chart**: Continuous intraday time-series tracking advances, declines, unchanged stocks, and net advances at 5-minute intervals throughout the trading session (backed by the `/api/cron/market-breadth` cron job).

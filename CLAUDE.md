@@ -50,7 +50,7 @@ src/
 │   │   ├── stream/market/       # Upstox WebSocket proxy/state
 │   │   └── recompute/           # Full portfolio recalculation trigger
 │   ├── live/              # Real-time dashboard page
-│   ├── markets/           # Markets Health page: breadth, intraday line chart, distributions
+│   ├── market/            # Markets Health page: breadth, intraday line chart, distributions
 │   ├── dashboard/         # Historical performance dashboard
 │   ├── screener/          # Momentum screener page
 │   ├── trades/            # Trade management & import
