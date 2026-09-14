@@ -113,18 +113,9 @@ export default function StockMovesDistributionChart({
 
   if (loading && distribution.length === 0) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[320px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[420px] animate-pulse" />
     );
   }
-
-  // Summary counts
-  const positiveCount = distribution
-    .filter((b) => b.label.includes('+') || b.label.startsWith('>'))
-    .reduce((acc, curr) => acc + curr.count, 0);
-
-  const negativeCount = distribution
-    .filter((b) => b.label.includes('-') || b.label.startsWith('<'))
-    .reduce((acc, curr) => acc + curr.count, 0);
 
   return (
     <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
@@ -136,7 +127,7 @@ export default function StockMovesDistributionChart({
               <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h3 className="font-semibold text-sm md:text-base text-white tracking-tight">
+              <h3 className="font-semibold text-base md:text-lg text-white tracking-tight">
                 Stock Moves Distribution
               </h3>
             </div>
@@ -148,7 +139,7 @@ export default function StockMovesDistributionChart({
                 Median Move
               </span>
               <span
-                className={`font-bold ${
+                className={`font-bold text-sm ${
                   medianMove > 0
                     ? 'text-emerald-400'
                     : medianMove < 0
@@ -163,21 +154,21 @@ export default function StockMovesDistributionChart({
         </div>
 
         {/* Big Histogram Chart with Count on Bars */}
-        <div className="h-[250px] md:h-[280px] w-full mt-2">
+        <div className="h-[340px] md:h-[400px] w-full mt-3">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 24, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 28, right: 10, left: -20, bottom: 0 }}>
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                tick={{ fill: '#94a3b8', fontSize: 10 }}
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
                 tickFormatter={(v) => SHORT_LABELS[v] || v}
                 interval={0}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: '#64748b', fontSize: 10 }}
+                tick={{ fill: '#64748b', fontSize: 11 }}
                 allowDecimals={false}
               />
               <Tooltip
@@ -189,7 +180,7 @@ export default function StockMovesDistributionChart({
                   dataKey="count"
                   position="top"
                   fill="#cbd5e1"
-                  fontSize={10}
+                  fontSize={11}
                   fontFamily="monospace"
                   fontWeight={600}
                   formatter={(val: unknown) =>
@@ -203,19 +194,6 @@ export default function StockMovesDistributionChart({
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* Distribution Footer Insight */}
-      <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
-        <span className="text-rose-400">
-          {negativeCount} stocks ({totalStocks > 0 ? ((negativeCount / totalStocks) * 100).toFixed(0) : 0}%) negative
-        </span>
-        <span className="text-gray-500 font-sans text-[10px]">
-          {negativeCount > positiveCount ? 'Sell-side Skew' : 'Buy-side Skew'}
-        </span>
-        <span className="text-emerald-400">
-          {positiveCount} stocks ({totalStocks > 0 ? ((positiveCount / totalStocks) * 100).toFixed(0) : 0}%) positive
-        </span>
       </div>
     </div>
   );
