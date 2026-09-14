@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { motion } from 'framer-motion';
 import type { IntradayBreadthPoint, NSEMarketBreadthData } from '@/app/actions/market-breadth';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowTrendUp } from '@fortawesome/free-solid-svg-icons';
@@ -147,63 +146,56 @@ export default function IntradayMarketBreadthChart({
           )}
         </div>
 
-        {/* Sleek Blended Advances / A/D / Declines Stats & Slim Progress Bar */}
+        {/* Advances / A/D Ratio / Declines Stats Badges */}
         {(advances > 0 || declines > 0) && (
-          <div className="pt-3.5 pb-2">
-            <div className="flex items-center justify-between text-xs md:text-sm font-mono mb-2 px-0.5">
-              {/* Advances */}
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]" />
-                <span className="text-gray-400 text-xs font-sans">Advances</span>
-                <span className="font-bold text-emerald-400">{advances.toLocaleString()}</span>
-                <span className="text-emerald-400/70 text-xs">({advPercent}%)</span>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3.5 my-3.5">
+            {/* Advances */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-emerald-500/[0.07] border border-emerald-500/20 shadow-sm gap-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] shrink-0" />
+                <span className="text-xs font-medium text-gray-300">Advances</span>
               </div>
-
-              {/* A/D Ratio */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-400 text-xs font-sans">A/D</span>
-                <span className={`font-bold ${adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {adRatio.toFixed(2)}
+              <div className="flex items-baseline gap-1 font-mono">
+                <span className="text-sm sm:text-base font-bold text-emerald-400">
+                  {advances.toLocaleString()}
                 </span>
-                <span className="text-gray-500 text-xs">
-                  ({netAdvances >= 0 ? `+${netAdvances}` : netAdvances})
+                <span className="text-[10px] sm:text-xs text-emerald-400/70 font-medium">
+                  ({advPercent}%)
                 </span>
-              </div>
-
-              {/* Declines */}
-              <div className="flex items-center gap-2">
-                <span className="text-rose-400/70 text-xs">({decPercent}%)</span>
-                <span className="font-bold text-rose-400">{declines.toLocaleString()}</span>
-                <span className="text-gray-400 text-xs font-sans">Declines</span>
-                <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.7)]" />
               </div>
             </div>
 
-            {/* Slim dual-color progress bar */}
-            <div className="relative h-2 w-full rounded-full overflow-hidden flex bg-slate-800/80 shadow-inner">
-              <motion.div
-                className="h-full bg-emerald-500"
-                style={{ width: `${advPercent}%` }}
-                initial={false}
-                animate={{ width: `${advPercent}%` }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
-              {unchPercent > 0 && (
-                <motion.div
-                  className="h-full bg-slate-500/80"
-                  style={{ width: `${unchPercent}%` }}
-                  initial={false}
-                  animate={{ width: `${unchPercent}%` }}
-                  transition={{ duration: 0.5, ease: 'easeOut' }}
-                />
-              )}
-              <motion.div
-                className="h-full bg-rose-500"
-                style={{ width: `${decPercent}%` }}
-                initial={false}
-                animate={{ width: `${decPercent}%` }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
+            {/* A/D Ratio */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-slate-800/60 border border-white/10 shadow-sm gap-1">
+              <span className="text-xs font-medium text-gray-300">A/D Ratio</span>
+              <div className="flex items-baseline gap-1 font-mono">
+                <span
+                  className={`text-sm sm:text-base font-bold ${
+                    adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {adRatio.toFixed(2)}
+                </span>
+                <span className="text-[10px] sm:text-xs text-gray-400 font-medium">
+                  ({netAdvances >= 0 ? `+${netAdvances}` : netAdvances})
+                </span>
+              </div>
+            </div>
+
+            {/* Declines */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-rose-500/[0.07] border border-rose-500/20 shadow-sm gap-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)] shrink-0" />
+                <span className="text-xs font-medium text-gray-300">Declines</span>
+              </div>
+              <div className="flex items-baseline gap-1 font-mono">
+                <span className="text-sm sm:text-base font-bold text-rose-400">
+                  {declines.toLocaleString()}
+                </span>
+                <span className="text-[10px] sm:text-xs text-rose-400/70 font-medium">
+                  ({decPercent}%)
+                </span>
+              </div>
             </div>
           </div>
         )}
