@@ -9,7 +9,6 @@ export default function ExitsPage() {
   const { privacyMode } = useLiveData();
   const { data: exits, isLoading, isFetching } = usePortfolioExits();
 
-
   if (isLoading && !exits) {
     return (
       <main className="container mx-auto px-2 md:px-4 max-w-7xl animate-pulse">
@@ -43,7 +42,6 @@ export default function ExitsPage() {
         </div>
       )}
       <ExitsTable exits={exits} privacyMode={privacyMode} />
-
     </main>
   );
 }

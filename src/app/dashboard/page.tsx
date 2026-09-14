@@ -78,6 +78,18 @@ const XirrCagrChart = dynamic(() => import('@/components/portfolio/XirrCagrChart
   loading: () => <div className="h-[380px] bg-slate-800/30 rounded-xl animate-pulse" />,
   ssr: false,
 });
+const PortfolioWaterfall = dynamic(() => import('@/components/portfolio/PortfolioWaterfall'), {
+  loading: () => <div className="h-[380px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const RollingRiskChart = dynamic(() => import('@/components/portfolio/RollingRiskChart'), {
+  loading: () => <div className="h-[380px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const TradeReturnHistogram = dynamic(() => import('@/components/exits/TradeReturnHistogram'), {
+  loading: () => <div className="h-[360px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
 
 export default function DashboardPage() {
   const { data, isLoading, isFetching } = useDashboardData();
@@ -341,6 +353,33 @@ export default function DashboardPage() {
           </div>
       </motion.div>
 
+      {/* Row 5.55: Portfolio Compounding Waterfall */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Portfolio Compounding Waterfall">
+                       <PortfolioWaterfall
+                         startingCapital={chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0}
+                         netDeposits={Math.max(0, totalInvested - (chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0))}
+                         realizedGains={totalRealizedPnL}
+                         dividends={totalDividends ?? 0}
+                         unrealizedGains={totalUnrealizedPnL}
+                         charges={totalCharges}
+                         tax={totalTax}
+                         currentEquity={totalCurrentValue}
+                         privacyMode={privacyMode}
+                       />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
       {/* Row 5.6: Daily Gain/Loss Bar Chart */}
       <motion.div
         variants={sectionVariants}
@@ -370,6 +409,23 @@ export default function DashboardPage() {
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Rolling Returns Chart">
                        <RollingReturnsChart data={chartData} />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5.75: Rolling Sharpe & Sortino */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Rolling Sharpe & Sortino">
+                       <RollingRiskChart data={chartData} />
                      </ChartErrorBoundary>
                 </div>
           </div>
@@ -461,6 +517,23 @@ export default function DashboardPage() {
                 <div className="flex-1 min-h-[500px]">
                      <ChartErrorBoundary componentName="Holding Period vs Returns Chart">
                        <ExitsScatterChart exits={exits} holdings={holdings} />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 10: Trade Return Distribution */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Trade Return Distribution">
+                       <TradeReturnHistogram exits={exits} />
                      </ChartErrorBoundary>
                 </div>
           </div>
