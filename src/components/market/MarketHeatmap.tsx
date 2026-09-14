@@ -21,7 +21,6 @@ interface MarketHeatmapProps {
   declining?: number;
   unchanged?: number;
   loading?: boolean;
-  onRefresh?: () => void;
 }
 
 export default memo(function MarketHeatmap({
@@ -34,7 +33,6 @@ export default memo(function MarketHeatmap({
   declining,
   unchanged,
   loading,
-  onRefresh,
 }: MarketHeatmapProps) {
   const count = constituents?.length || 0;
 
@@ -133,18 +131,6 @@ export default memo(function MarketHeatmap({
                     />
                   </div>
                 </div>
-              )}
-              {onRefresh && (
-                <button
-                  onClick={onRefresh}
-                  disabled={loading}
-                  className="ml-1 p-1.5 text-gray-500 hover:text-white bg-slate-800/50 hover:bg-slate-700/50 border border-white/5 rounded-lg transition-all disabled:opacity-50 shrink-0"
-                  title="Refresh"
-                >
-                  <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
               )}
             </div>
           </div>

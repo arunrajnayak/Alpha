@@ -3,21 +3,16 @@
 import { memo, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+export interface TopMoverItem {
+  symbol: string;
+  changePercent: number;
+  lastPrice: number;
+}
+
 interface TopMoversProps {
-  topGainers: Array<{
-    symbol: string;
-    lastPrice: number;
-    changePercent: number;
-    change: number;
-  }>;
-  topLosers: Array<{
-    symbol: string;
-    lastPrice: number;
-    changePercent: number;
-    change: number;
-  }>;
-  totalConstituents: number;
-  isMobile: boolean;
+  topGainers?: TopMoverItem[];
+  topLosers?: TopMoverItem[];
+  loading?: boolean;
 }
 
 const itemVariants = {
@@ -25,16 +20,32 @@ const itemVariants = {
   visible: (i: number) => ({
     opacity: 1,
     x: 0,
-    transition: { delay: i * 0.03, duration: 0.3 },
+    transition: { delay: i * 0.02, duration: 0.25 },
   }),
 };
 
-function MoverRow({ stock, index, type }: { stock: { symbol: string; changePercent: number }; index: number; type: 'gain' | 'loss' }) {
+function formatPrice(price: number): string {
+  if (!price || price <= 0) return '-';
+  return `₹${price.toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function MoverRow({
+  stock,
+  index,
+  type,
+}: {
+  stock: TopMoverItem;
+  index: number;
+  type: 'gain' | 'loss';
+}) {
   const isGain = type === 'gain';
   return (
     <motion.div
       layout
-      className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-white/[0.03] transition-colors"
+      className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-white/[0.03] transition-colors"
       variants={itemVariants}
       initial="hidden"
       animate="visible"
@@ -42,21 +53,78 @@ function MoverRow({ stock, index, type }: { stock: { symbol: string; changePerce
       custom={index}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <span className="text-[10px] font-medium text-gray-600 w-5 text-right">{index + 1}</span>
-        <span className="font-semibold text-sm text-gray-200 truncate">{stock.symbol}</span>
+        <span className="text-xs font-mono font-medium text-gray-500 w-5 text-right shrink-0">
+          {index + 1}
+        </span>
+        <span className="font-semibold text-sm text-gray-200 truncate tracking-tight">
+          {stock.symbol}
+        </span>
       </div>
-      <span className={`text-xs font-bold px-2 py-0.5 rounded-md min-w-[60px] text-right ${
-        isGain
-          ? 'text-emerald-400 bg-emerald-500/10'
-          : 'text-red-400 bg-red-500/10'
-      }`}>
-        {isGain ? '+' : ''}{stock.changePercent.toFixed(2)}%
-      </span>
+      <div className="flex items-center gap-4 shrink-0">
+        <span className="text-xs font-mono text-gray-400 tabular-nums">
+          {formatPrice(stock.lastPrice)}
+        </span>
+        <span
+          className={`text-xs font-bold font-mono px-2.5 py-0.5 rounded-md min-w-[70px] text-right ${
+            isGain
+              ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
+              : 'text-rose-400 bg-rose-500/10 border border-rose-500/20'
+          }`}
+        >
+          {isGain ? '+' : ''}{stock.changePercent.toFixed(2)}%
+        </span>
+      </div>
     </motion.div>
   );
 }
 
-export default memo(function TopMovers({ topGainers, topLosers, totalConstituents, isMobile }: TopMoversProps) {
+function SkeletonCard({ title, type }: { title: string; type: 'gain' | 'loss' }) {
+  const isGain = type === 'gain';
+  return (
+    <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 md:p-6 backdrop-blur-sm shadow-xl animate-pulse">
+      <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div
+            className={`w-2.5 h-2.5 rounded-full ${
+              isGain ? 'bg-emerald-500/50' : 'bg-rose-500/50'
+            }`}
+          />
+          <h3 className="text-sm md:text-base font-semibold text-gray-300">{title}</h3>
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-600 px-3 pb-2 border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <span className="w-5 text-right">#</span>
+          <span>Stock</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-right">Price</span>
+          <span className="w-[70px] text-right">Change</span>
+        </div>
+      </div>
+      <div className="divide-y divide-white/[0.03] mt-1">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between py-2.5 px-3">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-3 bg-slate-800/60 rounded" />
+              <div className="w-20 h-4 bg-slate-800/60 rounded" />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-3.5 bg-slate-800/40 rounded" />
+              <div className="w-16 h-6 bg-slate-800/60 rounded-md" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default memo(function TopMovers({
+  topGainers = [],
+  topLosers = [],
+  loading = false,
+}: TopMoversProps) {
   // Deduplicate gainers/losers by symbol to prevent any duplicate key errors in AnimatePresence
   const uniqueGainers = useMemo(() => {
     const seen = new Set<string>();
@@ -76,48 +144,73 @@ export default memo(function TopMovers({ topGainers, topLosers, totalConstituent
     });
   }, [topLosers]);
 
-  if (uniqueGainers.length === 0 && uniqueLosers.length === 0) return null;
-
-  const display = isMobile ? 5 : (totalConstituents < 200 ? 5 : 10);
+  if (loading && uniqueGainers.length === 0 && uniqueLosers.length === 0) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+        <SkeletonCard title="Top 10 Gainers" type="gain" />
+        <SkeletonCard title="Top 10 Losers" type="loss" />
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Top Gainers */}
-      <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+      {/* Top 10 Gainers */}
+      <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 md:p-6 backdrop-blur-sm shadow-xl">
         <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            <h3 className="text-sm font-semibold text-gray-200">Top Gainers</h3>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+            <h3 className="text-sm md:text-base font-semibold text-gray-200">Top 10 Gainers</h3>
           </div>
         </div>
-        <div className="divide-y divide-white/[0.03]">
+        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-3 pb-2 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <span className="w-5 text-right">#</span>
+            <span>Stock</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-right">Price</span>
+            <span className="w-[70px] text-right">Change</span>
+          </div>
+        </div>
+        <div className="divide-y divide-white/[0.03] mt-1">
           <AnimatePresence mode="popLayout">
-            {uniqueGainers.slice(0, display).map((stock, i) => (
+            {uniqueGainers.slice(0, 10).map((stock, i) => (
               <MoverRow key={`${stock.symbol}-gain`} stock={stock} index={i} type="gain" />
             ))}
           </AnimatePresence>
           {uniqueGainers.length === 0 && (
-            <p className="text-gray-500 text-sm py-4 text-center">No gainers</p>
+            <p className="text-gray-500 text-sm py-6 text-center">No gainers</p>
           )}
         </div>
       </div>
 
-      {/* Top Losers */}
-      <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
+      {/* Top 10 Losers */}
+      <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 md:p-6 backdrop-blur-sm shadow-xl">
         <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
-            <h3 className="text-sm font-semibold text-gray-200">Top Losers</h3>
+            <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+            <h3 className="text-sm md:text-base font-semibold text-gray-200">Top 10 Losers</h3>
           </div>
         </div>
-        <div className="divide-y divide-white/[0.03]">
+        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-3 pb-2 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <span className="w-5 text-right">#</span>
+            <span>Stock</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-right">Price</span>
+            <span className="w-[70px] text-right">Change</span>
+          </div>
+        </div>
+        <div className="divide-y divide-white/[0.03] mt-1">
           <AnimatePresence mode="popLayout">
-            {uniqueLosers.slice(0, display).map((stock, i) => (
+            {uniqueLosers.slice(0, 10).map((stock, i) => (
               <MoverRow key={`${stock.symbol}-loss`} stock={stock} index={i} type="loss" />
             ))}
           </AnimatePresence>
           {uniqueLosers.length === 0 && (
-            <p className="text-gray-500 text-sm py-4 text-center">No losers</p>
+            <p className="text-gray-500 text-sm py-6 text-center">No losers</p>
           )}
         </div>
       </div>

@@ -9,7 +9,6 @@ import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSidebar from '@/components/market/IndexSidebar';
-import NSEMarketBreadthCard from '@/components/market/NSEMarketBreadthCard';
 import IntradayMarketBreadthChart from '@/components/market/IntradayMarketBreadthChart';
 import StockMovesDistributionChart from '@/components/market/StockMovesDistributionChart';
 import AthDistributionChart from '@/components/market/AthDistributionChart';
@@ -78,7 +77,6 @@ export default function MarketOverviewClient({
   const [data, setData] = useState<MarketOverviewData | null>(initialData);
   const [breadthData, setBreadthData] = useState<NSEMarketBreadthData | null>(initialBreadthData);
   const [breadthLoading, setBreadthLoading] = useState(!initialBreadthData);
-  const [breadthSecondsLeft, setBreadthSecondsLeft] = useState(10);
   const [intradayData, setIntradayData] = useState<IntradayMarketBreadthData | null>(initialIntradayData);
   const [intradayLoading, setIntradayLoading] = useState(!initialIntradayData);
   const [loading, setLoading] = useState(!initialData); // True when no SSR data
@@ -175,7 +173,6 @@ export default function MarketOverviewClient({
     try {
       const res = await fetchNSEMarketBreadth(force);
       setBreadthData(res);
-      setBreadthSecondsLeft(10);
 
       // If market is active and we have live breadth, update/append current minute into intradayData points
       if (res.isLive && res.total > 0) {
@@ -220,20 +217,14 @@ export default function MarketOverviewClient({
     }
   }, [initialBreadthData, loadBreadth]);
 
-  // 10s countdown and auto-refresh interval — ONLY runs when market is active!
+  // 10s auto-refresh interval — ONLY runs when market is active!
   useEffect(() => {
-    if (!isMarketCurrentlyActive) return; // Don't refresh when market is closed!
+    if (!isMarketCurrentlyActive) return;
 
     const timer = setInterval(() => {
       if (!isVisibleRef.current || !marketActiveRef.current) return;
-      setBreadthSecondsLeft((prev) => {
-        if (prev <= 1) {
-          loadBreadth();
-          return 10;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      loadBreadth();
+    }, 10000);
 
     return () => clearInterval(timer);
   }, [isMarketCurrentlyActive, loadBreadth]);
@@ -457,21 +448,13 @@ export default function MarketOverviewClient({
     return data.constituents.map(c => c.instrumentKey).sort().join(',');
   }, [data?.constituents]);
 
-  // Sort constituents and derive movers via useMemo (React render phase, not setTimeout)
+  // Sort constituents via useMemo (React render phase, not setTimeout)
   // constituents are stored unsorted in state; sorting happens here once per render
   const sortedConstituents = useMemo(() => {
     if (!data?.constituents) return [];
     return [...data.constituents].sort((a, b) => b.changePercent - a.changePercent);
   }, [data?.constituents]);
 
-  const streamingTopGainers = useMemo(
-    () => sortedConstituents.filter(c => c.changePercent > 0).slice(0, 10),
-    [sortedConstituents]
-  );
-  const streamingTopLosers = useMemo(() => {
-    const losers = sortedConstituents.filter(c => c.changePercent < 0);
-    return losers.slice(-Math.min(10, losers.length)).reverse();
-  }, [sortedConstituents]);
 
   useEffect(() => {
     if (showStreaming && data && data.constituents.length > 0) {
@@ -587,11 +570,6 @@ export default function MarketOverviewClient({
               </div>
               <div className="h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {[0, 1].map(i => (
-                <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 h-[200px]" />
-              ))}
-            </div>
           </div>
         </div>
         {/* Sectoral Heatmap Skeleton */}
@@ -629,21 +607,6 @@ export default function MarketOverviewClient({
               </div>
             </div>
             <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {[0, 1].map(i => (
-              <div key={i} className="bg-slate-900/50 rounded-2xl border border-white/5 p-5">
-                <div className="h-4 w-24 bg-slate-800/50 rounded mb-4" />
-                <div className="flex flex-col gap-3">
-                  {[...Array(5)].map((_, j) => (
-                    <div key={j} className="flex justify-between items-center">
-                      <div className="h-3.5 w-20 bg-slate-800/40 rounded" />
-                      <div className="h-5 w-14 bg-slate-800/40 rounded-md" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       );
@@ -723,21 +686,10 @@ export default function MarketOverviewClient({
                   declining={data.declining}
                   unchanged={data.unchanged}
                   loading={loading}
-                  onRefresh={() => { loadData(selectedIndex); loadSummaries(false); }}
                 />
               )}
             </motion.div>
           )}
-
-          {/* Top Movers */}
-          <motion.div variants={itemVariants}>
-            <TopMovers
-              topGainers={isStreaming ? streamingTopGainers : data.topGainers}
-              topLosers={isStreaming ? streamingTopLosers : data.topLosers}
-              totalConstituents={data.constituents.length}
-              isMobile={isMobile}
-            />
-          </motion.div>
         </div>
       );
     }
@@ -821,28 +773,27 @@ export default function MarketOverviewClient({
         </motion.div>
       )}
 
-      {/* Section 1: All-NSE Market Breadth & Real-time Distributions (10s live poll) */}
+      {/* Section 1: All-NSE Market Breadth & Real-time Distributions */}
       {!embedded && (
         <motion.div variants={itemVariants} className="flex flex-col gap-4 md:gap-5">
-          {/* Row 1: Current Breadth Stats (Full Width) */}
-          <NSEMarketBreadthCard
-            breadth={breadthData}
-            loading={breadthLoading}
-            isMarketOpen={isMarketCurrentlyActive}
-            refreshSecondsLeft={breadthSecondsLeft}
-            onRefresh={() => { loadBreadth(true); loadIntradayBreadth(); }}
-          />
-
-          {/* Row 2: Intraday Line Chart (Full Width) */}
+          {/* Row 1: Market Breadth (Combined Stats + Intraday Trend, Full Width) */}
           <IntradayMarketBreadthChart
             points={intradayData?.points || []}
+            breadth={breadthData}
             date={intradayData?.date}
             isToday={intradayData?.isToday}
             isLive={isMarketCurrentlyActive}
-            loading={intradayLoading}
+            loading={breadthLoading || intradayLoading}
           />
 
-          {/* Row 2: Stock Moves Distribution (Full Width) */}
+          {/* Row 3: Top 10 Gainers & Losers (Separate Cards) */}
+          <TopMovers
+            topGainers={breadthData?.topGainers || []}
+            topLosers={breadthData?.topLosers || []}
+            loading={breadthLoading}
+          />
+
+          {/* Row 4: Stock Moves Distribution (Full Width) */}
           <StockMovesDistributionChart
             distribution={breadthData?.distribution || []}
             medianMove={breadthData?.medianMove || 0}
