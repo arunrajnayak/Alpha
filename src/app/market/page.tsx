@@ -1,6 +1,6 @@
 import MarketOverviewClient from './MarketOverviewClient';
 import { fetchAllIndexSummaries, fetchMarketOverview } from '@/app/actions/market-overview';
-import { fetchNSEMarketBreadth, fetchMarketHealthHistory } from '@/app/actions/market-breadth';
+import { fetchNSEMarketBreadth, fetchMarketHealthHistory, getIntradayMarketBreadth } from '@/app/actions/market-breadth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,11 +10,12 @@ export const metadata = {
 };
 
 export default async function MarketPage() {
-  const [summariesRes, overviewData, breadthData, healthData] = await Promise.all([
+  const [summariesRes, overviewData, breadthData, healthData, intradayData] = await Promise.all([
     fetchAllIndexSummaries().catch(() => ({ summaries: [], tokenStatus: undefined })),
     fetchMarketOverview('NIFTY Total Market').catch(() => null),
     fetchNSEMarketBreadth().catch(() => null),
     fetchMarketHealthHistory('1Y').catch(() => null),
+    getIntradayMarketBreadth().catch(() => null),
   ]);
 
   return (
@@ -25,6 +26,7 @@ export default async function MarketPage() {
         initialTokenStatus={summariesRes.tokenStatus}
         initialBreadthData={breadthData}
         initialHealthData={healthData}
+        initialIntradayData={intradayData}
       />
     </div>
   );

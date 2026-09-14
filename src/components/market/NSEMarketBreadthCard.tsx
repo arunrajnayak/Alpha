@@ -9,6 +9,7 @@ import { faArrowTrendUp, faArrowTrendDown, faLayerGroup } from '@fortawesome/fre
 interface NSEMarketBreadthCardProps {
   breadth: NSEMarketBreadthData | null;
   loading: boolean;
+  isMarketOpen?: boolean;
   refreshSecondsLeft?: number;
   onRefresh?: () => void;
 }
@@ -16,6 +17,7 @@ interface NSEMarketBreadthCardProps {
 export default function NSEMarketBreadthCard({
   breadth,
   loading,
+  isMarketOpen = true,
   refreshSecondsLeft,
   onRefresh,
 }: NSEMarketBreadthCardProps) {
@@ -76,10 +78,17 @@ export default function NSEMarketBreadthCard({
           </div>
 
           <div className="flex items-center gap-2">
-            {typeof refreshSecondsLeft === 'number' && (
-              <span className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-white/5 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {refreshSecondsLeft}s
+            {isMarketOpen ? (
+              typeof refreshSecondsLeft === 'number' && (
+                <span className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-white/5 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {refreshSecondsLeft}s
+                </span>
+              )
+            ) : (
+              <span className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-slate-800/60 px-2 py-0.5 rounded-full border border-white/5 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                Market Closed
               </span>
             )}
             {onRefresh && (

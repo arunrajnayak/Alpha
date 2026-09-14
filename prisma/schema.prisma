@@ -228,6 +228,31 @@ model IntradayPnL {
   @@index([date])
 }
 
+// Intraday Market Breadth History
+// Stores all-NSE advances/declines snapshots every 2-5 minutes during market hours
+model IntradayMarketBreadth {
+  id          Int      @id @default(autoincrement())
+  timestamp   DateTime @default(now())
+  date        String   // YYYY-MM-DD (IST date string for fast filtering)
+  advances    Int
+  declines    Int
+  unchanged   Int
+  total       Int
+  adRatio     Float
+  netAdvances Int
+  largeAdv    Int?
+  largeDec    Int?
+  midAdv      Int?
+  midDec      Int?
+  smallAdv    Int?
+  smallDec    Int?
+  microAdv    Int?
+  microDec    Int?
+
+  @@index([date])
+  @@index([timestamp])
+}
+
 // ===== Momentum Screener Models =====
 
 // Daily OHLCV candles for all NSE stocks (for Sharpe/DMA/volume computation)

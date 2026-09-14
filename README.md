@@ -305,14 +305,15 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 | # | Title | Endpoint | Schedule (UTC) | IST | What it does |
 |---|-------|----------|----------------|-----|--------------|
 | 1 | Intraday P/L | `/api/cron/intraday-pnl` | `* 4-10 * * 1-5` | Every min, 9:30am–4:00pm | Records P&L every minute for the Intraday chart |
-| 2 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon–Fri | End-of-day portfolio value, NAV, drawdown |
-| 3 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR) |
-| 4 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats |
-| 5 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE |
-| 6 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Updates stock-to-sector mappings |
-| 7 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Checks for new market cap classifications |
-| 8 | Momentum Screener | `/api/cron/momentum-screener` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | Scores and ranks all stocks |
-| 9 | Daily Email Report | `/api/cron/daily-report` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | *(Optional)* Sends portfolio + screener summary email via Resend. Requires `RESEND_API_KEY` and `REPORT_EMAIL_TO`. |
+| 2 | Intraday Breadth | `/api/cron/market-breadth` | `*/5 4-10 * * 1-5` | Every 5 min, 9:30am–4:00pm | Records all-NSE advances & declines for the Intraday Breadth chart |
+| 3 | Daily Snapshot | `/api/portfolio/snapshot?type=daily` | `30 10 * * 1-5` | 4:00 PM Mon–Fri | End-of-day portfolio value, NAV, drawdown |
+| 4 | Weekly Snapshot | `/api/portfolio/snapshot?type=weekly` | `0 11 * * 5` | 4:30 PM Fri | Weekly state (market cap, sector, XIRR) |
+| 5 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats |
+| 6 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE |
+| 7 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Updates stock-to-sector mappings |
+| 8 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Checks for new market cap classifications |
+| 9 | Momentum Screener | `/api/cron/momentum-screener` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | Scores and ranks all stocks |
+| 10 | Daily Email Report | `/api/cron/daily-report` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | *(Optional)* Sends portfolio + screener summary email via Resend. Requires `RESEND_API_KEY` and `REPORT_EMAIL_TO`. |
 
 > [!TIP]
 > After creating all jobs, click **"Run now"** in cron-job.org to manually trigger any job and verify it's working.

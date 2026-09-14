@@ -10,11 +10,12 @@ import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IndexSidebar from '@/components/market/IndexSidebar';
 import NSEMarketBreadthCard from '@/components/market/NSEMarketBreadthCard';
+import IntradayMarketBreadthChart from '@/components/market/IntradayMarketBreadthChart';
 import StockMovesDistributionChart from '@/components/market/StockMovesDistributionChart';
 import AthDistributionChart from '@/components/market/AthDistributionChart';
 import MarketHealthDashboard from '@/components/market/MarketHealthDashboard';
-import { fetchNSEMarketBreadth } from '@/app/actions/market-breadth';
-import type { NSEMarketBreadthData, MarketHealthHistoryData } from '@/app/actions/market-breadth';
+import { fetchNSEMarketBreadth, getIntradayMarketBreadth } from '@/app/actions/market-breadth';
+import type { NSEMarketBreadthData, MarketHealthHistoryData, IntradayMarketBreadthData } from '@/app/actions/market-breadth';
 import { useLiveData } from '@/context/LiveDataContext';
 import { PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 import { logger } from '@/lib/logger';
@@ -59,6 +60,7 @@ interface MarketOverviewClientProps {
   initialTokenStatus?: { hasToken: boolean; message?: string } | null;
   initialBreadthData?: NSEMarketBreadthData | null;
   initialHealthData?: MarketHealthHistoryData | null;
+  initialIntradayData?: IntradayMarketBreadthData | null;
   embedded?: boolean;
 }
 
@@ -68,6 +70,7 @@ export default function MarketOverviewClient({
   initialTokenStatus = null,
   initialBreadthData = null,
   initialHealthData = null,
+  initialIntradayData = null,
   embedded = false,
 }: MarketOverviewClientProps) {
   const [selectedIndex, setSelectedIndex] = useState('NIFTY Total Market');
@@ -76,6 +79,8 @@ export default function MarketOverviewClient({
   const [breadthData, setBreadthData] = useState<NSEMarketBreadthData | null>(initialBreadthData);
   const [breadthLoading, setBreadthLoading] = useState(!initialBreadthData);
   const [breadthSecondsLeft, setBreadthSecondsLeft] = useState(10);
+  const [intradayData, setIntradayData] = useState<IntradayMarketBreadthData | null>(initialIntradayData);
+  const [intradayLoading, setIntradayLoading] = useState(!initialIntradayData);
   const [loading, setLoading] = useState(!initialData); // True when no SSR data
   const [loadError, setLoadError] = useState<string | null>(null); // Track fetch errors for display
   const [summariesLoading, setSummariesLoading] = useState(initialSummaries.length === 0);
@@ -85,6 +90,16 @@ export default function MarketOverviewClient({
   
   const [tokenStatus, setTokenStatus] = useState<{ hasToken: boolean; message?: string } | null>(initialTokenStatus);
   
+  // Shared WebSocket stream from LiveDataContext
+  const { streamStatus, subscribeToPrices, subscribeToInstruments, initialize, data: liveContextData } = useLiveData();
+  useEffect(() => { initialize(); }, [initialize]);
+
+  // Market status: prefer API-driven status, fallback to sync time check
+  const currentMarketStatus = breadthData?.marketStatus || data?.marketStatus || liveContextData?.marketStatus;
+  const isMarketCurrentlyActive = currentMarketStatus
+    ? (currentMarketStatus === 'OPEN' || currentMarketStatus === 'PRE_OPEN')
+    : (isMarketOpen() || isPreOpenSession());
+
   // Refresh timers
   const dataRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -136,12 +151,61 @@ export default function MarketOverviewClient({
     }
   }, []);
 
+  // Fetch intraday breadth line series (today or latest available trading session)
+  const loadIntradayBreadth = useCallback(async () => {
+    try {
+      const res = await getIntradayMarketBreadth();
+      setIntradayData(res);
+    } catch (err) {
+      marketLogger.error('Failed to load intraday breadth:', err);
+    } finally {
+      setIntradayLoading(false);
+    }
+  }, []);
+
+  // Initial load of intraday breadth if not provided via SSR
+  useEffect(() => {
+    if (!initialIntradayData) {
+      loadIntradayBreadth();
+    }
+  }, [initialIntradayData, loadIntradayBreadth]);
+
   // Fetch NSE-wide market breadth & moves distribution (10s live poll)
   const loadBreadth = useCallback(async (force = false) => {
     try {
       const res = await fetchNSEMarketBreadth(force);
       setBreadthData(res);
       setBreadthSecondsLeft(10);
+
+      // If market is active and we have live breadth, update/append current minute into intradayData points
+      if (res.isLive && res.total > 0) {
+        setIntradayData((prev) => {
+          if (!prev) return prev;
+          const timeStr = new Date().toLocaleTimeString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          });
+          const newPoint = {
+            time: timeStr,
+            timestamp: new Date().toISOString(),
+            advances: res.advances,
+            declines: res.declines,
+            unchanged: res.unchanged,
+            total: res.total,
+            netAdvances: res.netAdvances,
+            adRatio: res.adRatio,
+          };
+          const existing = [...prev.points];
+          if (existing.length > 0 && existing[existing.length - 1].time === timeStr) {
+            existing[existing.length - 1] = newPoint;
+          } else {
+            existing.push(newPoint);
+          }
+          return { ...prev, points: existing, isToday: true };
+        });
+      }
     } catch (err) {
       marketLogger.error('Failed to load NSE breadth:', err);
     } finally {
@@ -156,10 +220,12 @@ export default function MarketOverviewClient({
     }
   }, [initialBreadthData, loadBreadth]);
 
-  // 10s countdown and auto-refresh interval
+  // 10s countdown and auto-refresh interval — ONLY runs when market is active!
   useEffect(() => {
+    if (!isMarketCurrentlyActive) return; // Don't refresh when market is closed!
+
     const timer = setInterval(() => {
-      if (!isVisibleRef.current) return;
+      if (!isVisibleRef.current || !marketActiveRef.current) return;
       setBreadthSecondsLeft((prev) => {
         if (prev <= 1) {
           loadBreadth();
@@ -170,7 +236,7 @@ export default function MarketOverviewClient({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [loadBreadth]);
+  }, [isMarketCurrentlyActive, loadBreadth]);
 
   // Auto-fetch summaries on mount when no SSR data provided (embedded mode)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -375,16 +441,6 @@ export default function MarketOverviewClient({
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [applyBatchedUpdates]);
-
-  // Web Socket Hook - use the shared stream from LiveDataContext
-  const { streamStatus, subscribeToPrices, subscribeToInstruments, initialize, data: liveContextData } = useLiveData();
-  useEffect(() => { initialize(); }, [initialize]);
-
-  // Prefer API-driven market status; fall back to sync check if data not loaded yet
-  const currentMarketStatus = data?.marketStatus || liveContextData?.marketStatus;
-  const isMarketCurrentlyActive = currentMarketStatus
-    ? (currentMarketStatus === 'OPEN' || currentMarketStatus === 'PRE_OPEN')
-    : (isMarketOpen() || isPreOpenSession());
 
   const showStreaming = isVisible && isMarketCurrentlyActive && !!tokenStatus?.hasToken;
 
@@ -744,11 +800,11 @@ export default function MarketOverviewClient({
           )}
         </div>
         <button
-          onClick={() => { loadData(selectedIndex); loadSummaries(); loadBreadth(true); }}
-          disabled={loading || breadthLoading}
+          onClick={() => { loadData(selectedIndex); loadSummaries(); loadBreadth(true); loadIntradayBreadth(); }}
+          disabled={loading || breadthLoading || intradayLoading}
           className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/50 border border-white/5 rounded-lg transition-all disabled:opacity-50"
         >
-          {loading || breadthLoading ? (
+          {loading || breadthLoading || intradayLoading ? (
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
               Loading...
@@ -768,12 +824,25 @@ export default function MarketOverviewClient({
       {/* Section 1: All-NSE Market Breadth & Real-time Distributions (10s live poll) */}
       {!embedded && (
         <motion.div variants={itemVariants} className="flex flex-col gap-4 md:gap-5">
-          <NSEMarketBreadthCard
-            breadth={breadthData}
-            loading={breadthLoading}
-            refreshSecondsLeft={breadthSecondsLeft}
-            onRefresh={() => loadBreadth(true)}
-          />
+          {/* Row 1: Current Breadth Stats + Intraday Line Chart */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+            <NSEMarketBreadthCard
+              breadth={breadthData}
+              loading={breadthLoading}
+              isMarketOpen={isMarketCurrentlyActive}
+              refreshSecondsLeft={breadthSecondsLeft}
+              onRefresh={() => { loadBreadth(true); loadIntradayBreadth(); }}
+            />
+            <IntradayMarketBreadthChart
+              points={intradayData?.points || []}
+              date={intradayData?.date}
+              isToday={intradayData?.isToday}
+              isLive={isMarketCurrentlyActive}
+              loading={intradayLoading}
+            />
+          </div>
+
+          {/* Row 2: Day Moves & ATH Drawdown Distributions */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
             <StockMovesDistributionChart
               distribution={breadthData?.distribution || []}
