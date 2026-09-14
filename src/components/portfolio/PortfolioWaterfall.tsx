@@ -211,7 +211,6 @@ export default function PortfolioWaterfall({
         </div>
         <div>
           <h3 className="text-sm font-bold text-gray-200 leading-tight">Portfolio Compounding</h3>
-          <p className="text-[11px] text-gray-500">How your portfolio grew from capital → current equity</p>
         </div>
       </div>
 
@@ -260,7 +259,7 @@ export default function PortfolioWaterfall({
       {/* Chart */}
       <div className="w-full overflow-x-auto">
         <div style={{ minWidth: 480 }}>
-          <ResponsiveContainer width="100%" height={320}>
+          <ResponsiveContainer width="100%" height={360}>
             <BarChart data={bars} margin={{ top: 24, right: 16, left: 0, bottom: 4 }} barCategoryGap="25%">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis
@@ -314,11 +313,6 @@ export default function PortfolioWaterfall({
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* Context note */}
-      <p className="text-[10px] text-gray-600">
-        Charges include STT, exchange fees, GST &amp; stamp duty. Tax is estimated net STCG/LTCG after loss offsets. Dividends shown only when Zerodha Tax P&amp;L data is uploaded.
-      </p>
     </div>
   );
 }
