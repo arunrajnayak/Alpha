@@ -111,6 +111,10 @@ export default function MarketOverviewClient({
   const selectedIndexRef = useRef(selectedIndex);
   useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
 
+  // Heatmap section visibility — for 1-minute auto-refresh
+  const heatmapSectionRef = useRef<HTMLDivElement>(null);
+  const heatmapVisibleRef = useRef(false);
+
   // Responsive check
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -233,6 +237,19 @@ export default function MarketOverviewClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (initialSummaries.length === 0) loadSummaries(true); }, []);
 
+  // IntersectionObserver: track whether heatmap section is visible
+  useEffect(() => {
+    const el = heatmapSectionRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { heatmapVisibleRef.current = entry.isIntersecting; },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+
   // Fetch data for selected index (REST)
   const loadData = useCallback(async (indexName: string, showLoading = true) => {
     try {
@@ -270,6 +287,17 @@ export default function MarketOverviewClient({
     }
     loadData(selectedIndex);
   }, [selectedIndex, loadData]);
+
+  // 1-minute heatmap refresh — only fires when section is visible and market is active
+  useEffect(() => {
+    if (!isMarketCurrentlyActive) return;
+    const timer = setInterval(() => {
+      if (heatmapVisibleRef.current) {
+        loadData(selectedIndexRef.current, false);
+      }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [isMarketCurrentlyActive, loadData]);
 
   // Keep a ref to indexSummaries to avoid stale closures in applyBatchedUpdates
   const indexSummariesRef = useRef(indexSummaries);
@@ -568,7 +596,7 @@ export default function MarketOverviewClient({
                   <div className="h-2.5 w-full bg-slate-800/50 rounded-full" />
                 </div>
               </div>
-              <div className="h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+              <div className="h-[280px] sm:h-[380px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
             </div>
           </div>
         </div>
@@ -577,7 +605,7 @@ export default function MarketOverviewClient({
           <div className="px-5 pt-5 pb-2">
             <div className="h-3 w-36 bg-slate-800/50 rounded" />
           </div>
-          <div className="h-[350px] md:h-[400px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+          <div className="h-[240px] sm:h-[310px] md:h-[400px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
         </div>
       </div>
     );
@@ -606,7 +634,7 @@ export default function MarketOverviewClient({
                 <div className="h-2.5 w-full bg-slate-800/50 rounded-full" />
               </div>
             </div>
-            <div className="h-[400px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+            <div className="h-[280px] sm:h-[380px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
           </div>
         </div>
       );
@@ -671,7 +699,7 @@ export default function MarketOverviewClient({
                       <div className="h-2.5 w-full bg-slate-800/50 rounded-full" />
                     </div>
                   </div>
-                  <div className="h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+                  <div className="h-[280px] sm:h-[380px] md:h-[500px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
                 </div>
               ) : (
                 /* key forces full remount when index changes — prevents stale Nivo layout animation */
@@ -831,7 +859,7 @@ export default function MarketOverviewClient({
       )}
 
       {/* Sidebar + Content — horizontal layout on desktop, vertical on mobile */}
-      <motion.div variants={itemVariants} className="flex flex-col md:flex-row gap-4 md:gap-5">
+      <motion.div ref={heatmapSectionRef} variants={itemVariants} className="flex flex-col md:flex-row gap-4 md:gap-5">
         {/* Index Sidebar */}
         <IndexSidebar
           indices={indexSummaries}

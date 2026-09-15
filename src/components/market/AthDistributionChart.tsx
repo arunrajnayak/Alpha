@@ -87,7 +87,7 @@ export default function AthDistributionChart({
 
   if (loading && distribution.length === 0) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[420px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[310px] sm:h-[390px] md:h-[470px] animate-pulse" />
     );
   }
 
@@ -107,7 +107,7 @@ export default function AthDistributionChart({
         </div>
 
         {/* Big Histogram Chart with Count on Bars */}
-        <div className="h-[340px] md:h-[400px] w-full mt-3">
+        <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 28, right: 10, left: -20, bottom: 0 }}>
               <XAxis

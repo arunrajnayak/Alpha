@@ -113,7 +113,7 @@ export default function IntradayMarketBreadthChart({
 
   if (loading && (!points || points.length === 0) && !breadth) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[500px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[360px] sm:h-[480px] md:h-[580px] animate-pulse" />
     );
   }
 
@@ -202,7 +202,7 @@ export default function IntradayMarketBreadthChart({
 
         {/* Enlarged Intraday Trend Chart */}
         {points && points.length > 0 ? (
-          <div className="h-[380px] md:h-[460px] w-full mt-3">
+          <div className="h-[260px] sm:h-[340px] md:h-[460px] w-full mt-3">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={points}
@@ -268,7 +268,7 @@ export default function IntradayMarketBreadthChart({
 
       {/* Footer Info */}
       {latest && (
-        <div className="flex items-center justify-between text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
           <span className="text-gray-400">
             Last snapshot: <span className="text-gray-200 font-semibold">{latest.time}</span>
           </span>

@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   CartesianGrid,
-  Legend,
 } from 'recharts';
 import { fetchMarketHealthHistory } from '@/app/actions/market-breadth';
 import type { MarketHealthHistoryData } from '@/app/actions/market-breadth';
@@ -27,6 +26,14 @@ const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ];
+
+// DMA series config — order matches TradingView chart colors
+const DMA_SERIES = [
+  { key: 'pctAbove20Dma',  label: '% Above 20 DMA',  color: '#f23645' }, // Red
+  { key: 'pctAbove50Dma',  label: '% Above 50 DMA',  color: '#4caf50' }, // Green
+  { key: 'pctAbove100Dma', label: '% Above 100 DMA', color: '#0497a7' }, // Teal
+  { key: 'pctAbove200Dma', label: '% Above 200 DMA', color: '#ff9800' }, // Orange
+] as const;
 
 function formatXAxisDate(val: string): string {
   if (!val) return '';
@@ -53,6 +60,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
   const [data, setData] = useState<MarketHealthHistoryData | null>(initialData || null);
   const [period, setPeriod] = useState<TimeframePeriod>('1Y');
   const [loading, setLoading] = useState(!initialData);
+  const [hoveredLine, setHoveredLine] = useState<string | null>(null);
   const isFirstMount = React.useRef(true);
   const [, startTransition] = useTransition();
 
@@ -96,7 +104,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           <div>
             <div className="flex items-center gap-2.5">
               <h2 className="text-base md:text-lg font-bold text-white tracking-tight">
-                Market Health & Breadth
+                Market Health &amp; Breadth
               </h2>
               {stats && (
                 <span
@@ -127,13 +135,13 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         </div>
       </div>
 
-      {/* Metric Stat Cards (MomoIndia-inspired) */}
+      {/* Metric Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {/* Above 200 DMA */}
         <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 200 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-2xl font-bold font-mono text-purple-400">
+            <span className="text-2xl font-bold font-mono" style={{ color: '#ff9800' }}>
               {stats ? `${stats.pctAbove200Dma}%` : '—'}
             </span>
             <span className="text-[10px] text-gray-500 font-mono">Long-term</span>
@@ -141,14 +149,26 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           <span className="text-[10px] text-gray-500 mt-1">Regime: {stats?.pctAbove200Dma && stats.pctAbove200Dma >= 50 ? 'Bull' : 'Bear'} filter</span>
         </div>
 
+        {/* Above 100 DMA */}
+        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
+          <span className="text-[11px] text-gray-400 font-medium">Above 100 DMA</span>
+          <div className="flex items-baseline gap-1.5 mt-1">
+            <span className="text-2xl font-bold font-mono" style={{ color: '#0497a7' }}>
+              {stats ? `${stats.pctAbove100Dma}%` : '—'}
+            </span>
+            <span className="text-[10px] text-gray-500 font-mono">Intermediate</span>
+          </div>
+          <span className="text-[10px] text-gray-500 mt-1">Medium-term trend</span>
+        </div>
+
         {/* Above 50 DMA */}
         <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 50 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-2xl font-bold font-mono text-blue-400">
+            <span className="text-2xl font-bold font-mono" style={{ color: '#4caf50' }}>
               {stats ? `${stats.pctAbove50Dma}%` : '—'}
             </span>
-            <span className="text-[10px] text-gray-500 font-mono">Intermediate</span>
+            <span className="text-[10px] text-gray-500 font-mono">Swing trend</span>
           </div>
           <span className="text-[10px] text-gray-500 mt-1">Swing trend participation</span>
         </div>
@@ -157,24 +177,12 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 20 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-2xl font-bold font-mono text-cyan-400">
+            <span className="text-2xl font-bold font-mono" style={{ color: '#f23645' }}>
               {stats ? `${stats.pctAbove20Dma}%` : '—'}
             </span>
             <span className="text-[10px] text-gray-500 font-mono">Short-term</span>
           </div>
           <span className="text-[10px] text-gray-500 mt-1">Momentum thrust</span>
-        </div>
-
-        {/* Within 10% of ATH */}
-        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
-          <span className="text-[11px] text-gray-400 font-medium">Within 10% of ATH</span>
-          <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-2xl font-bold font-mono text-amber-400">
-              {stats ? `${stats.pctNearAth10}%` : '—'}
-            </span>
-            <span className="text-[10px] text-gray-500 font-mono">Near Highs</span>
-          </div>
-          <span className="text-[10px] text-gray-500 mt-1">Expansion index</span>
         </div>
       </div>
 
@@ -190,12 +198,12 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           <span className="text-[10px] text-gray-500 font-mono">50% line = Bull/Bear pivot</span>
         </div>
 
-        <div className="h-[380px] md:h-[460px] w-full mt-2">
+        <div className="h-[260px] sm:h-[340px] md:h-[460px] w-full mt-2">
           {loading && !data ? (
             <div className="h-full bg-slate-800/50 rounded-lg animate-pulse" />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data?.history || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <LineChart data={data?.history || []} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis
                   dataKey="date"
@@ -222,50 +230,54 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                   }}
                   labelStyle={{ color: '#94a3b8', fontWeight: 600 }}
                   labelFormatter={formatTooltipDate}
-                  formatter={(val: unknown) => [
-                    `${val ?? 0}%`,
-                    '',
-                  ]}
+                  formatter={(val: unknown, name: string) => [`${val ?? 0}%`, name]}
                 />
-                <Legend
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
-                  iconType="circle"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctAbove200Dma"
-                  name="% Above 200 DMA"
-                  stroke="#a855f7"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctAbove100Dma"
-                  name="% Above 100 DMA"
-                  stroke="#6366f1"
-                  strokeWidth={1.5}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctAbove50Dma"
-                  name="% Above 50 DMA"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pctAbove20Dma"
-                  name="% Above 20 DMA"
-                  stroke="#06b6d4"
-                  strokeWidth={1.5}
-                  dot={false}
-                />
+                {DMA_SERIES.map(({ key, label, color }) => (
+                  <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    name={label}
+                    stroke={color}
+                    strokeWidth={hoveredLine === key ? 3 : 1.5}
+                    strokeOpacity={hoveredLine && hoveredLine !== key ? 0.12 : 1}
+                    dot={false}
+                    activeDot={{ r: 4, fill: color, strokeWidth: 1.5, stroke: '#fff' }}
+                  />
+                ))}
               </LineChart>
             </ResponsiveContainer>
           )}
+        </div>
+
+        {/* Custom Legend with hover interaction */}
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-3">
+          {DMA_SERIES.map(({ key, label, color }) => {
+            const isHovered = hoveredLine === key;
+            const isDimmed = hoveredLine !== null && !isHovered;
+            return (
+              <button
+                key={key}
+                onMouseEnter={() => setHoveredLine(key)}
+                onMouseLeave={() => setHoveredLine(null)}
+                className={`flex items-center gap-2 py-1 transition-all duration-200 cursor-default ${
+                  isHovered
+                    ? 'scale-105 opacity-100'
+                    : isDimmed
+                    ? 'opacity-30'
+                    : 'opacity-70 hover:opacity-100'
+                }`}
+              >
+                <span
+                  className="w-6 h-1.5 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-[11px] font-medium tracking-wide text-gray-300">
+                  {label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
