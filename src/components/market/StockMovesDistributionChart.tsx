@@ -6,7 +6,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
   ResponsiveContainer,
   Cell,
   LabelList,
@@ -54,47 +53,6 @@ const SHORT_LABELS: Record<string, string> = {
   '> +15%': '>+15%',
 };
 
-interface TooltipPayloadItem {
-  payload: {
-    label: string;
-    count: number;
-    percent: number;
-    color: string;
-  };
-}
-
-const CustomTooltip = ({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: TooltipPayloadItem[];
-}) => {
-  if (!active || !payload?.length) return null;
-  const data = payload[0].payload;
-  const isPositive = data.label.includes('+') || data.label.startsWith('>');
-  const isZero = data.label === '0%';
-
-  return (
-    <div className="bg-[#0c1220]/95 border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl backdrop-blur-md min-w-[140px]">
-      <span className="text-[11px] text-gray-400 font-medium block mb-1">
-        Change: <span className="text-gray-200 font-semibold">{data.label}</span>
-      </span>
-      <div className="flex items-baseline gap-2">
-        <span
-          className={`text-lg font-bold font-mono ${
-            isZero ? 'text-gray-300' : isPositive ? 'text-emerald-400' : 'text-rose-400'
-          }`}
-        >
-          {data.count}
-        </span>
-        <span className="text-xs text-gray-400 font-mono">
-          stocks ({data.percent}%)
-        </span>
-      </div>
-    </div>
-  );
-};
 
 export default function StockMovesDistributionChart({
   distribution,
@@ -171,10 +129,7 @@ export default function StockMovesDistributionChart({
                 tick={{ fill: '#64748b', fontSize: 11 }}
                 allowDecimals={false}
               />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
-              />
+
               <Bar dataKey="count" radius={[5, 5, 0, 0]}>
                 <LabelList
                   dataKey="count"
