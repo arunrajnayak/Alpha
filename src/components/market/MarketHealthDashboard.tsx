@@ -236,7 +236,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                   }}
                   labelStyle={{ color: '#94a3b8', fontWeight: 600 }}
                   labelFormatter={formatTooltipDate}
-                  formatter={(val: unknown, name: string) => [`${val ?? 0}%`, name]}
+                  formatter={(val: unknown, name?: unknown) => [`${val ?? 0}%`, String(name ?? '')]}
                 />
                 {DMA_SERIES.map(({ key, label, color }) => (
                   <Line
