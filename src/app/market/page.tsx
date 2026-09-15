@@ -19,7 +19,7 @@ export default async function MarketPage() {
   ]);
 
   return (
-    <div className="container mx-auto px-4 py-4 md:py-6 max-w-7xl">
+    <div className="container mx-auto px-2 sm:px-4 py-3 md:py-6 max-w-7xl">
       <MarketOverviewClient
         initialSummaries={summariesRes.summaries}
         initialData={overviewData}

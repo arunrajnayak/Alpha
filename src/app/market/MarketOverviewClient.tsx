@@ -647,7 +647,7 @@ export default function MarketOverviewClient({
           {isMobile && (
             <motion.div
               variants={itemVariants}
-              className="flex flex-col gap-2.5 bg-slate-900/50 border border-white/5 rounded-2xl p-4"
+              className="flex flex-col gap-2.5 bg-slate-900/50 border border-white/5 rounded-2xl p-3 sm:p-4"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider truncate">
@@ -745,7 +745,7 @@ export default function MarketOverviewClient({
 
   return (
     <Container
-      className={`flex flex-col gap-4 md:gap-6 ${embedded ? '' : 'pb-24 md:pb-8'}`}
+      className={`flex flex-col gap-3 sm:gap-4 md:gap-6 ${embedded ? '' : 'pb-24 md:pb-8'}`}
       variants={containerVariants}
       initial={embedded ? false : "hidden"}
       animate="visible"
@@ -803,7 +803,7 @@ export default function MarketOverviewClient({
 
       {/* Section 1: All-NSE Market Breadth & Real-time Distributions */}
       {!embedded && (
-        <motion.div variants={itemVariants} className="flex flex-col gap-4 md:gap-5">
+        <motion.div variants={itemVariants} className="flex flex-col gap-3 sm:gap-4 md:gap-5">
           {/* Row 1: Market Breadth (Combined Stats + Intraday Trend, Full Width) */}
           <IntradayMarketBreadthChart
             points={intradayData?.points || []}

@@ -61,6 +61,12 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
   const [period, setPeriod] = useState<TimeframePeriod>('1Y');
   const [loading, setLoading] = useState(!initialData);
   const [hoveredLine, setHoveredLine] = useState<string | null>(null);
+  const [visible, setVisible] = useState<Record<string, boolean>>({
+    pctAbove20Dma: true,
+    pctAbove50Dma: true,
+    pctAbove100Dma: true,
+    pctAbove200Dma: true,
+  });
   const isFirstMount = React.useRef(true);
   const [, startTransition] = useTransition();
 
@@ -94,9 +100,9 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
       : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
 
   return (
-    <div className="flex flex-col gap-5 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-4 md:p-6 shadow-xl">
+    <div className="flex flex-col gap-4 sm:gap-5 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-3 sm:p-5 md:p-6 shadow-xl">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3 sm:pb-4">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
             <FontAwesomeIcon icon={faHeartPulse} className="w-4 h-4" />
@@ -136,9 +142,9 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
       </div>
 
       {/* Metric Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
         {/* Above 200 DMA */}
-        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-2.5 sm:p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 200 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-2xl font-bold font-mono" style={{ color: '#ff9800' }}>
@@ -150,7 +156,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         </div>
 
         {/* Above 100 DMA */}
-        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-2.5 sm:p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 100 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-2xl font-bold font-mono" style={{ color: '#0497a7' }}>
@@ -162,7 +168,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         </div>
 
         {/* Above 50 DMA */}
-        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-2.5 sm:p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 50 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-2xl font-bold font-mono" style={{ color: '#4caf50' }}>
@@ -174,7 +180,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
         </div>
 
         {/* Above 20 DMA */}
-        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="bg-slate-800/40 border border-white/5 rounded-xl p-2.5 sm:p-3.5 flex flex-col justify-between">
           <span className="text-[11px] text-gray-400 font-medium">Above 20 DMA</span>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-2xl font-bold font-mono" style={{ color: '#f23645' }}>
@@ -187,15 +193,15 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
       </div>
 
       {/* Chart: Moving Average Breadth Over Time */}
-      <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4 md:p-5">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-slate-800/30 border border-white/5 rounded-xl p-2.5 sm:p-4 md:p-5">
+        <div className="flex items-center justify-between mb-2 sm:mb-3">
           <div className="flex items-center gap-2">
             <FontAwesomeIcon icon={faShieldHalved} className="w-3.5 h-3.5 text-purple-400" />
             <h3 className="text-sm md:text-base font-semibold text-gray-200">
               Moving Average Breadth (% of Stocks Above DMA)
             </h3>
           </div>
-          <span className="text-[10px] text-gray-500 font-mono">50% line = Bull/Bear pivot</span>
+          <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">50% line = Bull/Bear pivot</span>
         </div>
 
         <div className="h-[260px] sm:h-[340px] md:h-[460px] w-full mt-2">
@@ -203,7 +209,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
             <div className="h-full bg-slate-800/50 rounded-lg animate-pulse" />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data?.history || []} margin={{ top: 10, right: 10, left: -20, bottom: 40 }}>
+              <LineChart data={data?.history || []} margin={{ top: 10, right: 2, left: -24, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis
                   dataKey="date"
@@ -239,10 +245,12 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
                     dataKey={key}
                     name={label}
                     stroke={color}
-                    strokeWidth={hoveredLine === key ? 3 : 1.5}
-                    strokeOpacity={hoveredLine && hoveredLine !== key ? 0.12 : 1}
+                    strokeWidth={hoveredLine === key ? 3.5 : 2}
+                    strokeOpacity={hoveredLine && hoveredLine !== key ? 0.08 : 1}
                     dot={false}
-                    activeDot={{ r: 4, fill: color, strokeWidth: 1.5, stroke: '#fff' }}
+                    hide={!visible[key]}
+                    connectNulls={true}
+                    activeDot={{ r: 5, fill: color, strokeWidth: 1.5, stroke: '#fff' }}
                   />
                 ))}
               </LineChart>
@@ -250,29 +258,46 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           )}
         </div>
 
-        {/* Custom Legend with hover interaction */}
-        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-3">
+        {/* Custom Legend Pills with hover interaction & visibility toggle */}
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mt-3 sm:mt-4">
           {DMA_SERIES.map(({ key, label, color }) => {
+            const isHidden = !visible[key];
             const isHovered = hoveredLine === key;
             const isDimmed = hoveredLine !== null && !isHovered;
+
             return (
               <button
                 key={key}
+                type="button"
+                onClick={() => setVisible((prev) => ({ ...prev, [key]: !prev[key] }))}
                 onMouseEnter={() => setHoveredLine(key)}
                 onMouseLeave={() => setHoveredLine(null)}
-                className={`flex items-center gap-2 py-1 transition-all duration-200 cursor-default ${
-                  isHovered
-                    ? 'scale-105 opacity-100'
-                    : isDimmed
-                    ? 'opacity-30'
-                    : 'opacity-70 hover:opacity-100'
-                }`}
+                className={`
+                  inline-flex items-center gap-2 px-3 py-1 sm:py-1.5 rounded-full border transition-all duration-200 cursor-pointer text-[11px] sm:text-xs font-medium select-none
+                  ${
+                    isHidden
+                      ? 'opacity-40 grayscale bg-slate-800/30 border-white/5 line-through text-gray-500'
+                      : isHovered
+                      ? 'scale-105 opacity-100 shadow-md bg-slate-800/90'
+                      : isDimmed
+                      ? 'opacity-30 blur-[0.4px] bg-slate-800/40 border-white/5 text-gray-400'
+                      : 'opacity-85 hover:opacity-100 bg-slate-800/60 hover:bg-slate-800/90 border-white/10 text-gray-300'
+                  }
+                `}
+                style={{
+                  borderColor: isHovered ? color : undefined,
+                  boxShadow: isHovered ? `0 0 12px ${color}33` : undefined,
+                }}
               >
                 <span
-                  className="w-6 h-1.5 rounded-full"
-                  style={{ backgroundColor: color }}
+                  className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm transition-transform duration-200"
+                  style={{
+                    backgroundColor: color,
+                    boxShadow: isHovered ? `0 0 8px ${color}` : undefined,
+                    transform: isHovered ? 'scale(1.2)' : 'scale(1)',
+                  }}
                 />
-                <span className="text-[11px] font-medium tracking-wide text-gray-300">
+                <span className="tracking-wide">
                   {label}
                 </span>
               </button>

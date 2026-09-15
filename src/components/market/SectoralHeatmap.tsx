@@ -44,7 +44,7 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
 
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height: isMobile ? '350px' : '400px' }}>
-      <div className="px-5 pt-5 pb-2 shrink-0">
+      <div className="px-3.5 pt-3.5 sm:px-5 sm:pt-5 pb-2 shrink-0">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Sectoral Heatmap</h3>
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>

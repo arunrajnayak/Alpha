@@ -113,12 +113,12 @@ export default function IntradayMarketBreadthChart({
 
   if (loading && (!points || points.length === 0) && !breadth) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[360px] sm:h-[480px] md:h-[580px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6 h-[360px] sm:h-[480px] md:h-[580px] animate-pulse" />
     );
   }
 
   return (
-    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
+    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-3 sm:p-5 md:p-6 shadow-xl relative overflow-hidden">
       {/* Background Accent Glow */}
       <div
         className={`absolute -top-20 -right-20 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-15 ${
@@ -128,8 +128,8 @@ export default function IntradayMarketBreadthChart({
 
       {/* Top Header: Title on Left, Stocks Count on Right */}
       <div>
-        <div className="flex items-center justify-between pb-3 border-b border-white/5">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-white/5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <FontAwesomeIcon icon={faArrowTrendUp} className="w-3.5 h-3.5" />
             </div>
@@ -148,15 +148,15 @@ export default function IntradayMarketBreadthChart({
 
         {/* Advances / A/D Ratio / Declines Stats Badges */}
         {(advances > 0 || declines > 0) && (
-          <div className="grid grid-cols-3 gap-2 sm:gap-3.5 my-3.5">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-3.5 my-2.5 sm:my-3.5">
             {/* Advances */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-emerald-500/[0.07] border border-emerald-500/20 shadow-sm gap-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-emerald-500/[0.07] border border-emerald-500/20 shadow-sm gap-1">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] shrink-0" />
-                <span className="text-xs font-medium text-gray-300">Advances</span>
+                <span className="text-[11px] sm:text-xs font-medium text-gray-300">Advances</span>
               </div>
               <div className="flex items-baseline gap-1 font-mono">
-                <span className="text-sm sm:text-base font-bold text-emerald-400">
+                <span className="text-xs sm:text-base font-bold text-emerald-400">
                   {advances.toLocaleString()}
                 </span>
                 <span className="text-[10px] sm:text-xs text-emerald-400/70 font-medium">
@@ -166,11 +166,11 @@ export default function IntradayMarketBreadthChart({
             </div>
 
             {/* A/D Ratio */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-slate-800/60 border border-white/10 shadow-sm gap-1">
-              <span className="text-xs font-medium text-gray-300">A/D Ratio</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-slate-800/60 border border-white/10 shadow-sm gap-1">
+              <span className="text-[11px] sm:text-xs font-medium text-gray-300">A/D Ratio</span>
               <div className="flex items-baseline gap-1 font-mono">
                 <span
-                  className={`text-sm sm:text-base font-bold ${
+                  className={`text-xs sm:text-base font-bold ${
                     adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
@@ -183,13 +183,13 @@ export default function IntradayMarketBreadthChart({
             </div>
 
             {/* Declines */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl bg-rose-500/[0.07] border border-rose-500/20 shadow-sm gap-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-rose-500/[0.07] border border-rose-500/20 shadow-sm gap-1">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)] shrink-0" />
-                <span className="text-xs font-medium text-gray-300">Declines</span>
+                <span className="text-[11px] sm:text-xs font-medium text-gray-300">Declines</span>
               </div>
               <div className="flex items-baseline gap-1 font-mono">
-                <span className="text-sm sm:text-base font-bold text-rose-400">
+                <span className="text-xs sm:text-base font-bold text-rose-400">
                   {declines.toLocaleString()}
                 </span>
                 <span className="text-[10px] sm:text-xs text-rose-400/70 font-medium">
@@ -200,13 +200,14 @@ export default function IntradayMarketBreadthChart({
           </div>
         )}
 
+
         {/* Enlarged Intraday Trend Chart */}
         {points && points.length > 0 ? (
           <div className="h-[260px] sm:h-[340px] md:h-[460px] w-full mt-3">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={points}
-                margin={{ top: 16, right: 10, left: -20, bottom: 0 }}
+                margin={{ top: 16, right: 2, left: -24, bottom: 0 }}
               >
                 <CartesianGrid
                   stroke="rgba(255, 255, 255, 0.05)"

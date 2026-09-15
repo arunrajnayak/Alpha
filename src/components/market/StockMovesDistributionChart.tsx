@@ -71,15 +71,15 @@ export default function StockMovesDistributionChart({
 
   if (loading && distribution.length === 0) {
     return (
-      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 md:p-6 h-[310px] sm:h-[390px] md:h-[470px] animate-pulse" />
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6 h-[310px] sm:h-[390px] md:h-[470px] animate-pulse" />
     );
   }
 
   return (
-    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden">
+    <div className="flex flex-col justify-between bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-3 sm:p-5 md:p-6 shadow-xl relative overflow-hidden">
       {/* Top Header */}
       <div>
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
               <FontAwesomeIcon icon={faChartSimple} className="w-3.5 h-3.5" />
@@ -114,7 +114,7 @@ export default function StockMovesDistributionChart({
         {/* Big Histogram Chart with Count on Bars */}
         <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 28, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 28, right: 2, left: -24, bottom: 0 }}>
               <XAxis
                 dataKey="label"
                 tickLine={false}
