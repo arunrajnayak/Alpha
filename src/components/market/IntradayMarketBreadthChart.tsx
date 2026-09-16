@@ -176,9 +176,6 @@ export default function IntradayMarketBreadthChart({
                 >
                   {adRatio.toFixed(2)}
                 </span>
-                <span className="text-[10px] sm:text-xs text-gray-400 font-medium">
-                  ({netAdvances >= 0 ? `+${netAdvances}` : netAdvances})
-                </span>
               </div>
             </div>
 
@@ -266,23 +263,6 @@ export default function IntradayMarketBreadthChart({
           </div>
         )}
       </div>
-
-      {/* Footer Info */}
-      {latest && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] pt-3 mt-3 border-t border-white/5 text-gray-400 font-mono">
-          <span className="text-gray-400">
-            Last snapshot: <span className="text-gray-200 font-semibold">{latest.time}</span>
-          </span>
-          <span
-            className={latest.netAdvances >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}
-          >
-            Net {latest.netAdvances >= 0 ? `+${latest.netAdvances}` : latest.netAdvances}
-          </span>
-          <span className="text-gray-400">
-            A/D: <span className="text-gray-200 font-semibold">{latest.adRatio.toFixed(2)}</span>
-          </span>
-        </div>
-      )}
     </div>
   );
 }
