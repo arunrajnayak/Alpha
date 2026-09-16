@@ -289,22 +289,37 @@ function createEmptyBuckets(): DistributionBucket[] {
   ];
 }
 
-// Build empty ATH drawdown buckets template (0-5%, 5-10%, ..., 90-100%)
+// Build fine-grained ATH drawdown buckets: 100 × 1% buckets (0-1%, 1-2%, …, 99-100%+)
 function createEmptyATHBuckets(): DistributionBucket[] {
-  return [
-    { label: '0-5%', min: 0, max: 5, count: 0, percent: 0 },
-    { label: '5-10%', min: 5, max: 10, count: 0, percent: 0 },
-    { label: '10-15%', min: 10, max: 15, count: 0, percent: 0 },
-    { label: '15-20%', min: 15, max: 20, count: 0, percent: 0 },
-    { label: '20-30%', min: 20, max: 30, count: 0, percent: 0 },
-    { label: '30-40%', min: 30, max: 40, count: 0, percent: 0 },
-    { label: '40-50%', min: 40, max: 50, count: 0, percent: 0 },
-    { label: '50-60%', min: 50, max: 60, count: 0, percent: 0 },
-    { label: '60-70%', min: 60, max: 70, count: 0, percent: 0 },
-    { label: '70-80%', min: 70, max: 80, count: 0, percent: 0 },
-    { label: '80-90%', min: 80, max: 90, count: 0, percent: 0 },
-    { label: '90-100%', min: 90, max: Infinity, count: 0, percent: 0 },
-  ];
+  const buckets: DistributionBucket[] = [];
+  for (let i = 0; i < 100; i++) {
+    buckets.push({ label: `${i}%`, min: i, max: i === 99 ? Infinity : i + 1, count: 0, percent: 0 });
+  }
+  return buckets;
+}
+
+export function upgradeAthDistributionTo100(oldBuckets?: DistributionBucket[]): DistributionBucket[] {
+  const newBuckets = createEmptyATHBuckets();
+  if (!oldBuckets || oldBuckets.length === 0) return newBuckets;
+  if (oldBuckets.length === 100) return oldBuckets;
+
+  for (const b of oldBuckets) {
+    const min = Math.max(0, Math.floor(b.min));
+    const max = b.max === Infinity ? 100 : Math.min(100, Math.ceil(b.max));
+    const span = Math.max(1, max - min);
+    const countPerBucket = b.count / span;
+    const percentPerBucket = b.percent / span;
+    for (let i = min; i < max; i++) {
+      newBuckets[i].count += countPerBucket;
+      newBuckets[i].percent += percentPerBucket;
+    }
+  }
+
+  for (const b of newBuckets) {
+    b.count = Math.round(b.count);
+    b.percent = Number(b.percent.toFixed(2));
+  }
+  return newBuckets;
 }
 
 // ============================================================================
@@ -424,6 +439,9 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       if (config?.value) {
         const stored: NSEMarketBreadthData = JSON.parse(config.value);
         if (stored && stored.total >= 3000) {
+          if (stored.athDistribution && stored.athDistribution.length !== 100) {
+            stored.athDistribution = upgradeAthDistributionTo100(stored.athDistribution);
+          }
           cachedBreadthData = stored;
           breadthCacheTime = now;
           return {
@@ -565,13 +583,9 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       }
     }
 
-    // ATH drawdown bucket assignment
-    for (const b of athBuckets) {
-      if (m.awayFromAth >= b.min && (b.max === Infinity ? true : m.awayFromAth < b.max)) {
-        b.count++;
-        break;
-      }
-    }
+    // ATH drawdown bucket assignment (100 fine-grained 1% buckets)
+    const athIdx = Math.min(99, Math.max(0, Math.floor(m.awayFromAth)));
+    athBuckets[athIdx].count++;
   }
 
   const total = moves.length;
@@ -582,7 +596,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
   }
 
   for (const b of athBuckets) {
-    b.percent = total > 0 ? Number(((b.count / total) * 100).toFixed(1)) : 0;
+    b.percent = total > 0 ? Number(((b.count / total) * 100).toFixed(2)) : 0;
   }
 
   for (const t of Object.values(tiers)) {
