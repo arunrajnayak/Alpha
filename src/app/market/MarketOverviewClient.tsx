@@ -613,42 +613,18 @@ export default function MarketOverviewClient({
                 </div>
               ))}
             </div>
-            {/* Distribution charts */}
-            {(['Stock Moves', 'ATH Distance'] as const).map((label) => (
-              <div key={label} className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
-                  <div className="h-5 w-44 bg-slate-800/60 rounded" />
-                </div>
-                <div className="h-[180px] sm:h-[220px] md:h-[260px] w-full mt-3 bg-slate-800/20 rounded-xl" />
-              </div>
-            ))}
-          </div>
-        )}
-        {/* Section 2: Market health */}
-        {!embedded && (
-          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-3 sm:p-5 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
+            {/* Stock Moves Distribution */}
+            <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
-                <div className="h-5 w-40 bg-slate-800/60 rounded" />
+                <div className="h-5 w-44 bg-slate-800/60 rounded" />
               </div>
-              <div className="flex gap-1.5">
-                {[1, 2, 3].map((k) => <div key={k} className="h-7 w-10 bg-slate-800/50 rounded-lg" />)}
-              </div>
+              <div className="h-[180px] sm:h-[220px] md:h-[260px] w-full mt-3 bg-slate-800/20 rounded-xl" />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="bg-slate-800/30 rounded-xl p-3">
-                  <div className="h-3 w-20 bg-slate-800/60 rounded mb-2" />
-                  <div className="h-6 w-12 bg-slate-800/80 rounded" />
-                </div>
-              ))}
-            </div>
-            <div className="h-[200px] sm:h-[260px] w-full bg-slate-800/20 rounded-xl" />
           </div>
         )}
-        {/* Section 3 divider */}
+
+        {/* Section 2: Index Constituents & Heatmap divider */}
         {!embedded && (
           <div className="flex items-center gap-3 pt-2">
             <div className="h-px flex-1 bg-white/5" />
@@ -656,6 +632,7 @@ export default function MarketOverviewClient({
             <div className="h-px flex-1 bg-white/5" />
           </div>
         )}
+
         {/* Sidebar + Heatmap */}
         <div className="flex flex-col md:flex-row gap-4 md:gap-5">
           <div className="hidden md:flex flex-col gap-2 w-[220px] shrink-0">
@@ -690,6 +667,7 @@ export default function MarketOverviewClient({
             </div>
           </div>
         </div>
+
         {/* Sectoral Heatmap */}
         <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1">
           <div className="px-5 pt-5 pb-2">
@@ -697,6 +675,41 @@ export default function MarketOverviewClient({
           </div>
           <div className="h-[240px] sm:h-[310px] md:h-[400px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
         </div>
+
+        {/* Section 3: ATH Distance skeleton */}
+        {!embedded && (
+          <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
+              <div className="h-5 w-44 bg-slate-800/60 rounded" />
+            </div>
+            <div className="h-[180px] sm:h-[220px] md:h-[260px] w-full mt-3 bg-slate-800/20 rounded-xl" />
+          </div>
+        )}
+
+        {/* Section 4: Market health */}
+        {!embedded && (
+          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-3 sm:p-5 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
+                <div className="h-5 w-40 bg-slate-800/60 rounded" />
+              </div>
+              <div className="flex gap-1.5">
+                {[1, 2, 3].map((k) => <div key={k} className="h-7 w-10 bg-slate-800/50 rounded-lg" />)}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-slate-800/30 rounded-xl p-3">
+                  <div className="h-3 w-20 bg-slate-800/60 rounded mb-2" />
+                  <div className="h-6 w-12 bg-slate-800/80 rounded" />
+                </div>
+              ))}
+            </div>
+            <div className="h-[200px] sm:h-[260px] w-full bg-slate-800/20 rounded-xl" />
+          </div>
+        )}
       </div>
     );
   }
@@ -938,38 +951,24 @@ export default function MarketOverviewClient({
             loading={breadthLoading || intradayLoading}
           />
 
-          {/* Row 3: Top 10 Gainers & Losers (Separate Cards) */}
+          {/* Row 2: Top 10 Gainers & Losers (Separate Cards) */}
           <TopMovers
             topGainers={breadthData?.topGainers || []}
             topLosers={breadthData?.topLosers || []}
             loading={breadthLoading}
           />
 
-          {/* Row 4: Stock Moves Distribution (Full Width) */}
+          {/* Row 3: Stock Moves Distribution (Full Width) */}
           <StockMovesDistributionChart
             distribution={breadthData?.distribution || []}
             medianMove={breadthData?.medianMove || 0}
             totalStocks={breadthData?.total || 0}
             loading={breadthLoading}
           />
-
-          {/* Row 3: Distance Away from ATH Distribution (Full Width) */}
-          <AthDistributionChart
-            distribution={breadthData?.athDistribution || []}
-            totalStocks={breadthData?.total || 0}
-            loading={breadthLoading}
-          />
         </motion.div>
       )}
 
-      {/* Section 2: Market Health Trends (MomoIndia-inspired) */}
-      {!embedded && (
-        <motion.div variants={itemVariants}>
-          <MarketHealthDashboard initialData={initialHealthData} />
-        </motion.div>
-      )}
-
-      {/* Section 3: Index Constituents & Heatmap Header */}
+      {/* Section 2: Index Constituents & Heatmap Header */}
       {!embedded && (
         <motion.div variants={itemVariants} className="pt-2">
           <div className="flex items-center gap-3 mb-1">
@@ -1003,6 +1002,24 @@ export default function MarketOverviewClient({
             indices={indexSummaries}
             isMobile={isMobile}
           />
+        </motion.div>
+      )}
+
+      {/* Section 3: Distance Away from ATH Distribution (Full Width) */}
+      {!embedded && (
+        <motion.div variants={itemVariants}>
+          <AthDistributionChart
+            distribution={breadthData?.athDistribution || []}
+            totalStocks={breadthData?.total || 0}
+            loading={breadthLoading}
+          />
+        </motion.div>
+      )}
+
+      {/* Section 4: Market Health Trends (MomoIndia-inspired) */}
+      {!embedded && (
+        <motion.div variants={itemVariants}>
+          <MarketHealthDashboard initialData={initialHealthData} />
         </motion.div>
       )}
     </Container>

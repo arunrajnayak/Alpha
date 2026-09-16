@@ -13,7 +13,7 @@ export default function MarketLoading() {
         <div className="h-8 w-20 bg-slate-800/50 rounded-lg" />
       </div>
 
-      {/* Section 1: Market Breadth + Distributions */}
+      {/* Section 1: Market Breadth + Top Movers + Stock Moves */}
       <div className="flex flex-col gap-3 sm:gap-4 md:gap-5">
         {/* Breadth chart card */}
         <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6">
@@ -69,42 +69,9 @@ export default function MarketLoading() {
           </div>
           <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3 bg-slate-800/20 rounded-xl" />
         </div>
-
-        {/* ATH Distribution */}
-        <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
-            <div className="h-5 w-48 bg-slate-800/60 rounded" />
-          </div>
-          <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3 bg-slate-800/20 rounded-xl" />
-        </div>
       </div>
 
-      {/* Section 2: Market Health */}
-      <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-3 sm:p-5 md:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
-            <div className="h-5 w-40 bg-slate-800/60 rounded" />
-          </div>
-          <div className="flex gap-1.5">
-            {['6M', '1Y', 'ALL'].map((t) => (
-              <div key={t} className="h-7 w-10 bg-slate-800/50 rounded-lg" />
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-slate-800/30 rounded-xl p-3">
-              <div className="h-3 w-20 bg-slate-800/60 rounded mb-2" />
-              <div className="h-6 w-12 bg-slate-800/80 rounded" />
-            </div>
-          ))}
-        </div>
-        <div className="h-[240px] sm:h-[300px] w-full bg-slate-800/20 rounded-xl" />
-      </div>
-
-      {/* Section 3 divider */}
+      {/* Section 2: Index Constituents & Heatmap Divider */}
       <div className="flex items-center gap-3 pt-2">
         <div className="h-px flex-1 bg-white/5" />
         <div className="h-4 w-48 bg-slate-800/40 rounded" />
@@ -152,6 +119,39 @@ export default function MarketLoading() {
           <div className="h-3 w-36 bg-slate-800/50 rounded" />
         </div>
         <div className="h-[240px] sm:h-[310px] md:h-[400px] mx-4 mb-4 bg-slate-800/30 rounded-xl" />
+      </div>
+
+      {/* Section 3: ATH Distribution */}
+      <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
+          <div className="h-5 w-48 bg-slate-800/60 rounded" />
+        </div>
+        <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3 bg-slate-800/20 rounded-xl" />
+      </div>
+
+      {/* Section 4: Market Health */}
+      <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-3 sm:p-5 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 bg-slate-800/60 rounded-lg" />
+            <div className="h-5 w-40 bg-slate-800/60 rounded" />
+          </div>
+          <div className="flex gap-1.5">
+            {['6M', '1Y', 'ALL'].map((t) => (
+              <div key={t} className="h-7 w-10 bg-slate-800/50 rounded-lg" />
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-slate-800/30 rounded-xl p-3">
+              <div className="h-3 w-20 bg-slate-800/60 rounded mb-2" />
+              <div className="h-6 w-12 bg-slate-800/80 rounded" />
+            </div>
+          ))}
+        </div>
+        <div className="h-[240px] sm:h-[300px] w-full bg-slate-800/20 rounded-xl" />
       </div>
     </div>
   );
