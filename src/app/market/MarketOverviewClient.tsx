@@ -1010,7 +1010,7 @@ export default function MarketOverviewClient({
         <motion.div variants={itemVariants}>
           <AthDistributionChart
             distribution={breadthData?.athDistribution || []}
-            totalStocks={breadthData?.total || 0}
+            totalStocks={breadthData?.athTrackedStocks || breadthData?.total || 0}
             loading={breadthLoading}
           />
         </motion.div>

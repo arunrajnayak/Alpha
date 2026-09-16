@@ -77,15 +77,15 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
   const nextVal = data.distance === 99 ? '100%+' : `${data.distance + 1}%`;
 
   return (
-    <div className="bg-[#0c1220]/95 border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl backdrop-blur-md min-w-[190px]">
-      <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10 text-xs">
-        <span className="text-gray-400 font-medium">Distance from ATH</span>
-        <span className="text-gray-100 font-mono font-semibold">
+    <div className="bg-[#0c1220]/95 border border-white/10 rounded-xl px-3.5 py-2.5 shadow-2xl backdrop-blur-md min-w-[200px]">
+      <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10 text-xs gap-4">
+        <span className="text-gray-400 font-medium">Drawdown</span>
+        <span className="text-gray-100 font-mono font-semibold whitespace-nowrap">
           {data.distance}% – {nextVal}
         </span>
       </div>
-      <div className="space-y-1 text-xs font-mono">
-        <div className="flex items-center justify-between gap-3">
+      <div className="space-y-1.5 text-xs font-mono">
+        <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-gray-300">
             <span
               className="w-2 h-2 rounded-full shadow-[0_0_6px_currentColor]"
@@ -95,7 +95,7 @@ const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
           </span>
           <span className="font-bold text-white">{data.count.toLocaleString()}</span>
         </div>
-        <div className="flex items-center justify-between gap-3 text-[11px] text-gray-400">
+        <div className="flex items-center justify-between gap-4 text-[11px] text-gray-400">
           <span>Universe Share:</span>
           <span className="font-semibold text-gray-200">{data.percent.toFixed(2)}%</span>
         </div>
@@ -187,7 +187,7 @@ export default function AthDistributionChart({
                 Distance Away from ATH
               </h3>
               <p className="text-[11px] text-gray-400 hidden sm:block">
-                100 fine-grained 1% drawdown buckets across all active stocks
+                100 fine-grained 1% drawdown buckets across active stocks with ATH history
               </p>
             </div>
           </div>
@@ -352,31 +352,6 @@ export default function AthDistributionChart({
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
-
-        {/* Legend strip below chart */}
-        <div className="flex flex-wrap items-center justify-between text-[11px] text-gray-500 pt-2 border-t border-white/5 font-sans mt-2">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              0–10% Breakout Leaders
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              10–20% Pullback / Consolidation
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              20–50% Correction
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              &gt;50% Drawdown
-            </span>
-          </div>
-          <span className="text-gray-500 font-mono text-[10px] hidden sm:inline">
-            Hover along curve to inspect any 1% bucket
-          </span>
         </div>
       </div>
     </div>

@@ -60,6 +60,7 @@ export interface NSEMarketBreadthData {
   netAdvances: number;
   distribution: DistributionBucket[];
   athDistribution: DistributionBucket[];
+  athTrackedStocks?: number;
   tiers: {
     large: CapTierBreadth;
     mid: CapTierBreadth;
@@ -389,7 +390,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     changePercent: number;
     lastPrice: number;
     category: 'large' | 'mid' | 'small' | 'micro';
-    awayFromAth: number;
+    awayFromAth: number | null;
   }> = [];
 
   if (hasToken) {
@@ -403,7 +404,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
           const q = quotesMap.get(item.instrumentKey);
           if (q && q.previous_close > 0 && q.last_price > 0) {
             const changePercent = ((q.last_price - q.previous_close) / q.previous_close) * 100;
-            const awayFromAth = item.ath > 0 ? Math.max(0, ((item.ath - q.last_price) / item.ath) * 100) : 0;
+            const awayFromAth = item.ath > 0 ? Math.max(0, ((item.ath - q.last_price) / item.ath) * 100) : null;
             moves.push({
               symbol: item.symbol,
               changePercent,
@@ -549,6 +550,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
   let advances = 0;
   let declines = 0;
   let unchanged = 0;
+  let athTotalWithData = 0;
 
   const tiers: NSEMarketBreadthData['tiers'] = {
     large: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
@@ -583,9 +585,12 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       }
     }
 
-    // ATH drawdown bucket assignment (100 fine-grained 1% buckets)
-    const athIdx = Math.min(99, Math.max(0, Math.floor(m.awayFromAth)));
-    athBuckets[athIdx].count++;
+    // ATH drawdown bucket assignment (only for stocks with valid ATH history)
+    if (m.awayFromAth !== null && m.awayFromAth !== undefined && !isNaN(m.awayFromAth)) {
+      const athIdx = Math.min(99, Math.max(0, Math.floor(m.awayFromAth)));
+      athBuckets[athIdx].count++;
+      athTotalWithData++;
+    }
   }
 
   const total = moves.length;
@@ -596,7 +601,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
   }
 
   for (const b of athBuckets) {
-    b.percent = total > 0 ? Number(((b.count / total) * 100).toFixed(2)) : 0;
+    b.percent = athTotalWithData > 0 ? Number(((b.count / athTotalWithData) * 100).toFixed(2)) : 0;
   }
 
   for (const t of Object.values(tiers)) {
@@ -642,6 +647,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     netAdvances,
     distribution: buckets,
     athDistribution: athBuckets,
+    athTrackedStocks: athTotalWithData,
     tiers,
     topGainers,
     topLosers,
