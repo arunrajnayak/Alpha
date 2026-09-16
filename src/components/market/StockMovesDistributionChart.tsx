@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   BarChart,
   Bar,
@@ -96,17 +97,24 @@ export default function StockMovesDistributionChart({
               <span className="text-[10px] uppercase text-gray-500 block font-sans">
                 Median Move
               </span>
-              <span
-                className={`font-bold text-sm ${
-                  medianMove > 0
-                    ? 'text-emerald-400'
-                    : medianMove < 0
-                    ? 'text-rose-400'
-                    : 'text-gray-300'
-                }`}
-              >
-                {medianMove > 0 ? `+${medianMove}%` : `${medianMove}%`}
-              </span>
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={medianMove}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                  className={`font-bold text-sm ${
+                    medianMove > 0
+                      ? 'text-emerald-400'
+                      : medianMove < 0
+                      ? 'text-rose-400'
+                      : 'text-gray-300'
+                  }`}
+                >
+                  {medianMove > 0 ? `+${medianMove}%` : `${medianMove}%`}
+                </motion.span>
+              </AnimatePresence>
             </div>
           </div>
         </div>

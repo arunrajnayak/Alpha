@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   LineChart,
   Line,
@@ -166,10 +167,19 @@ export default function IntradayMarketBreadthChart({
                 <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] shrink-0" />
                 <span className="text-[11px] sm:text-xs font-medium text-gray-300">Advances</span>
               </div>
-              <div className="flex items-baseline gap-1 font-mono">
-                <span className="text-xs sm:text-base font-bold text-emerald-400">
-                  {advances.toLocaleString()}
-                </span>
+              <div className="flex items-baseline gap-1 font-mono overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={advances}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-xs sm:text-base font-bold text-emerald-400"
+                  >
+                    {advances.toLocaleString()}
+                  </motion.span>
+                </AnimatePresence>
                 <span className="text-[10px] sm:text-xs text-emerald-400/70 font-medium">
                   ({advPercent}%)
                 </span>
@@ -179,14 +189,21 @@ export default function IntradayMarketBreadthChart({
             {/* A/D Ratio */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-slate-800/60 border border-white/10 shadow-sm gap-1">
               <span className="text-[11px] sm:text-xs font-medium text-gray-300">A/D Ratio</span>
-              <div className="flex items-baseline gap-1 font-mono">
-                <span
-                  className={`text-xs sm:text-base font-bold ${
-                    adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {adRatio.toFixed(2)}
-                </span>
+              <div className="flex items-baseline gap-1 font-mono overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={adRatio.toFixed(2)}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2 }}
+                    className={`text-xs sm:text-base font-bold ${
+                      adRatio >= 1 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {adRatio.toFixed(2)}
+                  </motion.span>
+                </AnimatePresence>
               </div>
             </div>
 
@@ -196,10 +213,19 @@ export default function IntradayMarketBreadthChart({
                 <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.8)] shrink-0" />
                 <span className="text-[11px] sm:text-xs font-medium text-gray-300">Declines</span>
               </div>
-              <div className="flex items-baseline gap-1 font-mono">
-                <span className="text-xs sm:text-base font-bold text-rose-400">
-                  {declines.toLocaleString()}
-                </span>
+              <div className="flex items-baseline gap-1 font-mono overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={declines}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-xs sm:text-base font-bold text-rose-400"
+                  >
+                    {declines.toLocaleString()}
+                  </motion.span>
+                </AnimatePresence>
                 <span className="text-[10px] sm:text-xs text-rose-400/70 font-medium">
                   ({decPercent}%)
                 </span>
@@ -207,6 +233,7 @@ export default function IntradayMarketBreadthChart({
             </div>
           </div>
         )}
+
 
 
         {/* Enlarged Intraday Trend Chart */}
