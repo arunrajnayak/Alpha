@@ -9,6 +9,9 @@
  */
 
 import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { prisma } from '@/lib/db';
 import { getLiveQuotes } from '@/lib/upstox/client';
 import { hasValidToken } from '@/lib/upstox-client';
@@ -151,130 +154,120 @@ function computeMedian(values: number[]): number {
     : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+const NSE_ACTIVE_UNIVERSE_CONFIG_KEY = 'nse_active_equity_universe';
+const LATEST_NSE_BREADTH_CONFIG_KEY = 'latest_nse_market_breadth';
+
 // Load active NSE stock universe (All ~3,394 NSE listed equities)
 async function getActiveNSEUniverse(): Promise<UniverseItem[]> {
   const now = Date.now();
-  if (cachedUniverse && cachedUniverse.length > 0 && now - universeCacheTime < UNIVERSE_CACHE_TTL_MS) {
+  if (cachedUniverse && cachedUniverse.length >= 3000 && now - universeCacheTime < UNIVERSE_CACHE_TTL_MS) {
     return cachedUniverse;
   }
 
+  // 1. Try to load from instrument master JSON file if it exists or is downloaded
   try {
-    // 1. Ensure fresh instrument master from Upstox (cached locally with 7-day TTL)
     await ensureInstrumentMaster();
-    const data = await fs.readFile('/tmp/upstox-cache/nse_instruments.json', 'utf-8');
-    const instruments: Array<{
-      instrument_key: string;
-      trading_symbol?: string;
-      tradingsymbol?: string;
-      instrument_type: string;
-      name?: string;
-    }> = JSON.parse(data);
+    const primaryPath = '/tmp/upstox-cache/nse_instruments.json';
+    const fallbackPath = path.join(os.tmpdir(), 'upstox-cache', 'nse_instruments.json');
+    const targetFile = existsSync(primaryPath) ? primaryPath : existsSync(fallbackPath) ? fallbackPath : null;
 
-    // Filter for all active NSE equity instruments (EQ, BE, SM SME, BZ)
-    const equityInstruments = instruments.filter(
-      (i) =>
-        i.instrument_key?.startsWith('NSE_EQ') &&
-        ['EQ', 'BE', 'SM', 'BZ'].includes(i.instrument_type)
-    );
+    if (targetFile) {
+      const data = await fs.readFile(targetFile, 'utf-8');
+      const instruments: Array<{
+        instrument_key: string;
+        trading_symbol?: string;
+        tradingsymbol?: string;
+        instrument_type: string;
+        name?: string;
+      }> = JSON.parse(data);
 
-    // 2. Load AMFI classifications for cap tier mapping (Large, Mid, Small)
-    const amfiRecords = await prisma.aMFIClassification.findMany({
-      select: { symbol: true, category: true },
-      distinct: ['symbol'],
-    });
-    const amfiMap = new Map<string, 'large' | 'mid' | 'small' | 'micro'>();
-    for (const a of amfiRecords) {
-      const cat = (a.category || '').toLowerCase();
-      if (cat.includes('large')) amfiMap.set(a.symbol.toUpperCase(), 'large');
-      else if (cat.includes('mid')) amfiMap.set(a.symbol.toUpperCase(), 'mid');
-      else if (cat.includes('small')) amfiMap.set(a.symbol.toUpperCase(), 'small');
-    }
+      // Filter for all active NSE equity instruments (EQ, BE, SM SME, BZ)
+      const equityInstruments = instruments.filter(
+        (i) =>
+          i.instrument_key?.startsWith('NSE_EQ') &&
+          ['EQ', 'BE', 'SM', 'BZ'].includes(i.instrument_type)
+      );
 
-    // 3. Load ATH from StockATH
-    const athRecords = await prisma.stockATH.findMany({
-      select: { symbol: true, ath: true },
-    });
-    const athMap = new Map<string, number>();
-    for (const a of athRecords) {
-      if (a.ath > 0) athMap.set(a.symbol.toUpperCase(), a.ath);
-    }
+      if (equityInstruments.length >= 3000) {
+        // Load AMFI classifications for cap tier mapping (Large, Mid, Small)
+        const amfiRecords = await prisma.aMFIClassification.findMany({
+          select: { symbol: true, category: true },
+          distinct: ['symbol'],
+        });
+        const amfiMap = new Map<string, 'large' | 'mid' | 'small' | 'micro'>();
+        for (const a of amfiRecords) {
+          const cat = (a.category || '').toLowerCase();
+          if (cat.includes('large')) amfiMap.set(a.symbol.toUpperCase(), 'large');
+          else if (cat.includes('mid')) amfiMap.set(a.symbol.toUpperCase(), 'mid');
+          else if (cat.includes('small')) amfiMap.set(a.symbol.toUpperCase(), 'small');
+        }
 
-    const items: UniverseItem[] = equityInstruments
-      .map((inst) => {
-        const symbol = (inst.trading_symbol || inst.tradingsymbol || '').toUpperCase();
-        const category = amfiMap.get(symbol) || 'micro';
-        const ath = athMap.get(symbol) || 0;
-        return {
-          symbol,
-          instrumentKey: inst.instrument_key,
-          category,
-          currentPrice: 0,
-          ath,
-        };
-      })
-      .filter((i) => i.symbol && i.instrumentKey);
+        // Load ATH from StockATH
+        const athRecords = await prisma.stockATH.findMany({
+          select: { symbol: true, ath: true },
+        });
+        const athMap = new Map<string, number>();
+        for (const a of athRecords) {
+          if (a.ath > 0) athMap.set(a.symbol.toUpperCase(), a.ath);
+        }
 
-    if (items.length > 0) {
-      cachedUniverse = items;
-      universeCacheTime = now;
-      breadthLogger.info(`Loaded ${items.length} all-NSE active equity keys for market breadth`);
-      return items;
+        const items: UniverseItem[] = equityInstruments
+          .map((inst) => {
+            const symbol = (inst.trading_symbol || inst.tradingsymbol || '').toUpperCase();
+            const category = amfiMap.get(symbol) || 'micro';
+            const ath = athMap.get(symbol) || 0;
+            return {
+              symbol,
+              instrumentKey: inst.instrument_key,
+              category,
+              currentPrice: 0,
+              ath,
+            };
+          })
+          .filter((i) => i.symbol && i.instrumentKey);
+
+        if (items.length >= 3000) {
+          cachedUniverse = items;
+          universeCacheTime = now;
+          // Keep AppConfig in Turso updated so serverless instances have instant access
+          prisma.appConfig.upsert({
+            where: { key: NSE_ACTIVE_UNIVERSE_CONFIG_KEY },
+            update: { value: JSON.stringify(items) },
+            create: { key: NSE_ACTIVE_UNIVERSE_CONFIG_KEY, value: JSON.stringify(items) },
+          }).catch(() => {});
+          breadthLogger.info(`Loaded ${items.length} all-NSE active equity keys for market breadth`);
+          return items;
+        }
+      }
     }
   } catch (error) {
-    breadthLogger.warn('Could not load from instrument master, falling back to DB:', error);
+    breadthLogger.warn('Could not load from instrument master file, checking AppConfig:', error);
   }
 
-  // Fallback to MomentumScore in DB if instrument master read failed
+  // 2. Primary Persistent Source: Load full universe from AppConfig in Turso
   try {
-    const latestDateRecord = await prisma.momentumScore.findFirst({
-      select: { computedDate: true },
-      orderBy: { computedDate: 'desc' },
+    const config = await prisma.appConfig.findUnique({
+      where: { key: NSE_ACTIVE_UNIVERSE_CONFIG_KEY },
     });
-
-    if (!latestDateRecord?.computedDate) {
-      return [];
+    if (config?.value) {
+      const items: UniverseItem[] = JSON.parse(config.value);
+      if (items.length >= 3000) {
+        cachedUniverse = items;
+        universeCacheTime = now;
+        breadthLogger.info(`Loaded ${items.length} all-NSE active equity keys from AppConfig`);
+        return items;
+      }
     }
-
-    const scores = await prisma.momentumScore.findMany({
-      where: {
-        computedDate: latestDateRecord.computedDate,
-        rankType: 'all',
-      },
-      select: {
-        symbol: true,
-        instrumentKey: true,
-        marketCapCategory: true,
-        currentPrice: true,
-        ath: true,
-      },
-    });
-
-    const items: UniverseItem[] = scores
-      .filter((s) => s.instrumentKey && s.instrumentKey.startsWith('NSE_EQ'))
-      .map((s) => {
-        const cat = (s.marketCapCategory || '').toLowerCase();
-        let category: 'large' | 'mid' | 'small' | 'micro' = 'micro';
-        if (cat.includes('large')) category = 'large';
-        else if (cat.includes('mid')) category = 'mid';
-        else if (cat.includes('small')) category = 'small';
-
-        return {
-          symbol: s.symbol,
-          instrumentKey: s.instrumentKey,
-          category,
-          currentPrice: s.currentPrice,
-          ath: s.ath || 0,
-        };
-      });
-
-    cachedUniverse = items;
-    universeCacheTime = now;
-    breadthLogger.info(`Loaded ${items.length} fallback NSE equity keys from DB`);
-    return items;
   } catch (error) {
-    breadthLogger.error('Failed to load NSE universe from DB:', error);
-    return cachedUniverse || [];
+    breadthLogger.warn('Failed to load universe from AppConfig:', error);
   }
+
+  // 3. Fallback to existing cachedUniverse if available
+  if (cachedUniverse && cachedUniverse.length >= 3000) {
+    return cachedUniverse;
+  }
+
+  return cachedUniverse || [];
 }
 
 // Build empty stock moves buckets template (including +/- 10% and +/- 15% baskets)
@@ -411,65 +404,126 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     }
   }
 
-  // 4. Fallback to latest DB closing data if live quotes weren't obtained
-  if (moves.length === 0) {
+  // 4. Fallback if live quotes were not obtained or returned insufficient data (< 3000)
+  if (moves.length < 3000) {
+    // 4a. If in-memory cache has full breadth data, use it
+    if (cachedBreadthData && cachedBreadthData.total >= 3000) {
+      return {
+        ...cachedBreadthData,
+        marketStatus,
+        tokenStatus,
+        isLive: false,
+      };
+    }
+
+    // 4b. Load latest full breadth snapshot from AppConfig in Turso
     try {
-      const latestDateRecord = await prisma.momentumScore.findFirst({
-        select: { computedDate: true },
-        orderBy: { computedDate: 'desc' },
+      const config = await prisma.appConfig.findUnique({
+        where: { key: LATEST_NSE_BREADTH_CONFIG_KEY },
       });
-
-      if (latestDateRecord?.computedDate) {
-        const scores = await prisma.momentumScore.findMany({
-          where: {
-            computedDate: latestDateRecord.computedDate,
-            rankType: 'all',
-          },
-          select: {
-            symbol: true,
-            currentPrice: true,
-            ath: true,
-            sparklineData: true,
-            marketCapCategory: true,
-          },
-        });
-
-        for (const s of scores) {
-          let changePercent = 0;
-          if (s.sparklineData) {
-            try {
-              const spark: number[] = JSON.parse(s.sparklineData);
-              if (spark.length >= 2) {
-                const prev = spark[spark.length - 2];
-                const curr = spark[spark.length - 1];
-                if (prev > 0) {
-                  changePercent = ((curr - prev) / prev) * 100;
-                }
-              }
-            } catch {
-              // ignore json parse error
-            }
-          }
-
-          const cat = (s.marketCapCategory || '').toLowerCase();
-          let category: 'large' | 'mid' | 'small' | 'micro' = 'micro';
-          if (cat.includes('large')) category = 'large';
-          else if (cat.includes('mid')) category = 'mid';
-          else if (cat.includes('small')) category = 'small';
-
-          const awayFromAth = s.ath > 0 ? Math.max(0, ((s.ath - s.currentPrice) / s.ath) * 100) : 0;
-
-          moves.push({
-            symbol: s.symbol,
-            changePercent,
-            lastPrice: s.currentPrice,
-            category,
-            awayFromAth,
-          });
+      if (config?.value) {
+        const stored: NSEMarketBreadthData = JSON.parse(config.value);
+        if (stored && stored.total >= 3000) {
+          cachedBreadthData = stored;
+          breadthCacheTime = now;
+          return {
+            ...stored,
+            marketStatus,
+            tokenStatus,
+            isLive: false,
+          };
         }
       }
     } catch (err) {
-      breadthLogger.error('Failed to load fallback breadth from DB:', err);
+      breadthLogger.error('Failed to load fallback breadth from AppConfig:', err);
+    }
+
+    // 4c. Load latest IntradayMarketBreadth record with total >= 3000
+    try {
+      const latestBreadth = await prisma.intradayMarketBreadth.findFirst({
+        where: { total: { gte: 3000 } },
+        orderBy: { timestamp: 'desc' },
+      });
+
+      if (latestBreadth) {
+        const advPercent =
+          latestBreadth.total > 0
+            ? Number(((latestBreadth.advances / latestBreadth.total) * 100).toFixed(1))
+            : 0;
+        const decPercent =
+          latestBreadth.total > 0
+            ? Number(((latestBreadth.declines / latestBreadth.total) * 100).toFixed(1))
+            : 0;
+        const largeAdv = latestBreadth.largeAdv ?? 0;
+        const largeDec = latestBreadth.largeDec ?? 0;
+        const largeTotal = largeAdv + largeDec;
+
+        const midAdv = latestBreadth.midAdv ?? 0;
+        const midDec = latestBreadth.midDec ?? 0;
+        const midTotal = midAdv + midDec;
+
+        const smallAdv = latestBreadth.smallAdv ?? 0;
+        const smallDec = latestBreadth.smallDec ?? 0;
+        const smallTotal = smallAdv + smallDec;
+
+        const microAdv = latestBreadth.microAdv ?? 0;
+        const microDec = latestBreadth.microDec ?? 0;
+        const microTotal = microAdv + microDec;
+
+        const fallbackResult: NSEMarketBreadthData = {
+          total: latestBreadth.total,
+          advances: latestBreadth.advances,
+          declines: latestBreadth.declines,
+          unchanged: latestBreadth.unchanged,
+          advPercent,
+          decPercent,
+          adRatio: latestBreadth.adRatio,
+          netAdvances: latestBreadth.netAdvances,
+          distribution: createEmptyBuckets(),
+          athDistribution: createEmptyATHBuckets(),
+          tiers: {
+            large: {
+              advances: largeAdv,
+              declines: largeDec,
+              unchanged: 0,
+              total: largeTotal,
+              advPercent: largeTotal > 0 ? Number(((largeAdv / largeTotal) * 100).toFixed(1)) : 0,
+            },
+            mid: {
+              advances: midAdv,
+              declines: midDec,
+              unchanged: 0,
+              total: midTotal,
+              advPercent: midTotal > 0 ? Number(((midAdv / midTotal) * 100).toFixed(1)) : 0,
+            },
+            small: {
+              advances: smallAdv,
+              declines: smallDec,
+              unchanged: 0,
+              total: smallTotal,
+              advPercent: smallTotal > 0 ? Number(((smallAdv / smallTotal) * 100).toFixed(1)) : 0,
+            },
+            micro: {
+              advances: microAdv,
+              declines: microDec,
+              unchanged: 0,
+              total: microTotal,
+              advPercent: microTotal > 0 ? Number(((microAdv / microTotal) * 100).toFixed(1)) : 0,
+            },
+          },
+          topGainers: [],
+          topLosers: [],
+          medianMove: 0,
+          marketStatus,
+          lastUpdated: latestBreadth.timestamp.toISOString(),
+          isLive: false,
+          tokenStatus,
+        };
+
+        return fallbackResult;
+      }
+    } catch (err) {
+      breadthLogger.error('Failed to load fallback breadth from IntradayMarketBreadth:', err);
     }
   }
 
@@ -587,8 +641,19 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
   cachedBreadthData = result;
   breadthCacheTime = now;
 
-  // Auto-record snapshot if market is currently open and at least 2 minutes passed since last save
-  if (isLive && marketStatus === 'OPEN' && total > 0 && now - lastSavedBreadthTime > 2 * 60 * 1000) {
+  // Persist latest complete breadth snapshot to AppConfig so all serverless instances have access
+  if (result.total >= 3000) {
+    prisma.appConfig
+      .upsert({
+        where: { key: LATEST_NSE_BREADTH_CONFIG_KEY },
+        update: { value: JSON.stringify(result) },
+        create: { key: LATEST_NSE_BREADTH_CONFIG_KEY, value: JSON.stringify(result) },
+      })
+      .catch((err) => breadthLogger.warn('Failed to cache latest breadth to AppConfig:', err));
+  }
+
+  // Auto-record snapshot if market is currently open, we have full universe (>= 3000), and at least 2 minutes passed
+  if (isLive && marketStatus === 'OPEN' && total >= 3000 && now - lastSavedBreadthTime > 2 * 60 * 1000) {
     lastSavedBreadthTime = now;
     saveIntradayMarketBreadth(result).catch((err) => {
       breadthLogger.error('Auto-save of intraday breadth failed:', err);
@@ -812,7 +877,10 @@ export async function saveIntradayMarketBreadth(
   breadthData: NSEMarketBreadthData
 ): Promise<boolean> {
   try {
-    if (breadthData.total === 0) return false;
+    if (!breadthData || breadthData.total < 3000) {
+      breadthLogger.warn(`Skipping saveIntradayMarketBreadth: total (${breadthData?.total}) is below 3000`);
+      return false;
+    }
     const today = todayISTYmd();
 
     await prisma.intradayMarketBreadth.create({
@@ -860,12 +928,13 @@ export async function getIntradayMarketBreadth(
     // If no targetDate passed, check if we have data for today
     if (!targetDate) {
       const countToday = await prisma.intradayMarketBreadth.count({
-        where: { date: today },
+        where: { date: today, total: { gte: 3000 } },
       });
 
       // If today has no records (e.g. weekend, holiday, or before market opens), find latest available date
       if (countToday === 0) {
         const latestRecord = await prisma.intradayMarketBreadth.findFirst({
+          where: { total: { gte: 3000 } },
           select: { date: true },
           orderBy: { timestamp: 'desc' },
         });
@@ -876,7 +945,7 @@ export async function getIntradayMarketBreadth(
     }
 
     const records = await prisma.intradayMarketBreadth.findMany({
-      where: { date: selectedDate },
+      where: { date: selectedDate, total: { gte: 3000 } },
       orderBy: { timestamp: 'asc' },
     });
 

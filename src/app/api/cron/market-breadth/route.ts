@@ -27,11 +27,13 @@ export async function GET(request: NextRequest) {
     log.info('Fetching live NSE market breadth for cron snapshot...');
     const breadthData = await fetchNSEMarketBreadth(true);
 
-    if (breadthData.total > 0) {
+    if (breadthData.total >= 3000) {
       await saveIntradayMarketBreadth(breadthData);
       log.info(
         `Recorded intraday breadth: Adv=${breadthData.advances}, Dec=${breadthData.declines}, Total=${breadthData.total}`
       );
+    } else {
+      log.warn(`Skipping cron save, breadthData total too low (${breadthData.total})`);
     }
 
     return NextResponse.json({

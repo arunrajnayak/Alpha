@@ -176,10 +176,20 @@ export default function MarketOverviewClient({
   const loadBreadth = useCallback(async (force = false) => {
     try {
       const res = await fetchNSEMarketBreadth(force);
-      setBreadthData(res);
+      if (res && res.total > 0) {
+        setBreadthData((prev) => {
+          // If the new result has full universe (>= 3000), always update
+          if (res.total >= 3000) return res;
+          // If new result has degraded total (< 3000) but we already had full universe, preserve previous
+          if (prev && prev.total >= 3000) {
+            return { ...prev, marketStatus: res.marketStatus, tokenStatus: res.tokenStatus };
+          }
+          return res;
+        });
+      }
 
-      // If market is active and we have live breadth, update/append current minute into intradayData points
-      if (res.isLive && res.total > 0) {
+      // If market is active and we have full live breadth (>= 3000), update/append current minute into intradayData points
+      if (res.isLive && res.total >= 3000) {
         setIntradayData((prev) => {
           if (!prev) return prev;
           const timeStr = new Date().toLocaleTimeString('en-IN', {

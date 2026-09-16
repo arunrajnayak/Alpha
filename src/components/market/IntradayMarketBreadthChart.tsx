@@ -91,27 +91,38 @@ export default function IntradayMarketBreadthChart({
   breadth,
   loading = false,
 }: IntradayMarketBreadthChartProps) {
-  // Latest point from intraday snapshots
-  const latest = useMemo(() => {
-    if (!points || points.length === 0) return null;
-    return points[points.length - 1];
+  // Filter points to ensure only full-market snapshots (total >= 3000) are plotted if available
+  const validPoints = useMemo(() => {
+    if (!points || points.length === 0) return [];
+    const fullPoints = points.filter((p) => p.total >= 3000);
+    return fullPoints.length > 0 ? fullPoints : points;
   }, [points]);
 
-  // Derive current breadth metrics: prefer live breadthData, fallback to latest intraday snapshot
-  const advances = breadth?.advances ?? latest?.advances ?? 0;
-  const declines = breadth?.declines ?? latest?.declines ?? 0;
-  const unchanged = breadth?.unchanged ?? 0;
-  const total = breadth?.total ?? (advances + declines + unchanged);
-  const advPercent =
-    breadth?.advPercent ?? (total > 0 ? Number(((advances / total) * 100).toFixed(1)) : 0);
-  const decPercent =
-    breadth?.decPercent ?? (total > 0 ? Number(((declines / total) * 100).toFixed(1)) : 0);
+  // Latest point from intraday snapshots
+  const latest = useMemo(() => {
+    if (!validPoints || validPoints.length === 0) return null;
+    return validPoints[validPoints.length - 1];
+  }, [validPoints]);
+
+  // Derive current breadth metrics: prefer whichever source has full universe (total >= 3000)
+  const activeSource = useMemo(() => {
+    if (breadth && breadth.total >= 3000) return breadth;
+    if (latest && latest.total >= 3000) return latest;
+    return breadth || latest;
+  }, [breadth, latest]);
+
+  const advances = activeSource?.advances ?? 0;
+  const declines = activeSource?.declines ?? 0;
+  const unchanged = activeSource?.unchanged ?? 0;
+  const total = activeSource?.total ?? (advances + declines + unchanged);
+  const advPercent = total > 0 ? Number(((advances / total) * 100).toFixed(1)) : 0;
+  const decPercent = total > 0 ? Number(((declines / total) * 100).toFixed(1)) : 0;
   const unchPercent = total > 0 ? Number(((unchanged / total) * 100).toFixed(1)) : 0;
   const adRatio =
-    breadth?.adRatio ?? (declines > 0 ? Number((advances / declines).toFixed(2)) : advances);
-  const netAdvances = breadth?.netAdvances ?? (advances - declines);
+    activeSource?.adRatio ?? (declines > 0 ? Number((advances / declines).toFixed(2)) : advances);
+  const netAdvances = activeSource?.netAdvances ?? (advances - declines);
 
-  if (loading && (!points || points.length === 0) && !breadth) {
+  if (loading && (!validPoints || validPoints.length === 0) && !breadth) {
     return (
       <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-3 sm:p-5 md:p-6 h-[360px] sm:h-[480px] md:h-[580px] animate-pulse" />
     );
@@ -199,11 +210,11 @@ export default function IntradayMarketBreadthChart({
 
 
         {/* Enlarged Intraday Trend Chart */}
-        {points && points.length > 0 ? (
+        {validPoints && validPoints.length > 0 ? (
           <div className="h-[260px] sm:h-[340px] md:h-[460px] w-full mt-3">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={points}
+                data={validPoints}
                 margin={{ top: 16, right: 2, left: -24, bottom: 0 }}
               >
                 <CartesianGrid
