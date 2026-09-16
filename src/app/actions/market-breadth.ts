@@ -298,7 +298,7 @@ function createEmptyATHBuckets(): DistributionBucket[] {
   return buckets;
 }
 
-export function upgradeAthDistributionTo100(oldBuckets?: DistributionBucket[]): DistributionBucket[] {
+function upgradeAthDistributionTo100(oldBuckets?: DistributionBucket[]): DistributionBucket[] {
   const newBuckets = createEmptyATHBuckets();
   if (!oldBuckets || oldBuckets.length === 0) return newBuckets;
   if (oldBuckets.length === 100) return oldBuckets;
