@@ -66,6 +66,70 @@ function getMarketCapBadge(cat?: string) {
   return null;
 }
 
+function getRecoveryChip(recLow: number) {
+  if (recLow < 0.1) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-slate-800/80 text-gray-400 border border-white/10 font-semibold text-[10px]">
+        At Low
+      </span>
+    );
+  }
+
+  let chipStyle = '';
+  if (recLow >= 6.0) {
+    // Exceptional reversal / surge (>= 6%)
+    chipStyle = 'bg-gradient-to-r from-emerald-500/30 to-cyan-500/30 text-cyan-200 border border-cyan-400/50 font-bold shadow-sm shadow-cyan-500/20';
+  } else if (recLow >= 3.5) {
+    // Strong recovery (3.5% - 6%)
+    chipStyle = 'bg-teal-500/25 text-teal-200 border border-teal-400/40 font-bold';
+  } else if (recLow >= 1.5) {
+    // Solid recovery (1.5% - 3.5%)
+    chipStyle = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 font-semibold';
+  } else {
+    // Mild recovery (< 1.5%)
+    chipStyle = 'bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20 font-medium';
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono text-[11px] tabular-nums ${chipStyle}`}>
+      <FontAwesomeIcon icon={faArrowUp} className="text-[9px]" />
+      +{recLow.toFixed(2)}%
+    </span>
+  );
+}
+
+function getFallFromHighChip(dropHigh: number) {
+  if (Math.abs(dropHigh) <= 0.08) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 font-semibold text-[10px]">
+        At High
+      </span>
+    );
+  }
+
+  let chipStyle = '';
+  if (dropHigh <= -4.5) {
+    // Severe drop from peak (<= -4.5%)
+    chipStyle = 'bg-rose-500/25 text-rose-200 border border-rose-500/50 font-bold shadow-sm shadow-rose-500/20';
+  } else if (dropHigh <= -2.5) {
+    // Noticeable drop (-2.5% to -4.5%)
+    chipStyle = 'bg-orange-500/20 text-orange-200 border border-orange-500/35 font-semibold';
+  } else if (dropHigh <= -1.0) {
+    // Moderate pullback (-1.0% to -2.5%)
+    chipStyle = 'bg-amber-500/15 text-amber-200 border border-amber-500/30 font-medium';
+  } else {
+    // Minor pullback (>-1.0%) - holding near high
+    chipStyle = 'bg-emerald-500/15 text-emerald-300/90 border border-emerald-500/25 font-medium';
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono text-[11px] tabular-nums ${chipStyle}`}>
+      <FontAwesomeIcon icon={faArrowDown} className="text-[9px]" />
+      {dropHigh.toFixed(2)}%
+    </span>
+  );
+}
+
 const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
   holdings,
   lastRefreshed,
@@ -452,38 +516,14 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                     {/* Recovery from Day Low */}
                     <td className="py-3 px-3 text-right">
                       <div className="flex justify-end">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono font-semibold text-[11px] tabular-nums ${
-                            recLow > 0.1
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-slate-800/60 text-gray-400 border border-white/5'
-                          }`}
-                        >
-                          {recLow > 0.1 && <FontAwesomeIcon icon={faArrowUp} className="text-[9px]" />}
-                          +{recLow.toFixed(2)}%
-                        </span>
+                        {getRecoveryChip(recLow)}
                       </div>
                     </td>
 
                     {/* Fall from Day High */}
                     <td className="py-3 px-3 text-right">
                       <div className="flex justify-end">
-                        {Math.abs(dropHigh) <= 0.05 ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold text-[10px]">
-                            At High
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono font-semibold text-[11px] tabular-nums ${
-                              dropHigh <= -2.0
-                                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                                : 'bg-slate-800/60 text-rose-300/80 border border-white/5'
-                            }`}
-                          >
-                            <FontAwesomeIcon icon={faArrowDown} className="text-[9px]" />
-                            {dropHigh.toFixed(2)}%
-                          </span>
-                        )}
+                        {getFallFromHighChip(dropHigh)}
                       </div>
                     </td>
 
