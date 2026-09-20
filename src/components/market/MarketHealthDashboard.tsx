@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useSyncExternalStore } from 'react';
+import { useHasMounted } from '@/hooks/useHasMounted';
 import {
   LineChart,
   Line,
@@ -56,17 +57,77 @@ function formatTooltipDate(val: unknown): string {
   return val;
 }
 
+const STORAGE_KEY_DMA_VISIBILITY = 'alpha_dma_breadth_visibility';
+
+const DEFAULT_VISIBILITY: Record<string, boolean> = {
+  pctAbove20Dma: true,
+  pctAbove50Dma: true,
+  pctAbove100Dma: true,
+  pctAbove200Dma: true,
+};
+
+let cachedVisibility: Record<string, boolean> | null = null;
+const visibilityListeners = new Set<() => void>();
+
+function getVisibilitySnapshot(): Record<string, boolean> {
+  if (cachedVisibility) return cachedVisibility;
+  if (typeof window === 'undefined') return DEFAULT_VISIBILITY;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_DMA_VISIBILITY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (typeof parsed === 'object' && parsed !== null) {
+        cachedVisibility = {
+          pctAbove20Dma: typeof parsed.pctAbove20Dma === 'boolean' ? parsed.pctAbove20Dma : true,
+          pctAbove50Dma: typeof parsed.pctAbove50Dma === 'boolean' ? parsed.pctAbove50Dma : true,
+          pctAbove100Dma: typeof parsed.pctAbove100Dma === 'boolean' ? parsed.pctAbove100Dma : true,
+          pctAbove200Dma: typeof parsed.pctAbove200Dma === 'boolean' ? parsed.pctAbove200Dma : true,
+        };
+        return cachedVisibility;
+      }
+    }
+  } catch {}
+  cachedVisibility = DEFAULT_VISIBILITY;
+  return cachedVisibility;
+}
+
+function subscribeVisibility(callback: () => void) {
+  visibilityListeners.add(callback);
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY_DMA_VISIBILITY) {
+      cachedVisibility = null;
+      callback();
+    }
+  };
+  window.addEventListener('storage', handleStorage);
+  return () => {
+    visibilityListeners.delete(callback);
+    window.removeEventListener('storage', handleStorage);
+  };
+}
+
+function setVisibilityStorage(updater: (prev: Record<string, boolean>) => Record<string, boolean>) {
+  const prev = getVisibilitySnapshot();
+  const next = updater(prev);
+  cachedVisibility = next;
+  try {
+    localStorage.setItem(STORAGE_KEY_DMA_VISIBILITY, JSON.stringify(next));
+  } catch {}
+  visibilityListeners.forEach((l) => l());
+}
+
 export default function MarketHealthDashboard({ initialData }: MarketHealthDashboardProps) {
   const [data, setData] = useState<MarketHealthHistoryData | null>(initialData || null);
   const [period, setPeriod] = useState<TimeframePeriod>('1Y');
   const [loading, setLoading] = useState(!initialData);
   const [hoveredLine, setHoveredLine] = useState<string | null>(null);
-  const [visible, setVisible] = useState<Record<string, boolean>>({
-    pctAbove20Dma: true,
-    pctAbove50Dma: true,
-    pctAbove100Dma: true,
-    pctAbove200Dma: true,
-  });
+  const hasMounted = useHasMounted();
+  const clientVisible = useSyncExternalStore(
+    subscribeVisibility,
+    getVisibilitySnapshot,
+    () => DEFAULT_VISIBILITY
+  );
+  const visible = hasMounted ? clientVisible : DEFAULT_VISIBILITY;
   const isFirstMount = React.useRef(true);
   const [, startTransition] = useTransition();
 
@@ -269,7 +330,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
               <button
                 key={key}
                 type="button"
-                onClick={() => setVisible((prev) => ({ ...prev, [key]: !prev[key] }))}
+                onClick={() => setVisibilityStorage((prev) => ({ ...prev, [key]: !prev[key] }))}
                 onMouseEnter={() => setHoveredLine(key)}
                 onMouseLeave={() => setHoveredLine(null)}
                 className={`
