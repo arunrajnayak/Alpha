@@ -369,13 +369,12 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 const distAth = stock.distAthPct ?? 0;
                 const rvol = stock.rvol ?? 0;
 
-                // Day Range Bar metrics
-                const low = stock.dayLow || price;
-                const high = stock.dayHigh || price;
+                // Day Range Bar metrics (guarantee low <= price <= high)
+                const low = Math.min(stock.dayLow || price, price);
+                const high = Math.max(stock.dayHigh || price, price);
                 const open = stock.dayOpen || prevClose;
-                const rangeSpan = high - low || (price * 0.01) || 1;
+                const rangeSpan = Math.max(0.01, high - low);
                 const currentPosPct = Math.max(0, Math.min(100, ((price - low) / rangeSpan) * 100));
-                const openPosPct = Math.max(0, Math.min(100, ((open - low) / rangeSpan) * 100));
 
                 const sparkPoints = sparklines[stock.symbol] || (open ? [open, low, high, price] : [price, price]);
 
@@ -428,14 +427,14 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                       </div>
                     </td>
 
-                    {/* Day Range (Filled Bar) */}
+                    {/* Day Range (Filled Bar with LTP Thumb) */}
                     <td className="py-3 px-3">
                       <div
                         className="flex flex-col gap-1 w-full max-w-[140px] mx-auto"
-                        title={`Low: ₹${low.toFixed(1)} | High: ₹${high.toFixed(1)} | Open: ₹${open.toFixed(1)}`}
+                        title={`LTP: ₹${price.toFixed(1)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(1)} | High: ₹${high.toFixed(1)} | Open: ₹${open.toFixed(1)}`}
                       >
                         {/* Filled Bar Container */}
-                        <div className="w-full h-2 bg-slate-800/90 rounded-full relative overflow-hidden border border-white/5">
+                        <div className="w-full h-2 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
                           {/* Filled bar from Low up to current LTP */}
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${
@@ -443,12 +442,17 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                                 ? 'bg-gradient-to-r from-emerald-600/70 to-emerald-400'
                                 : 'bg-gradient-to-r from-rose-600/70 to-rose-400'
                             }`}
-                            style={{ width: `${Math.max(4, Math.min(100, currentPosPct))}%` }}
+                            style={{ width: `${currentPosPct}%` }}
                           />
-                          {/* Open tick marker */}
+
+                          {/* Current Price Thumb Indicator */}
                           <div
-                            className="absolute top-0 bottom-0 w-0.5 bg-white/70 z-10"
-                            style={{ left: `${openPosPct}%` }}
+                            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full shadow-md z-20 border border-slate-900 transition-all duration-300 ${
+                              isDayPositive
+                                ? 'bg-emerald-400 shadow-emerald-500/50'
+                                : 'bg-rose-400 shadow-rose-500/50'
+                            }`}
+                            style={{ left: `${currentPosPct}%` }}
                           />
                         </div>
 

@@ -505,8 +505,12 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
 
     // Intraday prices and technical metrics
     const dayOpen = (fullQuote?.open && fullQuote.open > 0) ? fullQuote.open : (tech?.lastCandleOpen || prevClose || price);
-    const dayHigh = (fullQuote?.high && fullQuote.high > 0) ? Math.max(fullQuote.high, price) : (tech?.lastCandleHigh || Math.max(price, dayOpen));
-    const dayLow = (fullQuote?.low && fullQuote.low > 0) ? Math.min(fullQuote.low, price) : (tech?.lastCandleLow || Math.min(price, dayOpen));
+    const dayHigh = (fullQuote?.high && fullQuote.high > 0)
+      ? Math.max(fullQuote.high, price)
+      : (tech?.lastCandleHigh ? Math.max(tech.lastCandleHigh, price) : Math.max(price, dayOpen));
+    const dayLow = (fullQuote?.low && fullQuote.low > 0)
+      ? Math.min(fullQuote.low, price)
+      : (tech?.lastCandleLow ? Math.min(tech.lastCandleLow, price) : Math.min(price, dayOpen));
     const todayVolume = (fullQuote?.volume && fullQuote.volume > 0) ? fullQuote.volume : (tech?.lastCandleVolume || 0);
     const high52w = fullQuote?.year_high || (tech?.ath || 0);
     const ath = Math.max(tech?.ath || 0, high52w || 0, dayHigh || 0);
