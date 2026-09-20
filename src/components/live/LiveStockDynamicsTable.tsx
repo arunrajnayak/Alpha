@@ -36,7 +36,6 @@ type SortColumn =
   | 'dayChangePercent'
   | 'recoveryFromLowPct'
   | 'fallFromHighPct'
-  | 'changeFromOpenPct'
   | 'distAthPct'
   | 'rvol';
 
@@ -245,7 +244,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
 
       {/* Table Content */}
       <div className="overflow-x-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-        <table className="w-full text-left border-collapse min-w-[960px]">
+        <table className="w-full text-left border-collapse min-w-[850px]">
           <thead>
             <tr className="border-b border-white/10 bg-slate-950/70 text-[11px] font-semibold text-gray-400 select-none">
               {/* Sticky Stock Column */}
@@ -308,19 +307,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 </div>
               </th>
 
-              {/* Gain/Loss from Open */}
-              <th
-                onClick={() => handleSort('changeFromOpenPct')}
-                className="py-3 px-3 text-right cursor-pointer hover:text-white transition-colors"
-                style={{ minWidth: 110 }}
-                title="Net percentage move after opening tick"
-              >
-                <div className="flex items-center justify-end">
-                  <span>From Open</span>
-                  {renderSortIcon('changeFromOpenPct')}
-                </div>
-              </th>
-
               {/* Distance from ATH */}
               <th
                 onClick={() => handleSort('distAthPct')}
@@ -352,7 +338,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
           <tbody className="divide-y divide-white/5 text-xs">
             {sortedHoldings.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-gray-500">
+                <td colSpan={8} className="py-12 text-center text-gray-500">
                   No portfolio holdings available.
                 </td>
               </tr>
@@ -365,7 +351,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 // Technical percentage metrics
                 const recLow = stock.recoveryFromLowPct ?? 0;
                 const dropHigh = stock.fallFromHighPct ?? 0;
-                const gainOpen = stock.changeFromOpenPct ?? 0;
                 const distAth = stock.distAthPct ?? 0;
                 const rvol = stock.rvol ?? 0;
 
@@ -499,23 +484,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                             {dropHigh.toFixed(2)}%
                           </span>
                         )}
-                      </div>
-                    </td>
-
-                    {/* Gain/Loss from Open */}
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex justify-end">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono font-semibold text-[11px] tabular-nums ${
-                            gainOpen > 0
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                              : gainOpen < 0
-                              ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-                              : 'bg-slate-800/60 text-gray-400 border border-white/5'
-                          }`}
-                        >
-                          {gainOpen > 0 ? '+' : ''}{gainOpen.toFixed(2)}%
-                        </span>
                       </div>
                     </td>
 
