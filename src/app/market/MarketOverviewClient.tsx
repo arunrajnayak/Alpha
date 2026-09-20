@@ -964,6 +964,7 @@ export default function MarketOverviewClient({
             medianMove={breadthData?.medianMove || 0}
             totalStocks={breadthData?.total || 0}
             loading={breadthLoading}
+            isMobile={isMobile}
           />
         </motion.div>
       )}

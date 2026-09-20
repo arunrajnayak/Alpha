@@ -67,7 +67,7 @@ export default function MarketLoading() {
             </div>
             <div className="h-9 w-20 bg-slate-800/40 rounded-lg" />
           </div>
-          <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3 bg-slate-800/20 rounded-xl" />
+          <div className="h-[270px] sm:h-[320px] md:h-[400px] w-full mt-3 bg-slate-800/20 rounded-xl" />
         </div>
       </div>
 

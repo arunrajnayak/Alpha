@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BarChart,
@@ -20,6 +20,7 @@ interface StockMovesDistributionChartProps {
   medianMove: number;
   totalStocks: number;
   loading?: boolean;
+  isMobile?: boolean;
 }
 
 const BUCKET_COLORS: Record<string, string> = {
@@ -54,13 +55,41 @@ const SHORT_LABELS: Record<string, string> = {
   '> +15%': '> +15%',
 };
 
+const SHORT_LABELS_MOBILE: Record<string, string> = {
+  '< -15%': '< -15%',
+  '-15% to -10%': '-15 to -10',
+  '-10% to -5%': '-10 to -5',
+  '-5% to -3%': '-5 to -3',
+  '-3% to -1%': '-3 to -1',
+  '-1% to 0%': '-1 to 0',
+  '0%': '0%',
+  '0% to +1%': '0 to +1',
+  '+1% to +3%': '+1 to +3',
+  '+3% to +5%': '+3 to +5',
+  '+5% to +10%': '+5 to +10',
+  '+10% to +15%': '+10 to +15',
+  '> +15%': '> +15%',
+};
 
 export default function StockMovesDistributionChart({
   distribution,
   medianMove,
   totalStocks,
   loading = false,
+  isMobile: isMobileProp,
 }: StockMovesDistributionChartProps) {
+  const [isMobile, setIsMobile] = useState(isMobileProp ?? false);
+
+  useEffect(() => {
+    if (isMobileProp !== undefined) {
+      setIsMobile(isMobileProp);
+      return;
+    }
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [isMobileProp]);
   const chartData = useMemo(() => {
     return distribution.map((b) => ({
       label: b.label,
@@ -120,21 +149,31 @@ export default function StockMovesDistributionChart({
         </div>
 
         {/* Big Histogram Chart with Count on Bars */}
-        <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3">
+        <div className="h-[270px] sm:h-[320px] md:h-[400px] w-full mt-3">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 28, right: 4, left: -24, bottom: 4 }}>
+            <BarChart
+              data={chartData}
+              margin={
+                isMobile
+                  ? { top: 24, right: 6, left: -24, bottom: 8 }
+                  : { top: 28, right: 4, left: -24, bottom: 4 }
+              }
+            >
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                tick={{ fill: '#94a3b8', fontSize: 10 }}
-                tickFormatter={(v) => SHORT_LABELS[v] || v}
+                tick={{ fill: '#94a3b8', fontSize: isMobile ? 9 : 10 }}
+                tickFormatter={(v) => (isMobile ? SHORT_LABELS_MOBILE[v] || v : SHORT_LABELS[v] || v)}
                 interval={0}
+                angle={isMobile ? -45 : 0}
+                textAnchor={isMobile ? 'end' : 'middle'}
+                height={isMobile ? 55 : 24}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: '#64748b', fontSize: 11 }}
+                tick={{ fill: '#64748b', fontSize: isMobile ? 9.5 : 11 }}
                 allowDecimals={false}
               />
 
@@ -143,7 +182,7 @@ export default function StockMovesDistributionChart({
                   dataKey="count"
                   position="top"
                   fill="#cbd5e1"
-                  fontSize={11}
+                  fontSize={isMobile ? 9 : 11}
                   fontFamily="monospace"
                   fontWeight={600}
                   formatter={(val: unknown) =>
