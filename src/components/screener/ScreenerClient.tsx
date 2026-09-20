@@ -293,7 +293,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
   const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('portfolio');
   const [hidePortfolio, setHidePortfolio] = useState(true);
-  const [hideWarnings, setHideWarnings] = useState(false);
+  const [hideWarnings, setHideWarnings] = useState(true);
   const [signalFilter, setSignalFilter] = useState<'hold' | 'warning' | 'exit' | null>(null);
   const [loading, setLoading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
