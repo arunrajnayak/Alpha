@@ -1,4 +1,4 @@
-import { differenceInDays } from 'date-fns';
+import { differenceInCalendarDays } from 'date-fns';
 
 // Types
 export interface PortfolioHolding {
@@ -32,9 +32,21 @@ export interface ClosedTrade {
     revenue: number;
 }
 
+export interface TradeCycle {
+    symbol: string;
+    startDate: Date;
+    totalBoughtQty: number;
+    totalCost: number;
+    cumulativeCost: number;
+    cumulativeRevenue: number;
+    cumulativeSoldQty: number;
+    currentQty: number;
+}
+
 export class PortfolioEngine {
     holdings: Map<string, PortfolioHolding>;
     inventory: Map<string, InventoryBatch[]>;
+    cycles: Map<string, TradeCycle>;
     investedCapital: number; // Net external capital (Deposits - Withdrawals + Buys - Sells)
     dailyNetFlow: number; // Net flow FOR THE CURRENT DAY processing
     
@@ -51,6 +63,7 @@ export class PortfolioEngine {
     constructor() {
         this.holdings = new Map();
         this.inventory = new Map();
+        this.cycles = new Map();
         this.investedCapital = 0;
         this.dailyNetFlow = 0;
         this.realizedPnl = 0;
@@ -95,6 +108,26 @@ export class PortfolioEngine {
             if (!this.inventory.has(tx.symbol)) this.inventory.set(tx.symbol, []);
             this.inventory.get(tx.symbol)!.push({ qty: tx.quantity, price: tx.price, date: tx.date });
 
+            // Update Trade Cycle
+            let cycle = this.cycles.get(tx.symbol);
+            if (!cycle) {
+                cycle = {
+                    symbol: tx.symbol,
+                    startDate: tx.date,
+                    totalBoughtQty: 0,
+                    totalCost: 0,
+                    cumulativeCost: 0,
+                    cumulativeRevenue: 0,
+                    cumulativeSoldQty: 0,
+                    currentQty: 0,
+                };
+                this.cycles.set(tx.symbol, cycle);
+            }
+            cycle.totalBoughtQty += tx.quantity;
+            cycle.totalCost += tradeVal;
+            cycle.cumulativeCost += tradeVal;
+            cycle.currentQty += tx.quantity;
+
             return null;
 
         } else if (tx.type === 'SELL') {
@@ -117,7 +150,6 @@ export class PortfolioEngine {
             // Process Inventory for Realized PnL (FIFO)
             let qtySold = tx.quantity;
             let costBasis = 0;
-            let weightedDays = 0;
             const originalQtySold = qtySold;
 
             // Initialize inventory queue if it doesn't exist
@@ -131,8 +163,6 @@ export class PortfolioEngine {
                 const take = Math.min(batch.qty, qtySold);
                 
                 costBasis += take * batch.price;
-                const days = differenceInDays(tx.date, batch.date);
-                weightedDays += days * take;
 
                 batch.qty -= take;
                 if (batch.qty < 0.00001) queue.shift();
@@ -144,36 +174,53 @@ export class PortfolioEngine {
             this.realizedPnl += pnl;
             if (current) current.realizedPnl += pnl;
 
-            const returnPct = costBasis > 0 ? pnl / costBasis : 0;
-            const holdDays = originalQtySold > 0 ? weightedDays / originalQtySold : 0;
+            // Track Trade Cycle and record completed exit
+            let cycleResult: TradeResult | null = null;
+            const cycle = this.cycles.get(tx.symbol);
+            if (cycle) {
+                cycle.cumulativeRevenue += tradeVal;
+                cycle.cumulativeSoldQty += tx.quantity;
+                cycle.currentQty -= tx.quantity;
 
-            this.closedTradesCount++;
-            this.totalHoldDays += holdDays;
-            if (pnl > 0) {
-                this.wins++;
-                this.totalWinPct += returnPct;
-            } else {
-                this.losses++;
-                this.totalLossPct += returnPct;
+                // Precision check for completed cycle
+                if (cycle.currentQty <= 0.0001) {
+                    const cycleGainLoss = cycle.cumulativeRevenue - cycle.cumulativeCost;
+                    const cycleReturnPct = cycle.cumulativeCost > 0 ? (cycleGainLoss / cycle.cumulativeCost) : 0;
+                    const days = differenceInCalendarDays(tx.date, cycle.startDate);
+
+                    this.closedTradesCount++;
+                    this.totalHoldDays += days;
+                    if (cycleGainLoss > 0) {
+                        this.wins++;
+                        this.totalWinPct += cycleReturnPct;
+                    } else {
+                        this.losses++;
+                        this.totalLossPct += cycleReturnPct;
+                    }
+
+                    cycleResult = {
+                        pnl: cycleGainLoss,
+                        returnPct: cycleReturnPct,
+                        holdDays: days,
+                        invested: cycle.cumulativeCost,
+                        revenue: cycle.cumulativeRevenue,
+                    };
+
+                    this.closedTrades.push({
+                        date: tx.date,
+                        symbol: tx.symbol,
+                        pnl: cycleGainLoss,
+                        returnPct: cycleReturnPct,
+                        holdDays: days,
+                        invested: cycle.cumulativeCost,
+                        revenue: cycle.cumulativeRevenue,
+                    });
+
+                    this.cycles.delete(tx.symbol);
+                }
             }
 
-            this.closedTrades.push({
-                date: tx.date,
-                symbol: tx.symbol,
-                pnl,
-                returnPct,
-                holdDays,
-                invested: costBasis,
-                revenue
-            });
-
-            return {
-                pnl,
-                returnPct,
-                holdDays,
-                invested: costBasis,
-                revenue
-            };
+            return cycleResult;
 
         } else if (tx.type === 'SPLIT' || tx.type === 'BONUS') {
             const ratio = tx.splitRatio || 1;
@@ -227,6 +274,14 @@ export class PortfolioEngine {
                 b.price /= ratio;
             });
         }
+
+        // Update Cycle
+        const cycle = this.cycles.get(symbol);
+        if (cycle) {
+            cycle.totalBoughtQty *= ratio;
+            cycle.currentQty *= ratio;
+            cycle.cumulativeSoldQty *= ratio;
+        }
     }
 
 
@@ -241,6 +296,11 @@ export class PortfolioEngine {
         if (oldInventory) {
             this.inventory.set(newSym, oldInventory);
             this.inventory.delete(oldSym);
+        }
+        const oldCycle = this.cycles.get(oldSym);
+        if (oldCycle) {
+            this.cycles.set(newSym, { ...oldCycle, symbol: newSym });
+            this.cycles.delete(oldSym);
         }
     }
 

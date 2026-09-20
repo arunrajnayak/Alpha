@@ -25,10 +25,10 @@ export function WinLossCard({ winPercent, lossPercent }: { winPercent: number; l
             <div className="flex-1 flex flex-col justify-center">
                 <div className="flex justify-between text-sm mb-2 font-semibold">
                     <span className="text-emerald-400">
-                        <AnimatedNumber value={winPercent} suffix="%" decimals={2} />
+                        <AnimatedNumber value={winPercent} suffix="%" decimals={1} />
                     </span>
                     <span className="text-red-400">
-                        <AnimatedNumber value={lossPercent} suffix="%" decimals={2} />
+                        <AnimatedNumber value={lossPercent} suffix="%" decimals={1} />
                     </span>
                 </div>
                 <div className="h-4 bg-gray-700/50 rounded-full overflow-hidden flex">
@@ -86,7 +86,7 @@ export function AvgGainLossCard({ avgWinnerGain, avgLoserLoss }: { avgWinnerGain
                 <div className="flex items-center gap-3">
                     <div className="w-20 text-right">
                         <span className="text-green-400 font-bold text-lg">
-                            +<AnimatedNumber value={avgWinnerGain} suffix="%" decimals={2} />
+                            +<AnimatedNumber value={avgWinnerGain} suffix="%" decimals={1} />
                         </span>
                     </div>
                     <div className="flex-1 h-3 bg-gray-700/50 rounded-full overflow-hidden">
@@ -101,7 +101,7 @@ export function AvgGainLossCard({ avgWinnerGain, avgLoserLoss }: { avgWinnerGain
                 <div className="flex items-center gap-3">
                     <div className="w-20 text-right">
                         <span className="text-rose-400 font-bold text-lg">
-                            <AnimatedNumber value={avgLoserLoss} suffix="%" decimals={2} />
+                            <AnimatedNumber value={avgLoserLoss} suffix="%" decimals={1} />
                         </span>
                     </div>
                     <div className="flex-1 h-3 bg-gray-700/50 rounded-full overflow-hidden">

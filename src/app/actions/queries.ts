@@ -131,10 +131,23 @@ export async function fetchDashboardData() {
   const totalCharges = exits.reduce((sum, e) => sum + (e.chargesBreakdown?.totalCharges ?? 0), 0);
   const { totalTax } = calculateNetCapitalGainsTax(exits.map(e => ({ gainLoss: e.gainLoss, timeHeld: e.timeHeld })));
 
+  // Derive live trade performance metrics directly from exits to ensure 100% consistency across dashboard
+  const exitWins = exits.filter(e => e.gainLoss > 0);
+  const exitLosses = exits.filter(e => e.gainLoss <= 0);
+  const totalExits = exits.length;
+  const livePortfolioStats = {
+    ...portfolioStats,
+    winPercent: totalExits > 0 ? (exitWins.length / totalExits) * 100 : 0,
+    lossPercent: totalExits > 0 ? (exitLosses.length / totalExits) * 100 : 0,
+    avgWinnerGain: exitWins.length > 0 ? exitWins.reduce((s, e) => s + e.changePercent, 0) / exitWins.length : 0,
+    avgLoserLoss: exitLosses.length > 0 ? exitLosses.reduce((s, e) => s + e.changePercent, 0) / exitLosses.length : 0,
+    avgHoldingPeriod: totalExits > 0 ? exits.reduce((s, e) => s + e.timeHeld, 0) / totalExits : 0,
+  };
+
   return {
     holdings,
     historicalHoldings,
-    portfolioStats,
+    portfolioStats: livePortfolioStats,
     dashboardStats,
     chartData,
     dashboardHistory,

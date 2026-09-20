@@ -7,6 +7,7 @@ import { getPortfolioHoldings, computeMarketCapSegmentation } from './holdings';
 import { computePortfolioState } from './recalculation';
 import { roundPercent, roundEquity, roundPrice } from '../precision-utils';
 import { SectorAllocation } from '../types';
+import { getPortfolioExits } from '../exits';
 
 export async function getDashboardHistory(days?: number) {
     // Only apply date filter if days is provided
@@ -335,34 +336,40 @@ export async function captureMonthlySnapshot() {
 
 // Get latest portfolio stats for dashboard
 async function getLatestPortfolioStatsInternal() {
-    const snapshot = await prisma.weeklyPortfolioSnapshot.findFirst({
-        orderBy: { date: 'desc' }
-    });
+    const [snapshot, exits] = await Promise.all([
+        prisma.weeklyPortfolioSnapshot.findFirst({
+            orderBy: { date: 'desc' }
+        }),
+        getPortfolioExits().catch(() => []),
+    ]);
 
-    if (!snapshot) {
-        return {
-            largeCapPercent: 0,
-            midCapPercent: 0,
-            smallCapPercent: 0,
-            microCapPercent: 0,
-            winPercent: 0,
-            lossPercent: 0,
-            avgHoldingPeriod: 0,
-            avgWinnerGain: 0,
-            avgLoserLoss: 0
-        };
+    let winPercent = snapshot?.winPercent || 0;
+    let lossPercent = snapshot?.lossPercent || 0;
+    let avgWinnerGain = snapshot?.avgWinnerGain || 0;
+    let avgLoserLoss = snapshot?.avgLoserLoss || 0;
+    let avgHoldingPeriod = snapshot?.avgHoldingPeriod || 0;
+
+    if (exits.length > 0) {
+        const wins = exits.filter(e => e.gainLoss > 0);
+        const losses = exits.filter(e => e.gainLoss <= 0);
+        const total = exits.length;
+        winPercent = roundPercent((wins.length / total) * 100);
+        lossPercent = roundPercent((losses.length / total) * 100);
+        avgWinnerGain = wins.length > 0 ? roundPercent(wins.reduce((s, e) => s + e.changePercent, 0) / wins.length) : 0;
+        avgLoserLoss = losses.length > 0 ? roundPercent(losses.reduce((s, e) => s + e.changePercent, 0) / losses.length) : 0;
+        avgHoldingPeriod = Math.round((exits.reduce((s, e) => s + e.timeHeld, 0) / total) * 10) / 10;
     }
 
     return {
-        largeCapPercent: snapshot.largeCapPercent || 0,
-        midCapPercent: snapshot.midCapPercent || 0,
-        smallCapPercent: snapshot.smallCapPercent || 0,
-        microCapPercent: snapshot.microCapPercent || 0,
-        winPercent: snapshot.winPercent || 0,
-        lossPercent: 100 - (snapshot.winPercent || 0), // Losers = 100 - Winners
-        avgHoldingPeriod: snapshot.avgHoldingPeriod || 0,
-        avgWinnerGain: snapshot.avgWinnerGain || 0,
-        avgLoserLoss: snapshot.avgLoserLoss || 0
+        largeCapPercent: snapshot?.largeCapPercent || 0,
+        midCapPercent: snapshot?.midCapPercent || 0,
+        smallCapPercent: snapshot?.smallCapPercent || 0,
+        microCapPercent: snapshot?.microCapPercent || 0,
+        winPercent,
+        lossPercent,
+        avgHoldingPeriod,
+        avgWinnerGain,
+        avgLoserLoss
     };
 }
 
