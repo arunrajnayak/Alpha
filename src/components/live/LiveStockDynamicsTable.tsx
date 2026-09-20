@@ -297,7 +297,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
             <FontAwesomeIcon icon={faBolt} className="text-sm" />
           </div>
           <div className="flex items-center gap-2">
-            <h3 className="text-base md:text-lg font-bold text-white">Intraday Dynamics &amp; Technical Pulse</h3>
+            <h3 className="text-base md:text-lg font-bold text-white">Intraday Dynamics</h3>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/10">
               {holdings.length} stocks
             </span>

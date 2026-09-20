@@ -241,7 +241,7 @@ export default function LivePage() {
           </motion.div>
         )}
 
-        {/* Intraday Dynamics & Technical Pulse Table */}
+        {/* Intraday Dynamics Table */}
         {data.allHoldings && data.allHoldings.length > 0 && (
           <LiveStockDynamicsTable
             holdings={data.allHoldings}
