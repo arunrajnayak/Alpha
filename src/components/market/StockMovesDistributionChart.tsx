@@ -39,19 +39,19 @@ const BUCKET_COLORS: Record<string, string> = {
 };
 
 const SHORT_LABELS: Record<string, string> = {
-  '< -15%': '<-15%',
-  '-15% to -10%': '-15:-10',
-  '-10% to -5%': '-10:-5',
-  '-5% to -3%': '-5:-3',
-  '-3% to -1%': '-3:-1',
-  '-1% to 0%': '-1:0',
+  '< -15%': '< -15%',
+  '-15% to -10%': '-15 to -10%',
+  '-10% to -5%': '-10 to -5%',
+  '-5% to -3%': '-5 to -3%',
+  '-3% to -1%': '-3 to -1%',
+  '-1% to 0%': '-1 to 0%',
   '0%': '0%',
-  '0% to +1%': '0:+1',
-  '+1% to +3%': '+1:+3',
-  '+3% to +5%': '+3:+5',
-  '+5% to +10%': '+5:+10',
-  '+10% to +15%': '+10:+15',
-  '> +15%': '>+15%',
+  '0% to +1%': '0 to +1%',
+  '+1% to +3%': '+1 to +3%',
+  '+3% to +5%': '+3 to +5%',
+  '+5% to +10%': '+5 to +10%',
+  '+10% to +15%': '+10 to +15%',
+  '> +15%': '> +15%',
 };
 
 
@@ -122,12 +122,12 @@ export default function StockMovesDistributionChart({
         {/* Big Histogram Chart with Count on Bars */}
         <div className="h-[240px] sm:h-[320px] md:h-[400px] w-full mt-3">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 28, right: 2, left: -24, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 28, right: 4, left: -24, bottom: 4 }}>
               <XAxis
                 dataKey="label"
                 tickLine={false}
                 axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                tick={{ fill: '#94a3b8', fontSize: 10 }}
                 tickFormatter={(v) => SHORT_LABELS[v] || v}
                 interval={0}
               />
