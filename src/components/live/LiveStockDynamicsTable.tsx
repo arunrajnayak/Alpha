@@ -13,6 +13,8 @@ import {
   faSortUp,
   faSortDown,
   faFire,
+  faCircleInfo,
+  faDropletSlash,
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency } from '@/lib/format';
 import { LiveStockData, MarketStatus } from '@/app/actions/live';
@@ -401,15 +403,19 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 </div>
               </th>
 
-              {/* Volume Multiplier */}
+              {/* Relative Volume (RVol) */}
               <th
                 onClick={() => handleSort('rvol')}
-                className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors"
-                style={{ minWidth: 125 }}
-                title="Today's volume relative to 30-day average volume (multiplier)"
+                className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors group/rvol"
+                style={{ minWidth: 110 }}
+                title={"Relative Volume (RVol): Ratio of today's volume to the 30-day average volume.\n\n• ≥ 2.0x : High volume surge (🔥)\n• ≥ 1.0x : Above average volume\n• < 0.5x : Dry Day / low liquidity"}
               >
-                <div className="flex items-center justify-end">
-                  <span>Vol Multiplier</span>
+                <div className="flex items-center justify-end gap-1.5">
+                  <span>RVol</span>
+                  <FontAwesomeIcon
+                    icon={faCircleInfo}
+                    className="text-[10px] text-gray-500 group-hover/rvol:text-gray-300 transition-colors"
+                  />
                   {renderSortIcon('rvol')}
                 </div>
               </th>
@@ -548,13 +554,13 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                       </div>
                     </td>
 
-                    {/* Volume Multiplier */}
+                    {/* Relative Volume (RVol) */}
                     <td className="py-3 px-4 text-right">
                       <div
                         className="flex items-center justify-end"
                         title={
                           stock.avgVolume1m
-                            ? `Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
+                            ? `${rvol > 0 && rvol < 0.5 ? 'Dry Day (<0.5x volume) | ' : ''}Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
                             : undefined
                         }
                       >
@@ -564,11 +570,19 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                               ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                               : rvol >= 1.0
                               ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : rvol > 0 && rvol < 0.5
+                              ? 'bg-slate-800/80 text-amber-300/80 border border-amber-500/20'
                               : 'bg-slate-800/60 text-gray-400 border border-white/5'
                           }`}
                         >
                           {rvol > 0 ? `${rvol.toFixed(1)}x` : '—'}
                           {rvol >= 2.0 && <FontAwesomeIcon icon={faFire} className="text-[10px] text-amber-400" />}
+                          {rvol > 0 && rvol < 0.5 && (
+                            <FontAwesomeIcon
+                              icon={faDropletSlash}
+                              className="text-[9px] text-amber-400/90"
+                            />
+                          )}
                         </span>
                       </div>
                     </td>
