@@ -347,6 +347,7 @@ export async function getOHLC(
           low: ohlc.low,
           close: ohlc.close,
           volume: ohlc.volume,
+          ts: ohlc.ts,
         };
 
         const normalizedKey = responseKey.replace(/:/g, '|');

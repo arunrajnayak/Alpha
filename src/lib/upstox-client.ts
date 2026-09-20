@@ -504,7 +504,8 @@ export async function getOHLC(
                     high: ohlc.high,
                     low: ohlc.low,
                     close: ohlc.close,
-                    volume: ohlc.volume
+                    volume: ohlc.volume,
+                    ts: ohlc.ts,
                 };
 
                 // Use instrument_token (pipe format, e.g. NSE_EQ|INE585B01010) as primary key.

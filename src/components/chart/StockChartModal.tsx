@@ -136,6 +136,7 @@ function StockChartModalContent({
     // Race-condition correction: if todayOHLC arrives AFTER the first WebSocket tick
     // already seeded liveBarRef with open=ltp (because stockInfo wasn't ready yet),
     // patch liveBarRef with the real session open/high/low and push a corrected liveTick.
+    if (!isMarketOpen()) return;
     if (stockInfo?.todayOHLC && intervalRef.current === 'day') {
       const tod = stockInfo.todayOHLC;
       const todayYmd = todayISTYmd(new Date());
@@ -180,6 +181,7 @@ function StockChartModalContent({
    * that TradingViewChart consumes via series.update().
    */
   const buildLiveTick = useCallback((ltp: number): LiveTick | null => {
+    if (!isMarketOpen()) return null;
     const prevCandles = candlesRef.current;
     if (!prevCandles || prevCandles.length === 0) return null;
     const last = prevCandles[prevCandles.length - 1];
@@ -297,6 +299,7 @@ function StockChartModalContent({
   }, []);
 
   const handleLivePriceUpdate = useCallback((ltp: number) => {
+    if (!isMarketOpen()) return;
     latestLtpRef.current = ltp;
     // Throttle to ~200ms so we don't flood the chart on rapid ticks
     if (!candleUpdateTimerRef.current) {

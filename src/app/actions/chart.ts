@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db';
 import { getHistoricalCandles, getIntradayCandles, UpstoxCandle } from '@/lib/upstox-client';
 import { getInstrumentKey, getLiveQuotes, getOHLC } from '@/lib/upstox';
 import type { CandleData, TradeMarker, ChartInterval } from '@/lib/chart-types';
-import { todayISTYmd } from '@/lib/tz';
+import { todayISTYmd, istDayOfWeek, istTimeParts } from '@/lib/tz';
+import { isTradingHoliday } from '@/lib/market-holidays-cache';
 
 /**
  * Fetch OHLCV candle data for a stock from Upstox API.
@@ -98,14 +99,39 @@ export async function getStockCandles(
         const todayOhlc = ohlcMap.get(instrumentKey);
         if (todayOhlc && todayOhlc.open > 0) {
             const todayStr = todayISTYmd();
-            candleMap.set(todayStr, {
-                time: todayStr,
-                open: todayOhlc.open,
-                high: todayOhlc.high,
-                low: todayOhlc.low,
-                close: todayOhlc.close,
-                volume: todayOhlc.volume,
-            });
+            const ohlcDate = todayOhlc.ts ? todayISTYmd(new Date(todayOhlc.ts)) : null;
+
+            const now = new Date();
+            const isWeekend = [0, 6].includes(istDayOfWeek(now));
+            const { hour, minute } = istTimeParts(now);
+            const isPreMarket = hour * 60 + minute < 9 * 60 + 15;
+
+            const isHoliday = await isTradingHoliday(now).catch(() => false);
+
+            // Only merge as today's candle if this OHLC actually belongs to today's trading session.
+            // On weekends, holidays, or pre-market, Upstox returns the previous session's OHLC.
+            // Stamping it with today's date causes an artificial duplicate candle when market is closed.
+            const isTodaySession = ohlcDate ? ohlcDate === todayStr : (!isWeekend && !isPreMarket && !isHoliday);
+
+            if (isTodaySession) {
+                candleMap.set(todayStr, {
+                    time: todayStr,
+                    open: todayOhlc.open,
+                    high: todayOhlc.high,
+                    low: todayOhlc.low,
+                    close: todayOhlc.close,
+                    volume: todayOhlc.volume,
+                });
+            } else if (ohlcDate && !candleMap.has(ohlcDate)) {
+                candleMap.set(ohlcDate, {
+                    time: ohlcDate,
+                    open: todayOhlc.open,
+                    high: todayOhlc.high,
+                    low: todayOhlc.low,
+                    close: todayOhlc.close,
+                    volume: todayOhlc.volume,
+                });
+            }
         }
     }
 
@@ -198,8 +224,18 @@ export async function getStockInfo(symbol: string): Promise<{
                 previousClose = quote.previous_close;
             }
             const ohlc = ohlcData.get(instrumentKey);
-            if (ohlc) {
-                todayOHLC = ohlc;
+            if (ohlc && ohlc.open > 0) {
+                const todayStr = todayISTYmd();
+                const ohlcDate = ohlc.ts ? todayISTYmd(new Date(ohlc.ts)) : null;
+                const now = new Date();
+                const isWeekend = [0, 6].includes(istDayOfWeek(now));
+                const { hour, minute } = istTimeParts(now);
+                const isPreMarket = hour * 60 + minute < 9 * 60 + 15;
+                const isHoliday = await isTradingHoliday(now).catch(() => false);
+                const isTodaySession = ohlcDate ? ohlcDate === todayStr : (!isWeekend && !isPreMarket && !isHoliday);
+                if (isTodaySession) {
+                    todayOHLC = ohlc;
+                }
             }
         } catch {
             // Fall back to latest ScreenerPrice if live quotes fail
