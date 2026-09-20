@@ -334,15 +334,15 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 </div>
               </th>
 
-              {/* Volume / 30D Avg (zX) */}
+              {/* Volume Multiplier */}
               <th
                 onClick={() => handleSort('rvol')}
                 className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors"
-                style={{ minWidth: 135 }}
-                title="Volume multiplier z relative to last 30d average volume X"
+                style={{ minWidth: 125 }}
+                title="Today's volume relative to 30-day average volume (multiplier)"
               >
                 <div className="flex items-center justify-end">
-                  <span>Vol / 30D Avg</span>
+                  <span>Vol Multiplier</span>
                   {renderSortIcon('rvol')}
                 </div>
               </th>
@@ -533,23 +533,27 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                       </div>
                     </td>
 
-                    {/* Volume / 30D Avg: Format as zX (e.g. 1.2x (57.4 K)) */}
+                    {/* Volume Multiplier */}
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div
+                        className="flex items-center justify-end"
+                        title={
+                          stock.avgVolume1m
+                            ? `Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
+                            : undefined
+                        }
+                      >
                         <span
-                          className={`font-mono font-bold text-xs ${
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono font-bold text-xs tabular-nums ${
                             rvol >= 2.0
-                              ? 'text-cyan-400'
+                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
                               : rvol >= 1.0
-                              ? 'text-emerald-400'
-                              : 'text-gray-300'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-slate-800/60 text-gray-400 border border-white/5'
                           }`}
                         >
                           {rvol > 0 ? `${rvol.toFixed(1)}x` : '—'}
-                          {rvol >= 2.0 && <FontAwesomeIcon icon={faFire} className="text-[10px] text-amber-400 ml-1" />}
-                        </span>
-                        <span className="text-gray-400 font-mono text-[11px]">
-                          ({formatVolume(stock.avgVolume1m)})
+                          {rvol >= 2.0 && <FontAwesomeIcon icon={faFire} className="text-[10px] text-amber-400" />}
                         </span>
                       </div>
                     </td>
