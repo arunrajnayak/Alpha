@@ -1,9 +1,12 @@
 import { prisma } from '@/lib/db';
-import { startOfDay, format, differenceInDays, subYears } from 'date-fns';
+import { startOfDay, format, differenceInDays, subYears, subDays } from 'date-fns';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { financeLogger } from '@/lib/logger';
 import { istDateParts, istDayOfWeek } from '@/lib/tz';
-import { getPortfolioHoldings, calculatePortfolioXIRR, computeMarketCapSegmentation } from './holdings';
+import { getPortfolioHoldings, computeMarketCapSegmentation } from './holdings';
+import { computePortfolioState } from './recalculation';
+import { roundPercent, roundEquity, roundPrice } from '../precision-utils';
+import { SectorAllocation } from '../types';
 
 export async function getDashboardHistory(days?: number) {
     // Only apply date filter if days is provided
@@ -41,15 +44,33 @@ export async function getDashboardHistory(days?: number) {
     }));
 }
 
+function computeSectorAllocations(holdings: { quantity: number; currentValue: number; sector?: string | null }[]): SectorAllocation[] {
+    const sectorAllocMap = new Map<string, { value: number; count: number }>();
+    let totalSectorValue = 0;
+
+    for (const h of holdings) {
+        if (h.quantity <= 0.001 || h.currentValue <= 0) continue;
+        const sector = h.sector || 'Unknown';
+        const existing = sectorAllocMap.get(sector) || { value: 0, count: 0 };
+        existing.value += h.currentValue;
+        existing.count += 1;
+        sectorAllocMap.set(sector, existing);
+        totalSectorValue += h.currentValue;
+    }
+
+    return Array.from(sectorAllocMap.entries()).map(([sector, data]) => ({
+        sector,
+        value: roundEquity(data.value),
+        count: data.count,
+        allocation: roundPercent(totalSectorValue > 0 ? (data.value / totalSectorValue) * 100 : 0),
+        dayChangePercent: 0
+    })).sort((a, b) => b.value - a.value);
+}
+
 export async function captureWeeklySnapshot() {
     financeLogger.info("Capturing Weekly Snapshot...");
-    const today = new Date();
-    const todayStart = startOfDay(today);
 
-    // 1. Get Current Holdings
-    const holdings = await getPortfolioHoldings();
-
-    // 2. Get latest Daily Snapshot for TotalEquity/NAV/Invested
+    // 1. Get latest Daily Snapshot for TotalEquity/NAV/Invested/Date
     const latestDaily = await prisma.dailyPortfolioSnapshot.findFirst({
         orderBy: { date: 'desc' }
     });
@@ -59,9 +80,31 @@ export async function captureWeeklySnapshot() {
         return;
     }
 
-    const totalEquity = latestDaily.totalEquity;
-    const nav = latestDaily.portfolioNAV;
-    const investedCapital = latestDaily.investedCapital;
+    // Anchor weekly snapshot to Friday (or latest weekday) if latest daily is on a weekend
+    let snapshotDate = latestDaily.date;
+    const dayOfWeek = snapshotDate.getUTCDay();
+    if (dayOfWeek === 6) {
+        // Saturday -> move to Friday
+        snapshotDate = subDays(snapshotDate, 1);
+    } else if (dayOfWeek === 0) {
+        // Sunday -> move to Friday
+        snapshotDate = subDays(snapshotDate, 2);
+    }
+
+    // Fetch the daily snapshot for the week-ending date (in case latestDaily was on weekend)
+    const dailyForWeek = (snapshotDate.getTime() === latestDaily.date.getTime())
+        ? latestDaily
+        : (await prisma.dailyPortfolioSnapshot.findFirst({
+            where: { date: { lte: snapshotDate } },
+            orderBy: { date: 'desc' }
+        })) || latestDaily;
+
+    const totalEquity = dailyForWeek.totalEquity;
+    const nav = dailyForWeek.portfolioNAV;
+    const investedCapital = dailyForWeek.investedCapital;
+
+    // 2. Get Current Holdings
+    const holdings = await getPortfolioHoldings();
 
     // 3. Market Cap Segmentation (using AMFI classifications)
     const mcapResult = await computeMarketCapSegmentation(holdings);
@@ -73,79 +116,27 @@ export async function captureWeeklySnapshot() {
     const smallPct = stockTotal > 0 ? (small / stockTotal) * 100 : 0;
     const microPct = stockTotal > 0 ? (micro / stockTotal) * 100 : 0;
 
-    // Note: portfolioMcap (weighted average market cap) is no longer calculated
-    // as we use AMFI categories instead of raw market cap values
-    const portfolioMcap = 0;
+    // 4. Sector Allocation
+    const sectorAllocations = computeSectorAllocations(holdings);
 
-    // 4. Performance Stats (Win/Loss)
-    const allTx = await prisma.transaction.findMany({
-        orderBy: { date: 'asc' }
-    });
+    // 5. Performance Stats (Win/Loss, Hold Days) via PortfolioEngine
+    const engine = await computePortfolioState(snapshotDate);
+    const tradeStats = engine.getTradeStats();
 
-    let wins = 0, losses = 0;
-    let totalWinPct = 0, totalLossPct = 0;
-    let totalHoldDays = 0, closedTradesCount = 0;
-
-    const inventory = new Map<string, { qty: number, price: number, date: Date }[]>();
-
-    for (const tx of allTx) {
-        if (!inventory.has(tx.symbol)) inventory.set(tx.symbol, []);
-        const queue = inventory.get(tx.symbol)!;
-
-        if (tx.type === 'BUY') {
-            queue.push({ qty: tx.quantity, price: tx.price, date: tx.date });
-        } else {
-            // SELL
-            let qtySold = tx.quantity;
-            let aquiredDateSum = 0;
-            let currentTradeCost = 0;
-            const batchSize = qtySold;
-
-            while (qtySold > 0 && queue.length > 0) {
-                 const batch = queue[0];
-                 const take = Math.min(batch.qty, qtySold);
-
-                 currentTradeCost += take * batch.price;
-                 const days = (tx.date.getTime() - batch.date.getTime()) / (1000 * 3600 * 24);
-                 aquiredDateSum += days * take;
-
-                 batch.qty -= take;
-                 if (batch.qty < 0.0001) queue.shift();
-                 qtySold -= take;
-            }
-
-            const soldVal = batchSize * tx.price;
-            const tradePnl = soldVal - currentTradeCost;
-            const tradePct = currentTradeCost > 0 ? tradePnl / currentTradeCost : 0;
-
-            if (tradePnl > 0) {
-                wins++;
-                totalWinPct += tradePct;
-            } else {
-                losses++;
-                totalLossPct += tradePct;
-            }
-
-            const avgDuration = batchSize > 0 ? aquiredDateSum / batchSize : 0;
-            totalHoldDays += avgDuration;
-            closedTradesCount++;
-        }
-    }
-
-    const winPercent = closedTradesCount > 0 ? (wins / closedTradesCount) * 100 : 0;
-    const lossPercent = closedTradesCount > 0 ? (losses / closedTradesCount) * 100 : 0;
-    const avgWinnerGain = wins > 0 ? (totalWinPct / wins) * 100 : 0;
-    const avgLoserLoss = losses > 0 ? (totalLossPct / losses) * 100 : 0;
-    const avgHoldingPeriod = closedTradesCount > 0 ? totalHoldDays / closedTradesCount : 0;
+    const winPercent = roundPercent(tradeStats.winPercent);
+    const lossPercent = roundPercent(tradeStats.lossPercent);
+    const avgWinnerGain = roundPercent(tradeStats.avgWinnerGain);
+    const avgLoserLoss = roundPercent(tradeStats.avgLoserLoss);
+    const avgHoldingPeriod = Math.round(tradeStats.avgHoldingPeriod * 10) / 10;
 
     // Stats
-    const xirrVal = await calculatePortfolioXIRR(totalEquity);
-    const pnl = totalEquity - investedCapital;
+    const xirrVal = roundPercent(latestDaily.xirr ?? 0);
+    const pnl = roundEquity(totalEquity - investedCapital);
 
     // Calc Weekly Return
     let weeklyReturn = 0;
     const prevSnapshot = await prisma.weeklyPortfolioSnapshot.findFirst({
-        where: { date: { lt: todayStart } },
+        where: { date: { lt: snapshotDate } },
         orderBy: { date: 'desc' }
     });
     if (prevSnapshot && prevSnapshot.nav > 0) {
@@ -154,66 +145,62 @@ export async function captureWeeklySnapshot() {
 
     // Save
     await prisma.weeklyPortfolioSnapshot.upsert({
-        where: { date: todayStart },
+        where: { date: snapshotDate },
         update: {
-             totalEquity,
-             nav,
-             weeklyReturn,
-             largeCapPercent: largePct,
-             midCapPercent: midPct,
-             smallCapPercent: smallPct,
-             microCapPercent: microPct,
+             totalEquity: roundEquity(totalEquity),
+             nav: roundPrice(nav),
+             weeklyReturn: roundPercent(weeklyReturn),
+             largeCapPercent: roundPercent(largePct),
+             midCapPercent: roundPercent(midPct),
+             smallCapPercent: roundPercent(smallPct),
+             microCapPercent: roundPercent(microPct),
 
-             marketCap: portfolioMcap,
+             marketCap: 0,
              xirr: xirrVal,
              pnl,
              winPercent,
              lossPercent,
              avgHoldingPeriod,
              avgWinnerGain,
-             avgLoserLoss
+             avgLoserLoss,
+             sectorAllocation: JSON.stringify(sectorAllocations)
         },
         create: {
-             date: todayStart,
-             totalEquity,
-             nav,
-             weeklyReturn,
-             largeCapPercent: largePct,
-             midCapPercent: midPct,
-             smallCapPercent: smallPct,
-             microCapPercent: microPct,
+             date: snapshotDate,
+             totalEquity: roundEquity(totalEquity),
+             nav: roundPrice(nav),
+             weeklyReturn: roundPercent(weeklyReturn),
+             largeCapPercent: roundPercent(largePct),
+             midCapPercent: roundPercent(midPct),
+             smallCapPercent: roundPercent(smallPct),
+             microCapPercent: roundPercent(microPct),
 
-             marketCap: portfolioMcap,
+             marketCap: 0,
              xirr: xirrVal,
              pnl,
              winPercent,
              lossPercent,
              avgHoldingPeriod,
              avgWinnerGain,
-             avgLoserLoss
+             avgLoserLoss,
+             sectorAllocation: JSON.stringify(sectorAllocations)
         }
     });
+
+    try {
+        (revalidateTag as any)('portfolio-data');
+        (revalidateTag as any)('dashboard-stats');
+    } catch {
+        // Ignore cache invalidation errors outside request context
+    }
 
     financeLogger.info("Weekly Snapshot Captured.");
 }
 
 export async function captureMonthlySnapshot() {
     financeLogger.info("Capturing Monthly Snapshot...");
-    const today = new Date();
-    const todayStart = startOfDay(today);
 
-    // Delete any existing monthly snapshot from the same month to prevent duplicates
-    // (recalculation may have created one on a different date within this month)
-    const monthStart = new Date(Date.UTC(today.getFullYear(), today.getMonth(), 1));
-    const monthEnd = new Date(Date.UTC(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999));
-    await prisma.monthlyPortfolioSnapshot.deleteMany({
-        where: { date: { gte: monthStart, lte: monthEnd } }
-    });
-
-    // 1. Get Current Holdings
-    const holdings = await getPortfolioHoldings();
-
-    // 2. Get latest Daily Snapshot for TotalEquity/NAV
+    // 1. Get latest Daily Snapshot for TotalEquity/NAV/Date
     const latestDaily = await prisma.dailyPortfolioSnapshot.findFirst({
         orderBy: { date: 'desc' }
     });
@@ -223,8 +210,21 @@ export async function captureMonthlySnapshot() {
         return;
     }
 
+    const snapshotDate = latestDaily.date;
     const totalEquity = latestDaily.totalEquity;
     const nav = latestDaily.portfolioNAV;
+    const investedCapital = latestDaily.investedCapital;
+
+    // Delete any existing monthly snapshot from the same month to prevent duplicates
+    // (recalculation may have created one on a different date within this month)
+    const monthStart = new Date(Date.UTC(snapshotDate.getUTCFullYear(), snapshotDate.getUTCMonth(), 1));
+    const monthEnd = new Date(Date.UTC(snapshotDate.getUTCFullYear(), snapshotDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+    await prisma.monthlyPortfolioSnapshot.deleteMany({
+        where: { date: { gte: monthStart, lte: monthEnd } }
+    });
+
+    // 2. Get Current Holdings
+    const holdings = await getPortfolioHoldings();
 
     // 3. Market Cap Segmentation (using AMFI classifications)
     const mcapResult = await computeMarketCapSegmentation(holdings);
@@ -235,64 +235,43 @@ export async function captureMonthlySnapshot() {
     const midPct = stockTotal > 0 ? (mid / stockTotal) * 100 : 0;
     const smallPct = stockTotal > 0 ? (small / stockTotal) * 100 : 0;
     const microPct = stockTotal > 0 ? (micro / stockTotal) * 100 : 0;
-    // Note: portfolioMcap is no longer calculated as we use AMFI categories
-    const portfolioMcap = 0;
 
-    // 4. Performance Stats (Same as Weekly)
-    const allTx = await prisma.transaction.findMany({ orderBy: { date: 'asc' } });
-    let wins = 0, losses = 0;
-    let totalWinPct = 0, totalLossPct = 0;
-    let totalHoldDays = 0, closedTradesCount = 0;
-    const inventory = new Map<string, { qty: number, price: number, date: Date }[]>();
+    // 4. Sector Allocation
+    const sectorAllocations = computeSectorAllocations(holdings);
 
-    for (const tx of allTx) {
-        if (!inventory.has(tx.symbol)) inventory.set(tx.symbol, []);
-        const queue = inventory.get(tx.symbol)!;
-        if (tx.type === 'BUY') {
-            queue.push({ qty: tx.quantity, price: tx.price, date: tx.date });
-        } else {
-             // SELL
-            let qtySold = tx.quantity;
-            let aquiredDateSum = 0;
-            let currentTradeCost = 0;
-            const batchSize = qtySold;
+    // 5. Performance Stats (Win/Loss, Hold Days, Exits) via PortfolioEngine
+    const engine = await computePortfolioState(snapshotDate);
+    const tradeStats = engine.getTradeStats();
 
-            while (qtySold > 0 && queue.length > 0) {
-                 const batch = queue[0];
-                 const take = Math.min(batch.qty, qtySold);
-                 currentTradeCost += take * batch.price;
-                 const days = (tx.date.getTime() - batch.date.getTime()) / (1000 * 3600 * 24);
-                 aquiredDateSum += days * take;
-                 batch.qty -= take;
-                 if (batch.qty < 0.0001) queue.shift();
-                 qtySold -= take;
-            }
-            const soldVal = batchSize * tx.price;
-            const tradePnl = soldVal - currentTradeCost;
-            const tradePct = currentTradeCost > 0 ? tradePnl / currentTradeCost : 0;
-            if (tradePnl > 0) { wins++; totalWinPct += tradePct; }
-            else { losses++; totalLossPct += tradePct; }
-            totalHoldDays += batchSize > 0 ? aquiredDateSum / batchSize : 0;
-            closedTradesCount++;
-        }
-    }
+    const winPercent = roundPercent(tradeStats.winPercent);
+    const lossPercent = roundPercent(tradeStats.lossPercent);
+    const avgWinnerGain = roundPercent(tradeStats.avgWinnerGain);
+    const avgLoserLoss = roundPercent(tradeStats.avgLoserLoss);
+    const avgHoldingPeriod = Math.round(tradeStats.avgHoldingPeriod * 10) / 10;
 
-    const winPercent = closedTradesCount > 0 ? (wins / closedTradesCount) * 100 : 0;
-    const lossPercent = closedTradesCount > 0 ? (losses / closedTradesCount) * 100 : 0;
-    const avgWinnerGain = wins > 0 ? (totalWinPct / wins) * 100 : 0;
-    const avgLoserLoss = losses > 0 ? (totalLossPct / losses) * 100 : 0;
-    const avgHoldingPeriod = closedTradesCount > 0 ? totalHoldDays / closedTradesCount : 0;
+    // Monthly exits
+    const monthExits = engine.closedTrades.filter(
+        t => t.date >= monthStart && t.date <= monthEnd
+    ).length;
 
-    const xirrVal = await calculatePortfolioXIRR(totalEquity);
-    // PnL based on Invested Capital
-    // Need invested capital from latest daily
-    const investedCapital = latestDaily.investedCapital;
-    const pnl = totalEquity - investedCapital;
+    // Calculate active months
+    const firstTx = await prisma.transaction.findFirst({
+        orderBy: { date: 'asc' },
+        select: { date: true }
+    });
+    const startYear = firstTx ? firstTx.date.getUTCFullYear() : snapshotDate.getUTCFullYear();
+    const startMonth = firstTx ? firstTx.date.getUTCMonth() : snapshotDate.getUTCMonth();
+    const monthsActive = Math.max(1, (snapshotDate.getUTCFullYear() - startYear) * 12 + (snapshotDate.getUTCMonth() - startMonth) + 1);
+    const calculatedAvgExits = tradeStats.closedTradesCount / monthsActive;
+    const avgExitsPerMonth = Math.round(calculatedAvgExits * 10) / 10;
+
+    const xirrVal = roundPercent(latestDaily.xirr ?? 0);
+    const pnl = roundEquity(totalEquity - investedCapital);
 
     // Calc Monthly Return
     let monthlyReturn = 0;
     const prevSnapshot = await prisma.monthlyPortfolioSnapshot.findFirst({
-        where: { date: { lt: todayStart } },
+        where: { date: { lt: monthStart } },
         orderBy: { date: 'desc' }
     });
     if (prevSnapshot && prevSnapshot.nav > 0) {
@@ -300,43 +279,57 @@ export async function captureMonthlySnapshot() {
     }
 
     await prisma.monthlyPortfolioSnapshot.upsert({
-        where: { date: todayStart },
+        where: { date: snapshotDate },
         update: {
-             totalEquity,
-             nav,
-             monthlyReturn,
-             largeCapPercent: largePct,
-             midCapPercent: midPct,
-             smallCapPercent: smallPct,
-             microCapPercent: microPct,
-             marketCap: portfolioMcap,
+             totalEquity: roundEquity(totalEquity),
+             nav: roundPrice(nav),
+             monthlyReturn: roundPercent(monthlyReturn),
+             largeCapPercent: roundPercent(largePct),
+             midCapPercent: roundPercent(midPct),
+             smallCapPercent: roundPercent(smallPct),
+             microCapPercent: roundPercent(microPct),
+             marketCap: 0,
              xirr: xirrVal,
              pnl,
              winPercent,
              lossPercent,
              avgHoldingPeriod,
              avgWinnerGain,
-             avgLoserLoss
+             avgLoserLoss,
+             exitCount: monthExits,
+             avgExitsPerMonth,
+             sectorAllocation: JSON.stringify(sectorAllocations)
         },
         create: {
-             date: todayStart,
-             totalEquity,
-             nav,
-             monthlyReturn,
-             largeCapPercent: largePct,
-             midCapPercent: midPct,
-             smallCapPercent: smallPct,
-             microCapPercent: microPct,
-             marketCap: portfolioMcap,
+             date: snapshotDate,
+             totalEquity: roundEquity(totalEquity),
+             nav: roundPrice(nav),
+             monthlyReturn: roundPercent(monthlyReturn),
+             largeCapPercent: roundPercent(largePct),
+             midCapPercent: roundPercent(midPct),
+             smallCapPercent: roundPercent(smallPct),
+             microCapPercent: roundPercent(microPct),
+             marketCap: 0,
              xirr: xirrVal,
              pnl,
              winPercent,
              lossPercent,
              avgHoldingPeriod,
              avgWinnerGain,
-             avgLoserLoss
+             avgLoserLoss,
+             exitCount: monthExits,
+             avgExitsPerMonth,
+             sectorAllocation: JSON.stringify(sectorAllocations)
         }
     });
+
+    try {
+        (revalidateTag as any)('portfolio-data');
+        (revalidateTag as any)('dashboard-stats');
+    } catch {
+        // Ignore cache invalidation errors outside request context
+    }
+
     financeLogger.info("Monthly Snapshot Captured.");
 }
 

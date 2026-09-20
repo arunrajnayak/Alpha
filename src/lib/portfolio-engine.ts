@@ -22,6 +22,16 @@ export interface TradeResult {
     revenue: number; // Sold value
 }
 
+export interface ClosedTrade {
+    date: Date;
+    symbol: string;
+    pnl: number;
+    returnPct: number;
+    holdDays: number;
+    invested: number;
+    revenue: number;
+}
+
 export class PortfolioEngine {
     holdings: Map<string, PortfolioHolding>;
     inventory: Map<string, InventoryBatch[]>;
@@ -30,6 +40,13 @@ export class PortfolioEngine {
     
     // Stats
     realizedPnl: number; // Cumulative
+    wins: number;
+    losses: number;
+    totalWinPct: number;
+    totalLossPct: number;
+    totalHoldDays: number;
+    closedTradesCount: number;
+    closedTrades: ClosedTrade[];
     
     constructor() {
         this.holdings = new Map();
@@ -37,6 +54,13 @@ export class PortfolioEngine {
         this.investedCapital = 0;
         this.dailyNetFlow = 0;
         this.realizedPnl = 0;
+        this.wins = 0;
+        this.losses = 0;
+        this.totalWinPct = 0;
+        this.totalLossPct = 0;
+        this.totalHoldDays = 0;
+        this.closedTradesCount = 0;
+        this.closedTrades = [];
     }
 
     resetDailyFlow() {
@@ -120,10 +144,33 @@ export class PortfolioEngine {
             this.realizedPnl += pnl;
             if (current) current.realizedPnl += pnl;
 
+            const returnPct = costBasis > 0 ? pnl / costBasis : 0;
+            const holdDays = originalQtySold > 0 ? weightedDays / originalQtySold : 0;
+
+            this.closedTradesCount++;
+            this.totalHoldDays += holdDays;
+            if (pnl > 0) {
+                this.wins++;
+                this.totalWinPct += returnPct;
+            } else {
+                this.losses++;
+                this.totalLossPct += returnPct;
+            }
+
+            this.closedTrades.push({
+                date: tx.date,
+                symbol: tx.symbol,
+                pnl,
+                returnPct,
+                holdDays,
+                invested: costBasis,
+                revenue
+            });
+
             return {
                 pnl,
-                returnPct: costBasis > 0 ? pnl / costBasis : 0,
-                holdDays: originalQtySold > 0 ? weightedDays / originalQtySold : 0,
+                returnPct,
+                holdDays,
                 invested: costBasis,
                 revenue
             };
@@ -226,6 +273,28 @@ export class PortfolioEngine {
             cashBalance: 0,
             investedCapital: this.investedCapital,
             holdings: details
+        };
+    }
+
+    getTradeStats() {
+        const winPercent = this.closedTradesCount > 0 ? (this.wins / this.closedTradesCount) * 100 : 0;
+        const lossPercent = this.closedTradesCount > 0 ? (this.losses / this.closedTradesCount) * 100 : 0;
+        const avgWinnerGain = this.wins > 0 ? (this.totalWinPct / this.wins) * 100 : 0;
+        const avgLoserLoss = this.losses > 0 ? (this.totalLossPct / this.losses) * 100 : 0;
+        const avgHoldingPeriod = this.closedTradesCount > 0 ? this.totalHoldDays / this.closedTradesCount : 0;
+
+        return {
+            wins: this.wins,
+            losses: this.losses,
+            closedTradesCount: this.closedTradesCount,
+            totalWinPct: this.totalWinPct,
+            totalLossPct: this.totalLossPct,
+            totalHoldDays: this.totalHoldDays,
+            winPercent,
+            lossPercent,
+            avgWinnerGain,
+            avgLoserLoss,
+            avgHoldingPeriod
         };
     }
 }

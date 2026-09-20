@@ -225,7 +225,11 @@ export async function getPortfolioHoldings() {
         return getPortfolioHoldingsInternal({ useLivePrices: true });
     }
 
-    return getPortfolioHoldingsCached();
+    try {
+        return await getPortfolioHoldingsCached();
+    } catch {
+        return getPortfolioHoldingsInternal();
+    }
 }
 
 // Fetch 1-year price history for sparkline charts
