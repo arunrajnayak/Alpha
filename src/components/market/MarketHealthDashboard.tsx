@@ -21,8 +21,6 @@ interface MarketHealthDashboardProps {
   initialData?: MarketHealthHistoryData | null;
 }
 
-type TimeframePeriod = '6M' | '1Y' | 'ALL';
-
 const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -118,7 +116,6 @@ function setVisibilityStorage(updater: (prev: Record<string, boolean>) => Record
 
 export default function MarketHealthDashboard({ initialData }: MarketHealthDashboardProps) {
   const [data, setData] = useState<MarketHealthHistoryData | null>(initialData || null);
-  const [period, setPeriod] = useState<TimeframePeriod>('1Y');
   const [loading, setLoading] = useState(!initialData);
   const [hoveredLine, setHoveredLine] = useState<string | null>(null);
   const hasMounted = useHasMounted();
@@ -139,7 +136,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
 
     startTransition(() => {
       setLoading(true);
-      fetchMarketHealthHistory(period)
+      fetchMarketHealthHistory('1Y')
         .then((res) => {
           setData(res);
         })
@@ -147,7 +144,7 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           setLoading(false);
         });
     });
-  }, [period, initialData]);
+  }, [initialData]);
 
   const stats = data?.currentStats;
 
@@ -184,22 +181,10 @@ export default function MarketHealthDashboard({ initialData }: MarketHealthDashb
           </div>
         </div>
 
-        {/* Timeframe Toggles */}
-        <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-white/5 self-start sm:self-auto">
-          {(['6M', '1Y', 'ALL'] as TimeframePeriod[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1 text-xs font-medium rounded-lg transition-all ${
-                period === p
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'text-gray-400 hover:text-white hover:bg-slate-700/50'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        {/* 1Y Period Indicator */}
+        <span className="text-[11px] font-mono text-gray-400 px-2.5 py-1 rounded-lg bg-slate-800/60 border border-white/5 self-start sm:self-auto">
+          1Y History
+        </span>
       </div>
 
       {/* Metric Stat Cards */}
