@@ -245,7 +245,16 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         const originalInvested = holding.invested;
         
         const totalPnl = currentValue - originalInvested;
-        const totalPnlPercent = originalInvested > 0 ? (totalPnl / originalInvested) * 100 : 0;
+        const dayHigh = holding.dayHigh ? Math.max(holding.dayHigh, ltp) : ltp;
+        const dayLow = holding.dayLow ? Math.min(holding.dayLow, ltp) : ltp;
+        const recoveryFromLowPct = dayLow > 0 ? ((ltp - dayLow) / dayLow) * 100 : 0;
+        const fallFromHighPct = dayHigh > 0 ? ((ltp - dayHigh) / dayHigh) * 100 : 0;
+        const dayOpen = holding.dayOpen || previousClose;
+        const changeFromOpenPct = dayOpen > 0 ? ((ltp - dayOpen) / dayOpen) * 100 : holding.changeFromOpenPct;
+        const high52w = holding.high52w || 0;
+        const dist52wHighPct = high52w > 0 ? ((ltp - high52w) / high52w) * 100 : holding.dist52wHighPct;
+        const ath = holding.ath || 0;
+        const distAthPct = ath > 0 ? ((ltp - ath) / ath) * 100 : holding.distAthPct;
 
         return {
           ...holding,
@@ -257,6 +266,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
           totalPnl: totalPnl,
           totalPnlPercent: totalPnlPercent,
           indicativePrice: update.iep ?? holding.indicativePrice,
+          dayHigh,
+          dayLow,
+          recoveryFromLowPct,
+          fallFromHighPct,
+          changeFromOpenPct,
+          dist52wHighPct,
+          distAthPct,
         };
       });
 
@@ -592,8 +608,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
 
       timeoutId = setTimeout(() => {
         // If streaming is connected, do less frequent full refreshes (every 5 minutes)
-        // If not streaming, poll every 30 seconds
-        const pollInterval = isStreaming ? 300000 : 30000; // 5 min vs 30 sec
+        // If not streaming, poll every 10 seconds (for real-time live pulse)
+        const pollInterval = isStreaming ? 300000 : 10000; // 5 min vs 10 sec
 
         if (isMarketCurrentlyOpen()) {
           if (!isStreaming) {

@@ -5,7 +5,7 @@ import { useLiveData } from '@/context/LiveDataContext';
 import { formatNumber } from '@/lib/format';
 import { motion, MotionConfig, type Variants } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { LiveHeader, LiveStatsCards, LiveMovers, PerformanceRank, IntradayPnLChart } from '@/components/live';
+import { LiveHeader, LiveStatsCards, LiveMovers, PerformanceRank, IntradayPnLChart, LiveStockDynamicsTable } from '@/components/live';
 
 const PortfolioHeatmap = dynamic(() => import('@/components/portfolio/PortfolioHeatmap'), {
   loading: () => <div className="h-[400px] bg-slate-800/50 rounded-2xl animate-pulse" />,
@@ -221,6 +221,18 @@ export default function LivePage() {
             isMobile={isMobile}
             downloading={downloading}
         />
+
+        {/* Intraday Dynamics & Technical Pulse Table */}
+        {data.allHoldings && data.allHoldings.length > 0 && (
+          <LiveStockDynamicsTable
+            holdings={data.allHoldings}
+            onRefresh={fetchData}
+            privacyMode={privacyMode}
+            isMobile={isMobile}
+            downloading={downloading}
+            itemVariants={itemVariants}
+          />
+        )}
 
         {/* Portfolio Heatmap */}
         {data.allHoldings && data.allHoldings.length > 0 && (

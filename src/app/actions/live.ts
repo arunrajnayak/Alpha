@@ -32,6 +32,21 @@ export interface LiveStockData {
   sector?: string;
   isPreOpen?: boolean;
   indicativePrice?: number;
+  // Intraday & Technical Dynamics
+  dayOpen?: number;
+  dayHigh?: number;
+  dayLow?: number;
+  todayVolume?: number;
+  high52w?: number;
+  ath?: number;
+  avgVolume1m?: number;
+  recoveryFromLowPct?: number;
+  fallFromHighPct?: number;
+  changeFromOpenPct?: number;
+  dist52wHighPct?: number;
+  distAthPct?: number;
+  rvol?: number;
+  sparkline?: number[];
 }
 
 export interface BreadthByCategory {
@@ -138,6 +153,84 @@ export interface LiveDashboardData {
   dataDate?: string;
 }
 
+interface StockTechnicals {
+  ath: number;
+  avgVolume1m: number;
+}
+
+const technicalsCache = new Map<string, { data: StockTechnicals; cachedAt: number }>();
+const TECHNICALS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function getStockTechnicalsBatch(symbols: string[]): Promise<Map<string, StockTechnicals>> {
+  const result = new Map<string, StockTechnicals>();
+  const now = Date.now();
+  const missingSymbols: string[] = [];
+
+  for (const sym of symbols) {
+    const cached = technicalsCache.get(sym);
+    if (cached && now - cached.cachedAt < TECHNICALS_CACHE_TTL_MS) {
+      result.set(sym, cached.data);
+    } else {
+      missingSymbols.push(sym);
+    }
+  }
+
+  if (missingSymbols.length === 0) {
+    return result;
+  }
+
+  try {
+    const symbolChunks = chunkArray(missingSymbols);
+
+    // 1. Fetch ATH from StockATH
+    const athArrays = await Promise.all(
+      symbolChunks.map(chunk =>
+        prisma.stockATH.findMany({
+          where: { symbol: { in: chunk } },
+          select: { symbol: true, ath: true },
+        })
+      )
+    );
+    const athMap = new Map<string, number>();
+    for (const row of athArrays.flat()) {
+      if (row.ath > 0) athMap.set(row.symbol, row.ath);
+    }
+
+    // 2. Fetch last ~22 trading days of ScreenerPrice for 1-month average volume
+    const screenerArrays = await Promise.all(
+      symbolChunks.map(chunk =>
+        prisma.screenerPrice.findMany({
+          where: { symbol: { in: chunk } },
+          orderBy: { date: 'desc' },
+          take: chunk.length * 25,
+          select: { symbol: true, volume: true },
+        })
+      )
+    );
+    const volumeBySymbol = new Map<string, number[]>();
+    for (const row of screenerArrays.flat()) {
+      const list = volumeBySymbol.get(row.symbol) || [];
+      if (list.length < 22) {
+        list.push(row.volume);
+        volumeBySymbol.set(row.symbol, list);
+      }
+    }
+
+    for (const sym of missingSymbols) {
+      const ath = athMap.get(sym) || 0;
+      const vols = volumeBySymbol.get(sym) || [];
+      const avgVolume1m = vols.length > 0 ? vols.reduce((sum, v) => sum + v, 0) / vols.length : 0;
+      const data: StockTechnicals = { ath, avgVolume1m };
+      technicalsCache.set(sym, { data, cachedAt: now });
+      result.set(sym, data);
+    }
+  } catch (err) {
+    liveActionsLogger.warn('Failed to load stock technicals batch:', err);
+  }
+
+  return result;
+}
+
 export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   try {
     // 1. Get current holdings
@@ -212,6 +305,13 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     
     // Build quote map
     const quoteMap = new Map<string, UpstoxLiveQuoteV3>();
+    const fullQuoteDataMap = new Map<string, {
+      open?: number;
+      high?: number;
+      low?: number;
+      volume?: number;
+      year_high?: number;
+    }>();
     let latestTradeTime: number = 0;
     
     // Fetch historical prices if we need them (for pre-market display)
@@ -257,6 +357,14 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
                     is_pre_open: isPreOpen,
                   });
 
+                  fullQuoteDataMap.set(symbol, {
+                    open: q.ohlc?.open,
+                    high: q.ohlc?.high,
+                    low: q.ohlc?.low,
+                    volume: q.volume,
+                    year_high: q.year_high,
+                  });
+
                   if (q.ohlc?.ts && q.ohlc.ts > latestTradeTime) {
                     latestTradeTime = q.ohlc.ts;
                   }
@@ -294,6 +402,9 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
 
   // Fetch AMFI market cap classifications for all holdings
   const amfiCategories = await getAMFICategoriesBatch(holdingSymbols);
+
+  // Fetch technicals (ATH and 1-month average volume) for all holdings
+  const technicalsMap = await getStockTechnicalsBatch(holdingSymbols);
 
   // Fetch sector mappings for all holdings (batched to avoid SQLite expression tree limit)
   // Also fetch symbol mappings to handle renamed/delisted stocks
@@ -350,6 +461,8 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
 
   for (const h of holdings) {
     const quote = quoteMap.get(h.symbol);
+    const fullQuote = fullQuoteDataMap.get(h.symbol);
+    const tech = technicalsMap.get(h.symbol);
 
     const invested = h.invested;
     const fallbackPrice = h.qty > 0 ? invested / h.qty : 0;
@@ -372,6 +485,23 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       // Previous close is directly available from LTP V3 (cp)
       prevClose = quote.previous_close || price;
     }
+
+    // Intraday prices and technical metrics
+    const dayOpen = fullQuote?.open && fullQuote.open > 0 ? fullQuote.open : (prevClose || price);
+    const dayHigh = fullQuote?.high && fullQuote.high > 0 ? Math.max(fullQuote.high, price) : Math.max(price, dayOpen);
+    const dayLow = fullQuote?.low && fullQuote.low > 0 ? Math.min(fullQuote.low, price) : Math.min(price, dayOpen);
+    const todayVolume = fullQuote?.volume || 0;
+    const high52w = fullQuote?.year_high || (tech?.ath || 0);
+    const ath = Math.max(tech?.ath || 0, high52w || 0, dayHigh || 0);
+    const effectiveHigh52w = high52w > 0 ? high52w : ath;
+    const avgVolume1m = tech?.avgVolume1m || 0;
+
+    const recoveryFromLowPct = dayLow > 0 ? ((price - dayLow) / dayLow) * 100 : 0;
+    const fallFromHighPct = dayHigh > 0 ? ((price - dayHigh) / dayHigh) * 100 : 0;
+    const changeFromOpenPct = dayOpen > 0 ? ((price - dayOpen) / dayOpen) * 100 : 0;
+    const dist52wHighPct = effectiveHigh52w > 0 ? ((price - effectiveHigh52w) / effectiveHigh52w) * 100 : 0;
+    const distAthPct = ath > 0 ? ((price - ath) / ath) * 100 : 0;
+    const rvol = avgVolume1m > 0 ? todayVolume / avgVolume1m : (todayVolume > 0 ? 1 : 0);
 
     // Get market cap category from AMFI classification
     // getAMFICategoriesBatch returns original symbol keys
@@ -410,6 +540,19 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       sector: sectorMap.get(h.symbol),
       isPreOpen,
       indicativePrice: quote?.indicative_equilibrium_price,
+      dayOpen,
+      dayHigh,
+      dayLow,
+      todayVolume,
+      high52w: effectiveHigh52w,
+      ath,
+      avgVolume1m,
+      recoveryFromLowPct,
+      fallFromHighPct,
+      changeFromOpenPct,
+      dist52wHighPct,
+      distAthPct,
+      rvol,
     });
   }
 
