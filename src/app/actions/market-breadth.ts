@@ -162,7 +162,7 @@ const LATEST_NSE_BREADTH_CONFIG_KEY = 'latest_nse_market_breadth';
 let cachedMcapMap: Map<string, number> | null = null;
 let mcapCacheTime = 0;
 const MCAP_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-export const MIN_TOP_MOVER_MCAP_CR = 1000; // Only stocks >= ₹1,000 Cr mcap in Top 10 Gainers/Losers
+const MIN_TOP_MOVER_MCAP_CR = 1000; // Only stocks >= ₹1,000 Cr mcap in Top 10 Gainers/Losers
 
 // Load stock market cap map (combining StockMarketCap daily bhavcopy with AMFI classification fallback)
 export async function getStockMarketCapMap(): Promise<Map<string, number>> {
