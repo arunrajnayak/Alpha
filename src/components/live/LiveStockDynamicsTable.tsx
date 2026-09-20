@@ -130,6 +130,40 @@ function getFallFromHighChip(dropHigh: number) {
   );
 }
 
+function getAthDistanceChip(distAth: number, ath?: number) {
+  if (distAth >= -0.1) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gradient-to-r from-yellow-500/25 to-amber-600/25 text-yellow-300 border border-yellow-500/40 font-black text-[10px]">
+        ATH
+      </span>
+    );
+  }
+
+  let chipStyle = '';
+  if (distAth >= -3.0) {
+    // Very close to ATH (< 3% away): vibrant glowing emerald
+    chipStyle = 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 font-bold shadow-sm shadow-emerald-500/20';
+  } else if (distAth >= -6.0) {
+    // Close to ATH (< 6% away): crisp emerald
+    chipStyle = 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold';
+  } else if (distAth >= -10.0) {
+    // Moderately close to ATH (< 10% away): mild emerald
+    chipStyle = 'bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20 font-medium';
+  } else {
+    // Further from ATH (>= 10% away)
+    chipStyle = 'bg-slate-800/60 text-indigo-300/80 border border-white/5 font-medium';
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-lg font-mono text-[11px] tabular-nums ${chipStyle}`}
+      title={`ATH: ₹${ath?.toFixed(1) || '—'}`}
+    >
+      {distAth.toFixed(1)}%
+    </span>
+  );
+}
+
 const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
   holdings,
   lastRefreshed,
@@ -530,18 +564,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                     {/* Distance from ATH */}
                     <td className="py-3 px-3 text-right">
                       <div className="flex justify-end">
-                        {distAth >= -0.1 ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gradient-to-r from-yellow-500/25 to-amber-600/25 text-yellow-300 border border-yellow-500/40 font-black text-[10px]">
-                            ATH
-                          </span>
-                        ) : (
-                          <span
-                            className="inline-flex items-center px-2 py-0.5 rounded-lg bg-slate-800/60 text-indigo-300/90 border border-white/5 font-mono font-semibold text-[11px] tabular-nums"
-                            title={`ATH: ₹${stock.ath?.toFixed(1) || '—'}`}
-                          >
-                            {distAth.toFixed(1)}%
-                          </span>
-                        )}
+                        {getAthDistanceChip(distAth, stock.ath)}
                       </div>
                     </td>
 
