@@ -14,7 +14,6 @@ import {
   faSortDown,
   faFire,
   faCircleInfo,
-  faDropletSlash,
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency } from '@/lib/format';
 import { LiveStockData, MarketStatus } from '@/app/actions/live';
@@ -406,18 +405,23 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 </div>
               </th>
 
-              {/* Relative Volume (RVol) */}
+              {/* Volume */}
               <th
                 onClick={() => handleSort('rvol')}
-                className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors group/rvol"
+                className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors group/vol"
                 style={{ minWidth: 110 }}
-                title={"Relative Volume (RVol): Ratio of today's volume to the 30-day average volume.\n\n• ≥ 2.0x : High volume surge (🔥)\n• ≥ 1.0x : Above average volume\n• < 0.5x : Dry Day / low liquidity"}
+                title={"Volume: Today's volume relative to 30-day average volume (multiplier).\n\n• ≥ 2.0x : High volume surge (🔥)\n• ≥ 1.0x : Above average volume\n• < 0.5x : Low volume / dry day"}
               >
-                <div className="flex items-center justify-end gap-1.5">
-                  <span>RVol</span>
+                <div
+                  className="flex items-center justify-end gap-1.5"
+                  title={"Volume: Today's volume relative to 30-day average volume (multiplier).\n\n• ≥ 2.0x : High volume surge (🔥)\n• ≥ 1.0x : Above average volume\n• < 0.5x : Low volume / dry day"}
+                >
+                  <span title={"Volume: Today's volume relative to 30-day average volume (multiplier).\n\n• ≥ 2.0x : High volume surge (🔥)\n• ≥ 1.0x : Above average volume\n• < 0.5x : Low volume / dry day"}>
+                    Volume
+                  </span>
                   <FontAwesomeIcon
                     icon={faCircleInfo}
-                    className="text-[10px] text-gray-500 group-hover/rvol:text-gray-300 transition-colors"
+                    className="text-[10px] text-gray-500 group-hover/vol:text-gray-300 transition-colors"
                   />
                   {renderSortIcon('rvol')}
                 </div>
@@ -557,13 +561,13 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                       </div>
                     </td>
 
-                    {/* Relative Volume (RVol) */}
+                    {/* Volume */}
                     <td className="py-3 px-4 text-right">
                       <div
                         className="flex items-center justify-end"
                         title={
                           stock.avgVolume1m
-                            ? `${rvol > 0 && rvol < 0.5 ? 'Dry Day (<0.5x volume) | ' : ''}Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
+                            ? `${rvol > 0 && rvol < 0.5 ? 'Low Volume (<0.5x) | ' : ''}Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
                             : undefined
                         }
                       >
@@ -580,12 +584,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                         >
                           {rvol > 0 ? `${rvol.toFixed(1)}x` : '—'}
                           {rvol >= 2.0 && <FontAwesomeIcon icon={faFire} className="text-[10px] text-amber-400" />}
-                          {rvol > 0 && rvol < 0.5 && (
-                            <FontAwesomeIcon
-                              icon={faDropletSlash}
-                              className="text-[9px] text-amber-400/90"
-                            />
-                          )}
                         </span>
                       </div>
                     </td>
