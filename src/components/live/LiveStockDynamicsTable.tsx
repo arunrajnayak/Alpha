@@ -336,7 +336,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
               {/* Sticky Stock Column */}
               <th
                 onClick={() => handleSort('symbol')}
-                className="py-3 px-4 sticky left-0 z-20 bg-slate-950/95 backdrop-blur-md cursor-pointer hover:text-white transition-colors"
+                className="py-3 px-4 sticky left-0 z-30 bg-slate-950 cursor-pointer hover:text-white transition-colors border-r border-white/10 shadow-[2px_0_8px_rgba(0,0,0,0.4)]"
                 style={{ minWidth: 115 }}
               >
                 <div className="flex items-center">
@@ -460,7 +460,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                     className="hover:bg-white/[0.03] transition-colors group"
                   >
                     {/* Sticky Stock Column (Symbol only) */}
-                    <td className="py-3 px-4 sticky left-0 z-10 bg-slate-900/95 group-hover:bg-slate-900/95 backdrop-blur-md border-r border-white/5 md:border-r-0">
+                    <td className="py-3 px-4 sticky left-0 z-20 bg-slate-900 group-hover:bg-[#151f32] transition-colors border-r border-white/10 shadow-[2px_0_8px_rgba(0,0,0,0.4)]">
                       <span className="font-bold text-white text-sm tracking-tight">{stock.symbol}</span>
                     </td>
 
@@ -519,7 +519,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
 
                           {/* Current Price Thumb Indicator */}
                           <div
-                            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full shadow-md z-20 border border-slate-900 transition-all duration-300 ${
+                            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full shadow-md z-[1] border border-slate-900 transition-all duration-300 ${
                               isDayPositive
                                 ? 'bg-emerald-400 shadow-emerald-500/50'
                                 : 'bg-rose-400 shadow-rose-500/50'
