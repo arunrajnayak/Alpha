@@ -37,7 +37,6 @@ type SortColumn =
   | 'recoveryFromLowPct'
   | 'fallFromHighPct'
   | 'changeFromOpenPct'
-  | 'dist52wHighPct'
   | 'distAthPct'
   | 'rvol';
 
@@ -246,7 +245,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
 
       {/* Table Content */}
       <div className="overflow-x-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-        <table className="w-full text-left border-collapse min-w-[1020px]">
+        <table className="w-full text-left border-collapse min-w-[960px]">
           <thead>
             <tr className="border-b border-white/10 bg-slate-950/70 text-[11px] font-semibold text-gray-400 select-none">
               {/* Sticky Stock Column */}
@@ -322,19 +321,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 </div>
               </th>
 
-              {/* Distance from 52W High */}
-              <th
-                onClick={() => handleSort('dist52wHighPct')}
-                className="py-3 px-3 text-right cursor-pointer hover:text-white transition-colors"
-                style={{ minWidth: 115 }}
-                title="Percentage distance from 52-week high"
-              >
-                <div className="flex items-center justify-end">
-                  <span>From 52W High</span>
-                  {renderSortIcon('dist52wHighPct')}
-                </div>
-              </th>
-
               {/* Distance from ATH */}
               <th
                 onClick={() => handleSort('distAthPct')}
@@ -366,7 +352,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
           <tbody className="divide-y divide-white/5 text-xs">
             {sortedHoldings.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-gray-500">
+                <td colSpan={9} className="py-12 text-center text-gray-500">
                   No portfolio holdings available.
                 </td>
               </tr>
@@ -380,7 +366,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 const recLow = stock.recoveryFromLowPct ?? 0;
                 const dropHigh = stock.fallFromHighPct ?? 0;
                 const gainOpen = stock.changeFromOpenPct ?? 0;
-                const dist52w = stock.dist52wHighPct ?? 0;
                 const distAth = stock.distAthPct ?? 0;
                 const rvol = stock.rvol ?? 0;
 
@@ -527,28 +512,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                         >
                           {gainOpen > 0 ? '+' : ''}{gainOpen.toFixed(2)}%
                         </span>
-                      </div>
-                    </td>
-
-                    {/* Distance from 52W High */}
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex justify-end">
-                        {dist52w >= -0.1 ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-amber-300 border border-amber-500/30 font-bold text-[10px]">
-                            52W High!
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-lg font-mono font-semibold text-[11px] tabular-nums ${
-                              dist52w >= -3.0
-                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                                : 'bg-slate-800/60 text-purple-300/80 border border-white/5'
-                            }`}
-                            title={`52W High: ₹${stock.high52w?.toFixed(1) || '—'}`}
-                          >
-                            {dist52w.toFixed(1)}%
-                          </span>
-                        )}
                       </div>
                     </td>
 
