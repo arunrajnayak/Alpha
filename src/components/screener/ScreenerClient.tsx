@@ -49,14 +49,9 @@ function getRankTextColor(rank: number): string {
   return 'text-red-400';
 }
 
-function formatAsmLabel(asm: { type: 'ST' | 'LT'; stage: string }) {
-  const typeStr = asm.type === 'LT' ? 'Long-Term' : 'Short-Term';
-  return `${typeStr} ASM (Stage ${asm.stage})`;
-}
-
 function isStockWarning(row: ScreenerRow): boolean {
   const is5PctCircuit = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
-  return Boolean(row.isBE || is5PctCircuit || row.asmInfo || row.exitSignal?.signalType === 'yellow');
+  return Boolean(row.isBE || is5PctCircuit || row.exitSignal?.signalType === 'yellow');
 }
 
 // ─── Badge Tooltip ───────────────────────────────────────────────────────────
@@ -117,16 +112,15 @@ function BadgeTooltip({ label, badgeCls, lines, icon, iconOnly }: BadgeTooltipPr
             {/* Lines */}
             <div className="px-3 py-2.5 flex flex-col gap-2">
               {lines.map((line, i) => {
-                const isAsm = line.startsWith('⚠') || line.includes('ASM');
                 const isLock = line.startsWith('🔒') || line.includes('Min hold');
                 const cleanLine = line.replace(/^[⚠🔒]\s*/, '');
                 return (
                   <div key={i} className="flex items-start gap-2">
                     <span className={`mt-[5px] shrink-0 w-1.5 h-1.5 rounded-full ${
-                      isLock ? 'bg-amber-400' : isAsm ? 'bg-orange-400' : 'bg-zinc-500'
+                      isLock ? 'bg-amber-400' : 'bg-zinc-500'
                     }`} />
                     <span className={`text-[11px] leading-4 ${
-                      isLock ? 'text-amber-300' : isAsm ? 'text-orange-300' : 'text-zinc-300'
+                      isLock ? 'text-amber-300' : 'text-zinc-300'
                     }`}>{cleanLine}</span>
                   </div>
                 );
@@ -660,7 +654,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
                 const is5PctCircuit    = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
-                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && row.rank <= 50 && (!!row.isBE || is5PctCircuit || !!row.asmInfo));
+                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && row.rank <= 50 && (!!row.isBE || is5PctCircuit));
                 const isProtected      = !!exit && exit.protected;
                 const effectiveRank    = (activeTab === 'prefiltered' && hideWarnings && row.adjustedRank != null)
                   ? row.adjustedRank
@@ -783,7 +777,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             exit.by50Dma && !exit.byFilter ? 'Below 50 DMA' : '',
                             exit.byDrawdown ? 'Drawdown > 25% since entry' : '',
                             exit.protected ? 'Min hold not met (< 14 days)' : '',
-                            row.asmInfo ? formatAsmLabel(row.asmInfo) : '',
                           ].filter(Boolean) as string[];
                           return (
                             <BadgeTooltip
@@ -808,7 +801,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             exit.is5PctCircuit ? '5% daily circuit limit' : '',
                             exit.by50Dma ? 'Below 50 DMA' : '',
                             exit.byDrawdownWarn && !exit.byDrawdown ? 'Drawdown > 20% since entry' : '',
-                            row.asmInfo ? formatAsmLabel(row.asmInfo) : '',
                           ].filter(Boolean) as string[];
                           return (
                             <BadgeTooltip
@@ -820,12 +812,11 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             />
                           );
                         })()}
-                        {/* Warning badge (ASM / BE / 5% Circuit) — shown outside portfolio tab */}
-                        {activeTab !== 'portfolio' && (row.asmInfo || row.isBE || is5PctCircuit) && (() => {
+                        {/* Warning badge (BE / 5% Circuit) — shown outside portfolio tab */}
+                        {activeTab !== 'portfolio' && (row.isBE || is5PctCircuit) && (() => {
                           const warnLines = [
                             row.isBE ? 'BE series (Trade-to-Trade)' : '',
                             is5PctCircuit ? '5% daily circuit limit' : '',
-                            row.asmInfo ? formatAsmLabel(row.asmInfo) : '',
                           ].filter(Boolean) as string[];
                           return (
                             <BadgeTooltip

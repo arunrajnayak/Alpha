@@ -29,7 +29,6 @@ Include a Markdown Table listing all Exit (🔴) and Warning (🟡) stocks:
 Provide commentary on technical breaches:
 - **EXIT (Red)**: Below 200 DMA & >25% ATH drawdown, rank >70, or dropped screener universe.
 - **WARNING (Yellow)**: Below 50 DMA, rank 51–70, moved to BE category, or dropped > 20% from post-portfolio addition high.
-- **ASM Surveillance**: Call out any stock on short/long-term surveillance (e.g. LT-1, LT-4).
 - **Protected**: Note stocks held < 14 days (cannot be exited yet).
 
 ### 🚀 Opportunity & Deployment Candidates
@@ -48,7 +47,6 @@ function holdingSignalSummary(h: PortfolioHolding): string {
   const parts = [base];
   if (h.signalReason)                         parts.push(`reason: ${h.signalReason}`);
   if (h.drawdownSinceEntry != null)            parts.push(`drawdown since entry: ${h.drawdownSinceEntry.toFixed(1)}%`);
-  if (h.asmInfo)                              parts.push(`ASM surveillance: ${h.asmInfo.type}-${h.asmInfo.stage}`);
   return parts.join(' | ');
 }
 
