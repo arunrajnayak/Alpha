@@ -47,6 +47,7 @@ export interface TopMoverItem {
   symbol: string;
   changePercent: number;
   lastPrice: number;
+  marketCap?: number;
 }
 
 export interface NSEMarketBreadthData {
@@ -157,6 +158,47 @@ function computeMedian(values: number[]): number {
 
 const NSE_ACTIVE_UNIVERSE_CONFIG_KEY = 'nse_active_equity_universe';
 const LATEST_NSE_BREADTH_CONFIG_KEY = 'latest_nse_market_breadth';
+
+let cachedMcapMap: Map<string, number> | null = null;
+let mcapCacheTime = 0;
+const MCAP_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+export const MIN_TOP_MOVER_MCAP_CR = 1000; // Only stocks >= ₹1,000 Cr mcap in Top 10 Gainers/Losers
+
+// Load stock market cap map (combining StockMarketCap daily bhavcopy with AMFI classification fallback)
+export async function getStockMarketCapMap(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (cachedMcapMap && now - mcapCacheTime < MCAP_CACHE_TTL_MS) {
+    return cachedMcapMap;
+  }
+
+  try {
+    const [mcapRecords, amfiRecords] = await Promise.all([
+      prisma.stockMarketCap.findMany({ select: { symbol: true, marketCap: true } }),
+      prisma.aMFIClassification.findMany({
+        select: { symbol: true, category: true, avgMarketCap: true },
+        distinct: ['symbol'],
+      }),
+    ]);
+
+    const map = new Map<string, number>();
+    for (const r of mcapRecords) {
+      map.set(r.symbol.toUpperCase(), r.marketCap);
+    }
+    for (const a of amfiRecords) {
+      const sym = a.symbol.toUpperCase();
+      if (!map.has(sym) && a.avgMarketCap) {
+        map.set(sym, a.avgMarketCap);
+      }
+    }
+
+    cachedMcapMap = map;
+    mcapCacheTime = now;
+    return map;
+  } catch (err) {
+    breadthLogger.error('Failed to load StockMarketCap map:', err);
+    return cachedMcapMap || new Map();
+  }
+}
 
 // Load active NSE stock universe (All ~3,394 NSE listed equities)
 async function getActiveNSEUniverse(): Promise<UniverseItem[]> {
@@ -354,7 +396,10 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     message: hasToken ? undefined : 'No active Upstox token available',
   };
 
-  const universe = await getActiveNSEUniverse();
+  const [universe, mcapMap] = await Promise.all([
+    getActiveNSEUniverse(),
+    getStockMarketCapMap(),
+  ]);
   if (universe.length === 0) {
     return {
       total: 0,
@@ -391,6 +436,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     lastPrice: number;
     category: 'large' | 'mid' | 'small' | 'micro';
     awayFromAth: number | null;
+    marketCap: number;
   }> = [];
 
   if (hasToken) {
@@ -405,12 +451,20 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
           if (q && q.previous_close > 0 && q.last_price > 0) {
             const changePercent = ((q.last_price - q.previous_close) / q.previous_close) * 100;
             const awayFromAth = item.ath > 0 ? Math.max(0, ((item.ath - q.last_price) / item.ath) * 100) : null;
+            let mcap = mcapMap.get(item.symbol);
+            if (mcap === undefined) {
+              if (item.category === 'large') mcap = 100000;
+              else if (item.category === 'mid') mcap = 30000;
+              else if (item.category === 'small') mcap = 10000;
+              else mcap = 0;
+            }
             moves.push({
               symbol: item.symbol,
               changePercent,
               lastPrice: q.last_price,
               category: item.category,
               awayFromAth,
+              marketCap: mcap,
             });
           }
         }
@@ -613,8 +667,9 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
   const adRatio = declines > 0 ? Number((advances / declines).toFixed(2)) : advances;
   const netAdvances = advances - declines;
 
-  // Top gainers & losers
-  const sorted = [...moves].sort((a, b) => b.changePercent - a.changePercent);
+  // Top gainers & losers (limited to stocks above ₹1,000 Cr market cap)
+  const eligibleMoves = moves.filter((m) => (m.marketCap ?? 0) >= MIN_TOP_MOVER_MCAP_CR);
+  const sorted = [...eligibleMoves].sort((a, b) => b.changePercent - a.changePercent);
   const topGainers: TopMoverItem[] = sorted
     .filter((s) => s.changePercent > 0)
     .slice(0, 10)
@@ -622,6 +677,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       symbol: s.symbol,
       changePercent: Number(s.changePercent.toFixed(2)),
       lastPrice: s.lastPrice,
+      marketCap: s.marketCap,
     }));
 
   const losers = sorted.filter((s) => s.changePercent < 0);
@@ -632,6 +688,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       symbol: s.symbol,
       changePercent: Number(s.changePercent.toFixed(2)),
       lastPrice: s.lastPrice,
+      marketCap: s.marketCap,
     }));
 
   const medianMove = Number(computeMedian(moves.map((m) => m.changePercent)).toFixed(2));

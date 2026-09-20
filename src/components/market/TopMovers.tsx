@@ -7,6 +7,7 @@ export interface TopMoverItem {
   symbol: string;
   changePercent: number;
   lastPrice: number;
+  marketCap?: number;
 }
 
 interface TopMoversProps {
@@ -51,6 +52,11 @@ function MoverRow({
       animate="visible"
       exit="hidden"
       custom={index}
+      title={
+        stock.marketCap
+          ? `${stock.symbol} • Mcap: ₹${Math.round(stock.marketCap).toLocaleString('en-IN')} Cr`
+          : undefined
+      }
     >
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <span className="text-xs font-mono font-medium text-gray-500 w-4 sm:w-5 text-right shrink-0">
@@ -90,6 +96,9 @@ function SkeletonCard({ title, type }: { title: string; type: 'gain' | 'loss' })
             }`}
           />
           <h3 className="text-sm md:text-base font-semibold text-gray-300">{title}</h3>
+          <span className="text-[10px] font-medium text-gray-500 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+            &gt; ₹1,000 Cr
+          </span>
         </div>
       </div>
       <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-600 px-2 sm:px-3 pb-2 border-b border-white/5">
@@ -161,6 +170,9 @@ export default memo(function TopMovers({
           <div className="flex items-center gap-2 sm:gap-2.5">
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
             <h3 className="text-sm md:text-base font-semibold text-gray-200">Top 10 Gainers</h3>
+            <span className="text-[10px] font-medium text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+              &gt; ₹1,000 Cr
+            </span>
           </div>
         </div>
         <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-2 sm:px-3 pb-2 border-b border-white/5">
@@ -191,6 +203,9 @@ export default memo(function TopMovers({
           <div className="flex items-center gap-2 sm:gap-2.5">
             <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
             <h3 className="text-sm md:text-base font-semibold text-gray-200">Top 10 Losers</h3>
+            <span className="text-[10px] font-medium text-gray-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+              &gt; ₹1,000 Cr
+            </span>
           </div>
         </div>
         <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-2 sm:px-3 pb-2 border-b border-white/5">
