@@ -446,6 +446,7 @@ Portfolio holdings are evaluated daily against the momentum screener criteria to
 #### 🔴 Red (Exit Signal)
 Indicates an immediate recommendation to sell. Triggered if any of the following apply:
 - **Major Filter Breach**: Close is below 200 DMA **OR** $> 25\%$ below ATH (`athProximity < 0.75`).
+  - *ATH Relaxation*: If a holding maintains strong momentum (`rank <= 50`), is above 200 DMA, and drawdown since entry is $< 10\%$, the $> 25\%$ ATH breach is relaxed to prevent premature exits of high-momentum stocks.
 - **Major Rank Drop**: The stock's rank drops $> 70$.
 - **Major Drawdown**: Dropped $> 25\%$ from peak since entry.
 - **Fell Out of Universe**: The stock is unranked for reasons other than being in the BE category.

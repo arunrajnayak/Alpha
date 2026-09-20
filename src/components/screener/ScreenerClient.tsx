@@ -771,7 +771,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             ...(exit.byFilter ? (() => {
                               const f: string[] = [];
                               if (!row.dmaSwatches.above200) f.push('Below 200 DMA');
-                              if (row.athProximity < 0.75) f.push('> 25% below ATH');
+                              if (exit.byAth ?? row.athProximity < 0.75) f.push('> 25% below ATH');
                               return f.length > 0 ? f : ['Below 200 DMA or > 25% below ATH'];
                             })() : []),
                             exit.by50Dma && !exit.byFilter ? 'Below 50 DMA' : '',

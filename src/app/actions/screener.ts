@@ -37,7 +37,8 @@ export interface ScreenerRow {
   isBE?: boolean;
   exitSignal?: {
     byRank: boolean;    // rank > 50
-    byFilter: boolean;  // below 200 DMA OR athProximity < 0.75
+    byFilter: boolean;  // below 200 DMA OR unrelaxed athProximity < 0.75
+    byAth?: boolean;    // > 25% below ATH (when not relaxed)
     by50Dma: boolean;   // below 50 DMA
     byDrawdownWarn: boolean; // dropped > 20% from post-portfolio addition high (warn)
     byDrawdown: boolean;     // dropped > 25% from post-portfolio addition high (exit)
@@ -447,7 +448,21 @@ export async function getScreenerData(
       const isBE = row.isBE ?? (isUnranked && (row.unrankedReason?.includes('BE category') ?? false));
       const is5PctCircuit = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
       const byRank   = isUnranked || row.rank > 50;
-      const byFilter = !row.dmaSwatches.above200 || row.athProximity < 0.75;
+
+      // ATH proximity breach (> 25% below ATH).
+      // Relaxation: If the holding maintains strong momentum (rank <= 50), remains above its 200 DMA,
+      // and has suffered mild/no drawdown since entry (>= -10%), relax the ATH breach trigger
+      // so strong momentum holdings with minimal capital loss aren't prematurely flagged for exit.
+      const isAthBreached = row.athProximity < 0.75;
+      const isAthRelaxed  =
+        isAthBreached &&
+        !isUnranked &&
+        row.rank <= 50 &&
+        row.dmaSwatches.above200 &&
+        (row.drawdownSinceEntry === null || row.drawdownSinceEntry === undefined || row.drawdownSinceEntry >= -10);
+      const byAth = isAthBreached && !isAthRelaxed;
+
+      const byFilter = !row.dmaSwatches.above200 || byAth;
       const by50Dma = !row.dmaSwatches.above50;
       const byDrawdownWarn = row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null && row.drawdownSinceEntry < -20;
       const byDrawdown     = row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null && row.drawdownSinceEntry < -25;
@@ -466,7 +481,7 @@ export async function getScreenerData(
         signalType = 'yellow';
       }
 
-      row.exitSignal = { byRank, byFilter, by50Dma, byDrawdownWarn, byDrawdown, protected: isProtected, isUnranked, isBE, is5PctCircuit, unrankedReason: row.unrankedReason, signalType };
+      row.exitSignal = { byRank, byFilter, byAth, by50Dma, byDrawdownWarn, byDrawdown, protected: isProtected, isUnranked, isBE, is5PctCircuit, unrankedReason: row.unrankedReason, signalType };
     }
   }
 
