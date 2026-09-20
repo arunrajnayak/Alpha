@@ -49,23 +49,6 @@ function formatVolume(vol: number | undefined): string {
   return vol.toLocaleString('en-IN');
 }
 
-function getMarketCapBadge(cat?: string) {
-  const c = (cat || '').toLowerCase();
-  if (c.includes('large')) {
-    return <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded">Large</span>;
-  }
-  if (c.includes('mid')) {
-    return <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded">Mid</span>;
-  }
-  if (c.includes('small')) {
-    return <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">Small</span>;
-  }
-  if (c.includes('micro')) {
-    return <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-700/50 text-gray-400 border border-slate-600/30 rounded">Micro</span>;
-  }
-  return null;
-}
-
 function getRecoveryChip(recLow: number) {
   if (recLow < 0.1) {
     return (
@@ -342,14 +325,14 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
 
       {/* Table Content */}
       <div className="overflow-x-auto relative scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-        <table className="w-full text-left border-collapse min-w-[850px]">
+        <table className="w-full text-left border-collapse min-w-[820px]">
           <thead>
             <tr className="border-b border-white/10 bg-slate-950/70 text-[11px] font-semibold text-gray-400 select-none">
               {/* Sticky Stock Column */}
               <th
                 onClick={() => handleSort('symbol')}
                 className="py-3 px-4 sticky left-0 z-20 bg-slate-950/95 backdrop-blur-md cursor-pointer hover:text-white transition-colors"
-                style={{ minWidth: 140 }}
+                style={{ minWidth: 115 }}
               >
                 <div className="flex items-center">
                   <span>Stock</span>
@@ -467,12 +450,9 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                     data-motion-item
                     className="hover:bg-white/[0.03] transition-colors group"
                   >
-                    {/* Sticky Stock Column (Symbol + Market Cap badge only) */}
+                    {/* Sticky Stock Column (Symbol only) */}
                     <td className="py-3 px-4 sticky left-0 z-10 bg-slate-900/95 group-hover:bg-slate-900/95 backdrop-blur-md border-r border-white/5 md:border-r-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white text-sm tracking-tight">{stock.symbol}</span>
-                        {getMarketCapBadge(stock.marketCapCategory)}
-                      </div>
+                      <span className="font-bold text-white text-sm tracking-tight">{stock.symbol}</span>
                     </td>
 
                     {/* LTP & Day Change */}
