@@ -134,9 +134,12 @@ function getAthDistanceChip(distAth: number, ath?: number) {
   } else if (distAth >= -10.0) {
     // Moderately close to ATH (< 10% away): mild emerald
     chipStyle = 'bg-emerald-500/10 text-emerald-400/80 border border-emerald-500/20 font-medium';
+  } else if (distAth >= -20.0) {
+    // Normal consolidation / pullback (10% to 20% away): neutral slate
+    chipStyle = 'bg-slate-800/60 text-slate-400 border border-white/5 font-medium';
   } else {
-    // Further from ATH (>= 10% away)
-    chipStyle = 'bg-slate-800/60 text-indigo-300/80 border border-white/5 font-medium';
+    // Deep correction (> 20% away from ATH): rose red
+    chipStyle = 'bg-rose-500/15 text-rose-400 border border-rose-500/25 font-medium';
   }
 
   return (
