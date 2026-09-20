@@ -180,21 +180,21 @@ function MobilePill({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.03, duration: 0.2 }}
-      className={`w-full min-w-0 flex flex-col items-start px-2.5 py-2 rounded-xl border transition-all duration-200 cursor-pointer ${
+      className={`w-full min-w-0 flex flex-col items-center justify-center text-center px-2 py-2 rounded-xl border transition-all duration-200 cursor-pointer ${
         isSelected
           ? 'bg-gradient-to-br from-blue-600/20 via-indigo-500/15 to-violet-500/10 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
           : 'bg-slate-900/50 border-white/5 hover:border-white/10'
       }`}
     >
-      <span className={`text-[10px] sm:text-[11px] font-semibold truncate w-full ${isSelected ? 'text-blue-300' : 'text-gray-400'}`}>
+      <span className={`text-[10px] sm:text-[11px] font-semibold truncate w-full text-center ${isSelected ? 'text-blue-300' : 'text-gray-400'}`}>
         {shortLabel}
       </span>
       {idx.value > 0 && (
-        <span className={`text-[13px] sm:text-[14px] font-extrabold tabular-nums block mt-0.5 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+        <span className={`text-[13px] sm:text-[14px] font-extrabold tabular-nums block mt-0.5 w-full text-center ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
           {isPositive ? '+' : ''}<AnimatedValue value={idx.changePercent} decimals={2} />%
         </span>
       )}
-      <span className={`text-[10px] tabular-nums mt-0.5 block truncate w-full ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
+      <span className={`text-[10px] tabular-nums mt-0.5 block truncate w-full text-center ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
         {idx.value > 0 ? <AnimatedValue value={idx.value} /> : '—'}
       </span>
     </motion.button>
