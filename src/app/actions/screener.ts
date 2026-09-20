@@ -14,6 +14,7 @@ import { fetchASMList } from '@/lib/nse-api';
 
 export interface ScreenerRow {
   rank: number;
+  adjustedRank?: number;
   symbol: string;
   companyName: string;
   compositeScore: number;

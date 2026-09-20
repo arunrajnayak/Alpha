@@ -10,6 +10,8 @@ interface StatsBarProps {
   filteredCount: number;
   hidePortfolio: boolean;
   onHidePortfolioChange: (val: boolean) => void;
+  hideWarnings: boolean;
+  onHideWarningsChange: (val: boolean) => void;
   signalFilter: 'hold' | 'warning' | 'exit' | null;
   onSignalFilterChange: (val: 'hold' | 'warning' | 'exit' | null) => void;
 }
@@ -21,6 +23,8 @@ export default memo(function StatsBar({
   filteredCount,
   hidePortfolio,
   onHidePortfolioChange,
+  hideWarnings,
+  onHideWarningsChange,
   signalFilter,
   onSignalFilterChange,
 }: StatsBarProps) {
@@ -61,19 +65,32 @@ export default memo(function StatsBar({
       </div>
 
       {/* Right side: Switch or Portfolio Stats */}
-      <div className="flex items-center gap-4 text-[11px]">
-        {/* Hide Portfolio Switch */}
+      <div className="flex flex-wrap items-center gap-4 text-[11px]">
+        {/* Pre-filtered switches: Hide Portfolio & Hide Warnings */}
         {activeTab === 'prefiltered' && (
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-gray-400 hover:text-gray-200 transition-colors py-1">
-            <input
-              type="checkbox"
-              checked={hidePortfolio}
-              onChange={(e) => onHidePortfolioChange(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="relative w-8 h-4 bg-slate-850 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-emerald-400 after:content-[''] after:absolute after:top-[1px] after:start-[1px] after:bg-gray-500 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500/20 border border-white/10 peer-checked:border-emerald-500/30"></div>
-            <span>Hide Portfolio Stocks</span>
-          </label>
+          <>
+            <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-gray-400 hover:text-gray-200 transition-colors py-1">
+              <input
+                type="checkbox"
+                checked={hidePortfolio}
+                onChange={(e) => onHidePortfolioChange(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="relative w-8 h-4 bg-slate-850 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-emerald-400 after:content-[''] after:absolute after:top-[1px] after:start-[1px] after:bg-gray-500 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500/20 border border-white/10 peer-checked:border-emerald-500/30"></div>
+              <span>Hide Portfolio Stocks</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-gray-400 hover:text-gray-200 transition-colors py-1">
+              <input
+                type="checkbox"
+                checked={hideWarnings}
+                onChange={(e) => onHideWarningsChange(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="relative w-8 h-4 bg-slate-850 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-amber-400 after:content-[''] after:absolute after:top-[1px] after:start-[1px] after:bg-gray-500 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500/20 border border-white/10 peer-checked:border-amber-500/30"></div>
+              <span>Hide Warning Stocks</span>
+            </label>
+          </>
         )}
 
         {/* Portfolio rank distribution + Market cap breakdown — rendered only for portfolio tab */}

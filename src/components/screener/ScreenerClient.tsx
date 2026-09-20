@@ -54,6 +54,11 @@ function formatAsmLabel(asm: { type: 'ST' | 'LT'; stage: string }) {
   return `${typeStr} ASM (Stage ${asm.stage})`;
 }
 
+function isStockWarning(row: ScreenerRow): boolean {
+  const is5PctCircuit = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
+  return Boolean(row.isBE || is5PctCircuit || row.asmInfo || row.exitSignal?.signalType === 'yellow');
+}
+
 // ─── Badge Tooltip ───────────────────────────────────────────────────────────
 
 interface BadgeTooltipProps {
@@ -294,6 +299,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
   const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('portfolio');
   const [hidePortfolio, setHidePortfolio] = useState(true);
+  const [hideWarnings, setHideWarnings] = useState(false);
   const [signalFilter, setSignalFilter] = useState<'hold' | 'warning' | 'exit' | null>(null);
   const [loading, setLoading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -399,20 +405,23 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const handleExportCSV = () => {
     if (!displayRows.length) return;
     const headers = ['Rank', 'Symbol', 'Company', 'Score', 'Avg Sharpe', 'ATH Proximity', 'Price', '200 DMA %', 'Turnover Cr', 'Market Cap Cr', 'Category', 'Rank Change'];
-    const csvRows = displayRows.map(r => [
-      r.rank === 9999 ? '' : r.rank,
-      r.symbol,
-      r.companyName,
-      r.compositeScore.toFixed(4),
-      r.avgSharpe.toFixed(4),
-      r.athProximity.toFixed(4),
-      r.currentPrice.toFixed(2),
-      r.aboveDma200Pct.toFixed(2),
-      r.medianTurnoverCr.toFixed(2),
-      r.marketCapCr.toFixed(0),
-      r.marketCapCategory || '',
-      r.rankChange ?? '',
-    ]);
+    const csvRows = displayRows.map(r => {
+      const rk = (activeTab === 'prefiltered' && hideWarnings && r.adjustedRank != null) ? r.adjustedRank : r.rank;
+      return [
+        rk === 9999 ? '' : rk,
+        r.symbol,
+        r.companyName,
+        r.compositeScore.toFixed(4),
+        r.avgSharpe.toFixed(4),
+        r.athProximity.toFixed(4),
+        r.currentPrice.toFixed(2),
+        r.aboveDma200Pct.toFixed(2),
+        r.medianTurnoverCr.toFixed(2),
+        r.marketCapCr.toFixed(0),
+        r.marketCapCategory || '',
+        r.rankChange ?? '',
+      ];
+    });
     const csv = [headers.join(','), ...csvRows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -425,6 +434,25 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
   const displayRows = useMemo(() => {
     let filtered = [...rows];
+
+    // On pre-filtered tab, if hideWarnings is active, assign sequential rank ignoring warning stocks
+    if (activeTab === 'prefiltered' && hideWarnings) {
+      let seq = 1;
+      const rankMap = new Map<string, number>();
+      for (const r of rows) {
+        if (!isStockWarning(r)) {
+          rankMap.set(r.symbol, seq++);
+        }
+      }
+
+      filtered = filtered
+        .filter(r => !isStockWarning(r))
+        .map(r => ({
+          ...r,
+          adjustedRank: rankMap.get(r.symbol) ?? r.rank,
+        }));
+    }
+
     if (activeTab === 'prefiltered' && hidePortfolio) {
       filtered = filtered.filter(r => !r.inPortfolio);
     }
@@ -456,11 +484,13 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       // by their compositeScore relative to ranked stocks so they appear
       // at their natural score position rather than pinned to the bottom.
       if (sortField === 'rank' || sortField === 'default') {
+        const aRank = (activeTab === 'prefiltered' && hideWarnings && a.adjustedRank != null) ? a.adjustedRank : a.rank;
+        const bRank = (activeTab === 'prefiltered' && hideWarnings && b.adjustedRank != null) ? b.adjustedRank : b.rank;
         const aUnranked = a.rank === 9999;
         const bUnranked = b.rank === 9999;
         if (!aUnranked && !bUnranked) {
           // Both ranked — sort by rank asc/desc normally
-          return sortDir === 'asc' ? a.rank - b.rank : b.rank - a.rank;
+          return sortDir === 'asc' ? aRank - bRank : bRank - aRank;
         }
         if (aUnranked && bUnranked) {
           // Both unranked — sort by score desc (higher score = better position)
@@ -491,11 +521,15 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         }
         case 'score':      cmp = a.compositeScore - b.compositeScore; break;
         case 'rankChange': cmp = (a.rankChange ?? 0) - (b.rankChange ?? 0); break;
-        default:           cmp = a.rank - b.rank;
+        default: {
+          const aRank = (activeTab === 'prefiltered' && hideWarnings && a.adjustedRank != null) ? a.adjustedRank : a.rank;
+          const bRank = (activeTab === 'prefiltered' && hideWarnings && b.adjustedRank != null) ? b.adjustedRank : b.rank;
+          cmp = aRank - bRank;
+        }
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, sortField, sortDir, activeTab, hidePortfolio, signalFilter]);
+  }, [rows, sortField, sortDir, activeTab, hidePortfolio, hideWarnings, signalFilter]);
 
   const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
 
@@ -572,6 +606,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         filteredCount={rows.length}
         hidePortfolio={hidePortfolio}
         onHidePortfolioChange={setHidePortfolio}
+        hideWarnings={hideWarnings}
+        onHideWarningsChange={setHideWarnings}
         signalFilter={signalFilter}
         onSignalFilterChange={setSignalFilter}
       />
@@ -624,8 +660,11 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
                 const is5PctCircuit    = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
-                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && row.rank <= 50 && (!!row.isBE || is5PctCircuit));
+                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && row.rank <= 50 && (!!row.isBE || is5PctCircuit || !!row.asmInfo));
                 const isProtected      = !!exit && exit.protected;
+                const effectiveRank    = (activeTab === 'prefiltered' && hideWarnings && row.adjustedRank != null)
+                  ? row.adjustedRank
+                  : row.rank;
 
                 // All-tab tier: portfolio > pre-filtered > universe-only
                 const isAllTab = activeTab === 'all';
@@ -646,7 +685,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                         ? 'rgb(234,179,8)'
                         : row.isUnranked
                           ? 'rgb(63,63,70)'
-                          : getRankAccent(row.rank);
+                          : getRankAccent(effectiveRank);
 
                 const rankTextColor = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
@@ -657,7 +696,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                       ? 'text-yellow-400'
                       : isProtected
                         ? 'text-amber-400'
-                        : getRankTextColor(row.rank);
+                        : getRankTextColor(effectiveRank);
 
                 const rowBg = isAllTab
                   ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
@@ -680,12 +719,20 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     className={`group transition-colors ${isClickableTab ? 'cursor-pointer' : ''} ${rowBg}`}
                   >
                     {/* Rank — left accent bar */}
-                    <td className="pl-5 pr-2 py-3" style={{ boxShadow: `inset 5px 0 0 ${accentColor}` }}>
+                    <td
+                      className="pl-5 pr-2 py-3"
+                      style={{ boxShadow: `inset 5px 0 0 ${accentColor}` }}
+                      title={
+                        activeTab === 'prefiltered' && hideWarnings && row.adjustedRank != null && row.adjustedRank !== row.rank
+                          ? `Adjusted Rank: #${row.adjustedRank} (Original Rank: #${row.rank} — warning stocks ignored)`
+                          : undefined
+                      }
+                    >
                       {row.isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
                       ) : (
                         <span className={`font-mono text-xl font-black tabular-nums leading-none ${rankTextColor}`}>
-                          {row.rank}
+                          {effectiveRank}
                         </span>
                       )}
                     </td>
