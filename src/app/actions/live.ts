@@ -156,6 +156,10 @@ export interface LiveDashboardData {
 interface StockTechnicals {
   ath: number;
   avgVolume1m: number;
+  lastCandleVolume?: number;
+  lastCandleOpen?: number;
+  lastCandleHigh?: number;
+  lastCandleLow?: number;
 }
 
 const technicalsCache = new Map<string, { data: StockTechnicals; cachedAt: number }>();
@@ -196,19 +200,24 @@ async function getStockTechnicalsBatch(symbols: string[]): Promise<Map<string, S
       if (row.ath > 0) athMap.set(row.symbol, row.ath);
     }
 
-    // 2. Fetch last ~22 trading days of ScreenerPrice for 1-month average volume
+    // 2. Fetch last ~25 trading days of ScreenerPrice for 1-month average volume & latest candle fallback
     const screenerArrays = await Promise.all(
       symbolChunks.map(chunk =>
         prisma.screenerPrice.findMany({
           where: { symbol: { in: chunk } },
           orderBy: { date: 'desc' },
           take: chunk.length * 25,
-          select: { symbol: true, volume: true },
+          select: { symbol: true, volume: true, open: true, high: true, low: true, close: true },
         })
       )
     );
     const volumeBySymbol = new Map<string, number[]>();
+    const lastCandleBySymbol = new Map<string, { volume: number; open: number; high: number; low: number; close: number }>();
+
     for (const row of screenerArrays.flat()) {
+      if (!lastCandleBySymbol.has(row.symbol)) {
+        lastCandleBySymbol.set(row.symbol, row);
+      }
       const list = volumeBySymbol.get(row.symbol) || [];
       if (list.length < 22) {
         list.push(row.volume);
@@ -220,7 +229,15 @@ async function getStockTechnicalsBatch(symbols: string[]): Promise<Map<string, S
       const ath = athMap.get(sym) || 0;
       const vols = volumeBySymbol.get(sym) || [];
       const avgVolume1m = vols.length > 0 ? vols.reduce((sum, v) => sum + v, 0) / vols.length : 0;
-      const data: StockTechnicals = { ath, avgVolume1m };
+      const lastCandle = lastCandleBySymbol.get(sym);
+      const data: StockTechnicals = {
+        ath,
+        avgVolume1m,
+        lastCandleVolume: lastCandle?.volume,
+        lastCandleOpen: lastCandle?.open,
+        lastCandleHigh: lastCandle?.high,
+        lastCandleLow: lastCandle?.low,
+      };
       technicalsCache.set(sym, { data, cachedAt: now });
       result.set(sym, data);
     }
@@ -326,7 +343,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       liveActionsLogger.info(`Fetched historical prices for ${historicalPrices.lastDayPrices.size} symbols, last trading date: ${historicalPrices.lastTradingDate?.toISOString().split('T')[0]}`);
     }
     
-    if (hasToken && !useHistoricalData) {
+    if (hasToken) {
       try {
         // Get all instrument keys that we found
         const instrumentKeys = Array.from(instrumentKeyMap.values());
@@ -396,7 +413,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       } catch (error) {
         liveActionsLogger.error("Error fetching Upstox quotes:", error);
       }
-    } else if (!useHistoricalData) {
+    } else {
       liveActionsLogger.warn("No valid Upstox token - using fallback prices");
     }
 
@@ -487,10 +504,10 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     }
 
     // Intraday prices and technical metrics
-    const dayOpen = fullQuote?.open && fullQuote.open > 0 ? fullQuote.open : (prevClose || price);
-    const dayHigh = fullQuote?.high && fullQuote.high > 0 ? Math.max(fullQuote.high, price) : Math.max(price, dayOpen);
-    const dayLow = fullQuote?.low && fullQuote.low > 0 ? Math.min(fullQuote.low, price) : Math.min(price, dayOpen);
-    const todayVolume = fullQuote?.volume || 0;
+    const dayOpen = (fullQuote?.open && fullQuote.open > 0) ? fullQuote.open : (tech?.lastCandleOpen || prevClose || price);
+    const dayHigh = (fullQuote?.high && fullQuote.high > 0) ? Math.max(fullQuote.high, price) : (tech?.lastCandleHigh || Math.max(price, dayOpen));
+    const dayLow = (fullQuote?.low && fullQuote.low > 0) ? Math.min(fullQuote.low, price) : (tech?.lastCandleLow || Math.min(price, dayOpen));
+    const todayVolume = (fullQuote?.volume && fullQuote.volume > 0) ? fullQuote.volume : (tech?.lastCandleVolume || 0);
     const high52w = fullQuote?.year_high || (tech?.ath || 0);
     const ath = Math.max(tech?.ath || 0, high52w || 0, dayHigh || 0);
     const effectiveHigh52w = high52w > 0 ? high52w : ath;
@@ -501,7 +518,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     const changeFromOpenPct = dayOpen > 0 ? ((price - dayOpen) / dayOpen) * 100 : 0;
     const dist52wHighPct = effectiveHigh52w > 0 ? ((price - effectiveHigh52w) / effectiveHigh52w) * 100 : 0;
     const distAthPct = ath > 0 ? ((price - ath) / ath) * 100 : 0;
-    const rvol = avgVolume1m > 0 ? todayVolume / avgVolume1m : (todayVolume > 0 ? 1 : 0);
+    const rvol = avgVolume1m > 0 ? todayVolume / avgVolume1m : 0;
 
     // Get market cap category from AMFI classification
     // getAMFICategoriesBatch returns original symbol keys

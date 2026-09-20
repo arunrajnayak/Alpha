@@ -222,18 +222,6 @@ export default function LivePage() {
             downloading={downloading}
         />
 
-        {/* Intraday Dynamics & Technical Pulse Table */}
-        {data.allHoldings && data.allHoldings.length > 0 && (
-          <LiveStockDynamicsTable
-            holdings={data.allHoldings}
-            onRefresh={fetchData}
-            privacyMode={privacyMode}
-            isMobile={isMobile}
-            downloading={downloading}
-            itemVariants={itemVariants}
-          />
-        )}
-
         {/* Portfolio Heatmap */}
         {data.allHoldings && data.allHoldings.length > 0 && (
           <motion.div
@@ -251,6 +239,19 @@ export default function LivePage() {
                 downloading={downloading}
             />
           </motion.div>
+        )}
+
+        {/* Intraday Dynamics & Technical Pulse Table */}
+        {data.allHoldings && data.allHoldings.length > 0 && (
+          <LiveStockDynamicsTable
+            holdings={data.allHoldings}
+            lastRefreshed={lastRefreshed}
+            marketStatus={data.marketStatus}
+            privacyMode={privacyMode}
+            isMobile={isMobile}
+            downloading={downloading}
+            itemVariants={itemVariants}
+          />
         )}
 
         {/* Bottom Section: Movers + Performance Rank */}
