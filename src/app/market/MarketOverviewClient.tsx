@@ -8,6 +8,7 @@ import type { MarketOverviewData } from '@/app/actions/market-overview';
 import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
+import IntradayDynamicsMovers from '@/components/market/IntradayDynamicsMovers';
 import IndexSidebar from '@/components/market/IndexSidebar';
 import IntradayMarketBreadthChart from '@/components/market/IntradayMarketBreadthChart';
 import StockMovesDistributionChart from '@/components/market/StockMovesDistributionChart';
@@ -958,7 +959,14 @@ export default function MarketOverviewClient({
             loading={breadthLoading}
           />
 
-          {/* Row 3: Stock Moves Distribution (Full Width) */}
+          {/* Row 3: Intraday Dynamics (Top 5 from Day Low & High) */}
+          <IntradayDynamicsMovers
+            topRecoveries={breadthData?.topRecoveries || []}
+            topFallers={breadthData?.topFallers || []}
+            loading={breadthLoading}
+          />
+
+          {/* Row 4: Stock Moves Distribution (Full Width) */}
           <StockMovesDistributionChart
             distribution={breadthData?.distribution || []}
             medianMove={breadthData?.medianMove || 0}

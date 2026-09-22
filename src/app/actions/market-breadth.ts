@@ -13,7 +13,7 @@ import { existsSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { prisma } from '@/lib/db';
-import { getLiveQuotes } from '@/lib/upstox/client';
+import { getLiveQuotes, getOHLC } from '@/lib/upstox/client';
 import { hasValidToken } from '@/lib/upstox-client';
 import { ensureInstrumentMaster } from '@/lib/upstox/instruments';
 import { logger } from '@/lib/logger';
@@ -50,6 +50,13 @@ export interface TopMoverItem {
   marketCap?: number;
 }
 
+export interface IntradayMoverItem extends TopMoverItem {
+  dayLow: number;
+  dayHigh: number;
+  recoveryFromLowPct: number;
+  fallFromHighPct: number;
+}
+
 export interface NSEMarketBreadthData {
   total: number;
   advances: number;
@@ -70,6 +77,8 @@ export interface NSEMarketBreadthData {
   };
   topGainers: TopMoverItem[];
   topLosers: TopMoverItem[];
+  topRecoveries?: IntradayMoverItem[];
+  topFallers?: IntradayMoverItem[];
   medianMove: number;
   marketStatus: 'OPEN' | 'CLOSED' | 'PRE_OPEN';
   lastUpdated: string;
@@ -79,6 +88,7 @@ export interface NSEMarketBreadthData {
     message?: string;
   };
 }
+
 
 export interface MarketHealthPoint {
   date: string;
@@ -420,6 +430,8 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       },
       topGainers: [],
       topLosers: [],
+      topRecoveries: [],
+      topFallers: [],
       medianMove: 0,
       marketStatus,
       lastUpdated: new Date().toISOString(),
@@ -437,12 +449,19 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     category: 'large' | 'mid' | 'small' | 'micro';
     awayFromAth: number | null;
     marketCap: number;
+    dayLow: number;
+    dayHigh: number;
+    recoveryFromLowPct: number;
+    fallFromHighPct: number;
   }> = [];
 
   if (hasToken) {
     try {
       const keys = universe.map((u) => u.instrumentKey);
-      const quotesMap = await getLiveQuotes(keys);
+      const [quotesMap, ohlcMap] = await Promise.all([
+        getLiveQuotes(keys),
+        getOHLC(keys),
+      ]);
 
       if (quotesMap.size > 0) {
         isLive = true;
@@ -458,6 +477,13 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
               else if (item.category === 'small') mcap = 10000;
               else mcap = 0;
             }
+
+            const ohlc = ohlcMap.get(item.instrumentKey);
+            const dayHigh = ohlc?.high && ohlc.high > 0 ? Math.max(ohlc.high, q.last_price) : q.last_price;
+            const dayLow = ohlc?.low && ohlc.low > 0 ? Math.min(ohlc.low, q.last_price) : q.last_price;
+            const recoveryFromLowPct = dayLow > 0 ? ((q.last_price - dayLow) / dayLow) * 100 : 0;
+            const fallFromHighPct = dayHigh > 0 ? ((q.last_price - dayHigh) / dayHigh) * 100 : 0;
+
             moves.push({
               symbol: item.symbol,
               changePercent,
@@ -465,6 +491,10 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
               category: item.category,
               awayFromAth,
               marketCap: mcap,
+              dayHigh,
+              dayLow,
+              recoveryFromLowPct,
+              fallFromHighPct,
             });
           }
         }
@@ -474,12 +504,15 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     }
   }
 
+
   // 4. Fallback if live quotes were not obtained or returned insufficient data (< 3000)
   if (moves.length < 3000) {
     // 4a. If in-memory cache has full breadth data, use it
     if (cachedBreadthData && cachedBreadthData.total >= 3000) {
       return {
         ...cachedBreadthData,
+        topRecoveries: cachedBreadthData.topRecoveries || [],
+        topFallers: cachedBreadthData.topFallers || [],
         marketStatus,
         tokenStatus,
         isLive: false,
@@ -501,6 +534,8 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
           breadthCacheTime = now;
           return {
             ...stored,
+            topRecoveries: stored.topRecoveries || [],
+            topFallers: stored.topFallers || [],
             marketStatus,
             tokenStatus,
             isLive: false,
@@ -586,12 +621,15 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
           },
           topGainers: [],
           topLosers: [],
+          topRecoveries: [],
+          topFallers: [],
           medianMove: 0,
           marketStatus,
           lastUpdated: latestBreadth.timestamp.toISOString(),
           isLive: false,
           tokenStatus,
         };
+
 
         return fallbackResult;
       }
@@ -691,7 +729,39 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
       marketCap: s.marketCap,
     }));
 
+  // Top Recoveries from Day Low & Top Fallers from Day High (limited to stocks above ₹1,000 Cr market cap)
+  const topRecoveries: IntradayMoverItem[] = [...eligibleMoves]
+    .filter((s) => s.recoveryFromLowPct > 0.05)
+    .sort((a, b) => b.recoveryFromLowPct - a.recoveryFromLowPct)
+    .slice(0, 5)
+    .map((s) => ({
+      symbol: s.symbol,
+      changePercent: Number(s.changePercent.toFixed(2)),
+      lastPrice: s.lastPrice,
+      dayLow: s.dayLow,
+      dayHigh: s.dayHigh,
+      recoveryFromLowPct: Number(s.recoveryFromLowPct.toFixed(2)),
+      fallFromHighPct: Number(s.fallFromHighPct.toFixed(2)),
+      marketCap: s.marketCap,
+    }));
+
+  const topFallers: IntradayMoverItem[] = [...eligibleMoves]
+    .filter((s) => s.fallFromHighPct < -0.05)
+    .sort((a, b) => a.fallFromHighPct - b.fallFromHighPct)
+    .slice(0, 5)
+    .map((s) => ({
+      symbol: s.symbol,
+      changePercent: Number(s.changePercent.toFixed(2)),
+      lastPrice: s.lastPrice,
+      dayLow: s.dayLow,
+      dayHigh: s.dayHigh,
+      recoveryFromLowPct: Number(s.recoveryFromLowPct.toFixed(2)),
+      fallFromHighPct: Number(s.fallFromHighPct.toFixed(2)),
+      marketCap: s.marketCap,
+    }));
+
   const medianMove = Number(computeMedian(moves.map((m) => m.changePercent)).toFixed(2));
+
 
   const result: NSEMarketBreadthData = {
     total,
@@ -708,6 +778,8 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     tiers,
     topGainers,
     topLosers,
+    topRecoveries,
+    topFallers,
     medianMove,
     marketStatus,
     lastUpdated: new Date().toISOString(),

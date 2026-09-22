@@ -309,67 +309,78 @@ export async function getOHLC(
   instrumentKeys: string[],
   interval: OHLCInterval = '1d'
 ): Promise<Map<string, OHLC>> {
+  if (instrumentKeys.length === 0) return new Map();
+
   const accessToken = await getAccessToken();
   const requestKeyLookup = buildKeyLookup(instrumentKeys);
-
-  const url = `${BASE_URL_V3}/market-quote/ohlc?instrument_key=${instrumentKeys
-    .map((k) => encodeURIComponent(k))
-    .join(',')}&interval=${interval}`;
-
-  const response = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new UpstoxError(
-      `OHLC fetch failed: ${response.status} - ${errorText}`,
-      response.status
-    );
-  }
-
-  const json = await response.json();
   const result = new Map<string, OHLC>();
 
-  if (json.data) {
-    for (const [responseKey, value] of Object.entries(json.data)) {
-      const data = value as OHLCResponseValue;
-      const ohlc = data.live_ohlc || data.prev_ohlc;
-      if (ohlc) {
-        const ohlcObj = {
-          open: ohlc.open,
-          high: ohlc.high,
-          low: ohlc.low,
-          close: ohlc.close,
-          volume: ohlc.volume,
-          ts: ohlc.ts,
-        };
+  const batches = chunkArray(instrumentKeys, BATCH_SIZE);
 
-        const normalizedKey = responseKey.replace(/:/g, '|');
-        if (data.instrument_token) {
-          result.set(data.instrument_token, ohlcObj);
+  await Promise.all(
+    batches.map(async (batch) => {
+      const url = `${BASE_URL_V3}/market-quote/ohlc?instrument_key=${batch
+        .map((k) => encodeURIComponent(k))
+        .join(',')}&interval=${interval}`;
+
+      try {
+        const response = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[Upstox] Batch OHLC fetch failed: ${response.status} - ${errorText}`);
+          return;
         }
-        const lookupByResponse = requestKeyLookup.get(responseKey);
-        if (lookupByResponse) {
-          result.set(lookupByResponse, ohlcObj);
+
+        const json = await response.json();
+
+        if (json.data) {
+          for (const [responseKey, value] of Object.entries(json.data)) {
+            const data = value as OHLCResponseValue;
+            const ohlc = data.live_ohlc || data.prev_ohlc;
+            if (ohlc) {
+              const ohlcObj = {
+                open: ohlc.open,
+                high: ohlc.high,
+                low: ohlc.low,
+                close: ohlc.close,
+                volume: ohlc.volume,
+                ts: ohlc.ts,
+              };
+
+              const normalizedKey = responseKey.replace(/:/g, '|');
+              if (data.instrument_token) {
+                result.set(data.instrument_token, ohlcObj);
+              }
+              const lookupByResponse = requestKeyLookup.get(responseKey);
+              if (lookupByResponse) {
+                result.set(lookupByResponse, ohlcObj);
+              }
+              const lookupByNormalized = requestKeyLookup.get(normalizedKey);
+              if (lookupByNormalized) {
+                result.set(lookupByNormalized, ohlcObj);
+              }
+              result.set(normalizedKey, ohlcObj);
+              result.set(responseKey, ohlcObj);
+            }
+          }
         }
-        const lookupByNormalized = requestKeyLookup.get(normalizedKey);
-        if (lookupByNormalized) {
-          result.set(lookupByNormalized, ohlcObj);
-        }
-        result.set(normalizedKey, ohlcObj);
-        result.set(responseKey, ohlcObj);
+      } catch (error) {
+        console.error('[Upstox] Batch OHLC fetch error:', error);
       }
-    }
-  }
+    })
+  );
 
   return result;
 }
+
 
 // ============================================================================
 // Index Quotes
