@@ -193,24 +193,34 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
   }, [lastRefreshed]);
 
   // Fetch intraday sparklines
+  const symbolsList = useMemo(() => {
+    return holdings.map(h => h.symbol).filter(Boolean).sort().join(',');
+  }, [holdings]);
+
   useEffect(() => {
     let isMounted = true;
     async function loadSparklines() {
       try {
-        const res = await fetch('/api/live/sparklines');
+        const url = symbolsList
+          ? `/api/live/sparklines?symbols=${encodeURIComponent(symbolsList)}`
+          : '/api/live/sparklines';
+        const res = await fetch(url);
         if (!res.ok) return;
         const json = await res.json();
         if (json?.sparklines && isMounted) {
-          setSparklines(json.sparklines);
+          setSparklines(prev => ({ ...prev, ...json.sparklines }));
         }
       } catch (err) {
         // Silent fallback
       }
     }
 
-    loadSparklines();
+    if (holdings.length > 0) {
+      loadSparklines();
+    }
+
     // Only periodically poll sparklines during market hours
-    if (isMarketOpen) {
+    if (isMarketOpen && holdings.length > 0) {
       const timer = setInterval(loadSparklines, 120_000);
       return () => {
         isMounted = false;
@@ -220,7 +230,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
     return () => {
       isMounted = false;
     };
-  }, [isMarketOpen]);
+  }, [isMarketOpen, symbolsList, holdings.length]);
 
   // Update sparklines in-memory with latest price tick
   useEffect(() => {
@@ -230,16 +240,13 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
       const next = { ...prev };
       for (const h of holdings) {
         if (!h.currentPrice) continue;
-        const pts = next[h.symbol] || (h.dayOpen ? [h.dayOpen, h.dayLow || h.currentPrice, h.dayHigh || h.currentPrice] : []);
-        if (pts.length > 0) {
+        const pts = next[h.symbol];
+        if (pts && pts.length > 0) {
           const last = pts[pts.length - 1];
           if (Math.abs(last - h.currentPrice) > 0.01) {
             next[h.symbol] = [...pts.slice(-24), h.currentPrice];
             changed = true;
           }
-        } else {
-          next[h.symbol] = [h.dayOpen || h.previousClose || h.currentPrice, h.currentPrice];
-          changed = true;
         }
       }
       return changed ? next : prev;
@@ -454,8 +461,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 const open = stock.dayOpen || prevClose;
                 const rangeSpan = Math.max(0.01, high - low);
                 const currentPosPct = Math.max(0, Math.min(100, ((price - low) / rangeSpan) * 100));
-
-                const sparkPoints = sparklines[stock.symbol] || (open ? [open, low, high, price] : [price, price]);
+                const sparkPoints = sparklines[stock.symbol];
 
                 return (
                   <tr
@@ -497,7 +503,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                           data={sparkPoints}
                           width={88}
                           height={24}
-                          trendPositive={price >= open}
+                          trendPositive={isDayPositive}
                           uniqueId={`spark-${stock.symbol}`}
                         />
                       </div>

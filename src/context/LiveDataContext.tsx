@@ -244,7 +244,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         
         const originalInvested = holding.invested;
         
-        const totalPnl = currentValue - originalInvested;
+        const holdingTotalPnl = currentValue - originalInvested;
+        const holdingTotalPnlPercent = originalInvested > 0 ? (holdingTotalPnl / originalInvested) * 100 : 0;
         const dayHigh = holding.dayHigh ? Math.max(holding.dayHigh, ltp) : ltp;
         const dayLow = holding.dayLow ? Math.min(holding.dayLow, ltp) : ltp;
         const recoveryFromLowPct = dayLow > 0 ? ((ltp - dayLow) / dayLow) * 100 : 0;
@@ -263,8 +264,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
           dayChange: dayChange,
           dayChangePercent: dayChangePercent,
           currentValue: currentValue,
-          totalPnl: totalPnl,
-          totalPnlPercent: totalPnlPercent,
+          totalPnl: holdingTotalPnl,
+          totalPnlPercent: holdingTotalPnlPercent,
           indicativePrice: update.iep ?? holding.indicativePrice,
           dayHigh,
           dayLow,

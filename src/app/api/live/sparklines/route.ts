@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/upstox/auth';
 import { getInstrumentKeys } from '@/lib/instrument-service';
 import { computePortfolioState } from '@/lib/finance/recalculation';
-import { isMarketOpenAsync } from '@/lib/marketHours';
 import { format, subDays } from 'date-fns';
 import { istDayOfWeek } from '@/lib/tz';
 import { toDateStr } from '@/lib/screener/dates';
@@ -25,66 +24,49 @@ const CACHE_TTL_MS = 2 * 60 * 1000;
 async function fetchCandlesForInstrument(
   instrumentKey: string,
   token: string,
-  isLive: boolean,
-  lastTradingDateStr: string
+  previousTradingDateStr: string
 ): Promise<number[]> {
   try {
     const encodedKey = encodeURIComponent(instrumentKey);
-    let url: string;
-
-    if (isLive) {
-      url = `https://api.upstox.com/v3/historical-candle/intraday/${encodedKey}/minutes/5`;
-    } else {
-      url = `https://api.upstox.com/v3/historical-candle/${encodedKey}/minutes/5/${lastTradingDateStr}/${lastTradingDateStr}`;
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
+    // 1. Always attempt today's intraday 5-min candles first.
+    // Upstox serves today's session candles on /intraday during and after market hours until midnight.
+    const intradayUrl = `https://api.upstox.com/v3/historical-candle/intraday/${encodedKey}/minutes/5`;
+    const res = await fetch(intradayUrl, {
+      headers,
       next: { revalidate: 120 },
     });
 
-    if (!res.ok) {
-      // If live intraday had no candles (e.g. early morning before open), fallback to last trading day
-      if (isLive) {
-        const fallbackUrl = `https://api.upstox.com/v3/historical-candle/${encodedKey}/minutes/5/${lastTradingDateStr}/${lastTradingDateStr}`;
-        const fallbackRes = await fetch(fallbackUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        });
-        if (fallbackRes.ok) {
-          const fallbackJson = await fallbackRes.json();
-          const fallbackCandles = fallbackJson?.data?.candles || [];
-          return processCandles(fallbackCandles);
-        }
+    if (res.ok) {
+      const json = await res.json();
+      const candles = json?.data?.candles || [];
+      if (candles.length > 0) {
+        return processCandles(candles);
       }
-      return [];
     }
 
-    const json = await res.json();
-    const candles = json?.data?.candles || [];
+    // 2. Fallback to previous completed trading day (e.g. weekends, holidays, pre-market < 9:15 AM)
+    const fallbackUrl = `https://api.upstox.com/v3/historical-candle/${encodedKey}/minutes/5/${previousTradingDateStr}/${previousTradingDateStr}`;
+    const fallbackRes = await fetch(fallbackUrl, {
+      headers,
+      next: { revalidate: 300 },
+    });
 
-    if (candles.length === 0 && isLive) {
-      // Empty candles for today yet, fallback to last trading day
-      const fallbackUrl = `https://api.upstox.com/v3/historical-candle/${encodedKey}/minutes/5/${lastTradingDateStr}/${lastTradingDateStr}`;
-      const fallbackRes = await fetch(fallbackUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
-      });
-      if (fallbackRes.ok) {
-        const fallbackJson = await fallbackRes.json();
-        const fallbackCandles = fallbackJson?.data?.candles || [];
+    if (fallbackRes.ok) {
+      const fallbackJson = await fallbackRes.json();
+      const fallbackCandles = fallbackJson?.data?.candles || [];
+      if (fallbackCandles.length > 0) {
         return processCandles(fallbackCandles);
       }
     }
 
-    return processCandles(candles);
+    return [];
   } catch (err) {
     sparklineLogger.warn(`Failed to fetch candles for ${instrumentKey}:`, err);
     return [];
@@ -148,8 +130,8 @@ async function mapConcurrent<T, R>(
   return results;
 }
 
-async function getLastTradingDate(): Promise<string> {
-  let d = new Date();
+async function getPreviousTradingDate(): Promise<string> {
+  let d = subDays(new Date(), 1);
   // If weekend or holiday, step back
   for (let i = 0; i < 10; i++) {
     const day = istDayOfWeek(d);
@@ -190,10 +172,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ status: 'success', sparklines: {} });
     }
 
-    const token = await getAccessToken();
+    const token = await getAccessToken().catch(() => '');
     const instrumentKeyMap = await getInstrumentKeys(symbols);
-    const isMarketOpen = await isMarketOpenAsync();
-    const lastTradingDateStr = await getLastTradingDate();
+    const previousTradingDateStr = await getPreviousTradingDate();
 
     const sparklinesMap: Record<string, number[]> = {};
 
@@ -201,8 +182,8 @@ export async function GET(request: NextRequest) {
       .map(sym => ({ symbol: sym, key: instrumentKeyMap.get(sym) }))
       .filter((item): item is { symbol: string; key: string } => !!item.key);
 
-    await mapConcurrent(itemsToFetch, 5, async ({ symbol, key }) => {
-      const points = await fetchCandlesForInstrument(key, token, isMarketOpen, lastTradingDateStr);
+    await mapConcurrent(itemsToFetch, 8, async ({ symbol, key }) => {
+      const points = await fetchCandlesForInstrument(key, token, previousTradingDateStr);
       if (points.length > 0) {
         sparklinesMap[symbol] = points;
       }
