@@ -26,14 +26,6 @@ const itemVariants = {
   }),
 };
 
-function formatPrice(price: number): string {
-  if (!price || price <= 0) return '-';
-  return `₹${price.toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
 function formatRangeBound(val: number): string {
   if (!val || val <= 0) return '-';
   if (val >= 1000) return `₹${val.toFixed(0)}`;
@@ -124,7 +116,7 @@ function DynamicMoverRow({
   return (
     <motion.div
       layout
-      className="flex items-center justify-between py-2 px-2 sm:px-3 rounded-xl hover:bg-white/[0.03] transition-colors"
+      className="grid grid-cols-[105px_1fr_85px] sm:grid-cols-[135px_1fr_95px] items-center gap-2 sm:gap-4 py-2.5 px-2 sm:px-3 rounded-xl hover:bg-white/[0.03] transition-colors"
       variants={itemVariants}
       initial="hidden"
       animate="visible"
@@ -132,12 +124,12 @@ function DynamicMoverRow({
       custom={index}
       title={
         stock.marketCap
-          ? `${stock.symbol} • Mcap: ₹${Math.round(stock.marketCap).toLocaleString('en-IN')} Cr\nLTP: ₹${price.toFixed(2)} | Low: ₹${low.toFixed(2)} | High: ₹${high.toFixed(2)}`
-          : undefined
+          ? `${stock.symbol} • Mcap: ₹${Math.round(stock.marketCap).toLocaleString('en-IN')} Cr\nLTP: ₹${price.toFixed(2)} | Low: ₹${low.toFixed(2)} | High: ₹${high.toFixed(2)} | Day Change: ${isDayPositive ? '+' : ''}${stock.changePercent.toFixed(2)}%`
+          : `LTP: ₹${price.toFixed(2)} | Low: ₹${low.toFixed(2)} | High: ₹${high.toFixed(2)}`
       }
     >
-      {/* Left: Rank & Stock Symbol */}
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      {/* Column 1: Rank, Stock Symbol & Day Change % */}
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         <span className="text-xs font-mono font-medium text-gray-500 w-4 sm:w-5 text-right shrink-0">
           {index + 1}
         </span>
@@ -145,46 +137,8 @@ function DynamicMoverRow({
           <span className="font-semibold text-sm text-gray-200 truncate tracking-tight">
             {stock.symbol}
           </span>
-          {/* Mobile-only secondary line: LTP */}
-          <span className="sm:hidden text-[10px] font-mono text-gray-400">
-            {formatPrice(stock.lastPrice)}
-          </span>
-        </div>
-      </div>
-
-      {/* Center: Day Range Bar (visible on sm+) */}
-      <div className="hidden sm:flex flex-col gap-1 w-24 md:w-32 shrink-0 px-2">
-        <div className="w-full h-1.5 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              isDayPositive
-                ? 'bg-gradient-to-r from-emerald-600/70 to-emerald-400'
-                : 'bg-gradient-to-r from-rose-600/70 to-rose-400'
-            }`}
-            style={{ width: `${currentPosPct}%` }}
-          />
-          <div
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full border border-slate-900 shadow-sm ${
-              isDayPositive ? 'bg-emerald-400 shadow-emerald-500/50' : 'bg-rose-400 shadow-rose-500/50'
-            }`}
-            style={{ left: `${currentPosPct}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-[9px] text-gray-500 font-mono leading-none">
-          <span>{formatRangeBound(low)}</span>
-          <span>{formatRangeBound(high)}</span>
-        </div>
-      </div>
-
-      {/* Right: LTP & Day Change % + Intraday Metric Chip */}
-      <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
-        {/* Desktop LTP & Change */}
-        <div className="hidden sm:flex flex-col items-end">
-          <span className="text-xs font-mono text-gray-300 tabular-nums font-semibold">
-            {formatPrice(stock.lastPrice)}
-          </span>
           <span
-            className={`text-[10px] font-mono font-medium flex items-center gap-0.5 ${
+            className={`text-[10px] font-mono font-medium leading-tight flex items-center gap-0.5 ${
               isDayPositive ? 'text-emerald-400' : 'text-rose-400'
             }`}
           >
@@ -196,13 +150,40 @@ function DynamicMoverRow({
             {stock.changePercent.toFixed(2)}%
           </span>
         </div>
+      </div>
 
-        {/* Dynamic Metric Chip */}
-        <div className="min-w-[76px] sm:min-w-[85px] flex justify-end">
-          {isRecovery
-            ? getRecoveryChip(stock.recoveryFromLowPct)
-            : getFallFromHighChip(stock.fallFromHighPct)}
+      {/* Column 2: Day Range Bar (Uniformly aligned across all rows) */}
+      <div
+        className="flex flex-col gap-1 w-full max-w-[200px] sm:max-w-[260px] mx-auto px-1 sm:px-2"
+        title={`LTP: ₹${price.toFixed(2)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(2)} | High: ₹${high.toFixed(2)}`}
+      >
+        <div className="w-full h-1.5 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
+          <div
+            className={`h-full rounded-full transition-all duration-300 ${
+              isDayPositive
+                ? 'bg-gradient-to-r from-emerald-600/70 to-emerald-400'
+                : 'bg-gradient-to-r from-rose-600/70 to-rose-400'
+            }`}
+            style={{ width: `${currentPosPct}%` }}
+          />
+          <div
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+              isDayPositive ? 'bg-emerald-400 shadow-emerald-500/50' : 'bg-rose-400 shadow-rose-500/50'
+            }`}
+            style={{ left: `${currentPosPct}%` }}
+          />
         </div>
+        <div className="flex justify-between text-[10px] text-gray-400 font-mono leading-none px-0.5">
+          <span>{formatRangeBound(low)}</span>
+          <span>{formatRangeBound(high)}</span>
+        </div>
+      </div>
+
+      {/* Column 3: Dynamic Metric Chip */}
+      <div className="flex justify-end shrink-0">
+        {isRecovery
+          ? getRecoveryChip(stock.recoveryFromLowPct)
+          : getFallFromHighChip(stock.fallFromHighPct)}
       </div>
     </motion.div>
   );
@@ -231,29 +212,28 @@ function SkeletonCard({
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-600 px-2 sm:px-3 pb-2 border-b border-white/5">
-        <div className="flex items-center gap-2 sm:gap-3">
+      <div className="grid grid-cols-[105px_1fr_85px] sm:grid-cols-[135px_1fr_95px] items-center gap-2 sm:gap-4 text-[11px] font-semibold uppercase tracking-wider text-gray-600 px-2 sm:px-3 pb-2 border-b border-white/5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           <span className="w-4 sm:w-5 text-right">#</span>
           <span>Stock</span>
         </div>
-        <div className="flex items-center gap-2.5 sm:gap-4">
-          <span className="hidden sm:inline text-right">Range</span>
-          <span className="hidden sm:inline text-right">Price</span>
-          <span className="w-[76px] sm:w-[85px] text-right">
-            {isRecovery ? 'From Low' : 'From High'}
-          </span>
-        </div>
+        <span className="text-center">Day Range</span>
+        <span className="text-right">
+          {isRecovery ? 'From Low' : 'From High'}
+        </span>
       </div>
       <div className="divide-y divide-white/[0.03] mt-1">
         {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex items-center justify-between py-2 px-2 sm:px-3">
-            <div className="flex items-center gap-2 sm:gap-3">
+          <div
+            key={i}
+            className="grid grid-cols-[105px_1fr_85px] sm:grid-cols-[135px_1fr_95px] items-center gap-2 sm:gap-4 py-2.5 px-2 sm:px-3"
+          >
+            <div className="flex items-center gap-2 sm:gap-2.5">
               <div className="w-4 sm:w-5 h-3 bg-slate-800/60 rounded" />
-              <div className="w-20 h-4 bg-slate-800/60 rounded" />
+              <div className="w-16 h-4 bg-slate-800/60 rounded" />
             </div>
-            <div className="flex items-center gap-2.5 sm:gap-4">
-              <div className="hidden sm:block w-24 h-3 bg-slate-800/40 rounded" />
-              <div className="hidden sm:block w-14 h-3.5 bg-slate-800/40 rounded" />
+            <div className="w-full max-w-[200px] sm:max-w-[260px] mx-auto h-3 bg-slate-800/40 rounded" />
+            <div className="flex justify-end">
               <div className="w-16 h-6 bg-slate-800/60 rounded-md" />
             </div>
           </div>
@@ -311,16 +291,13 @@ export default memo(function IntradayDynamicsMovers({
             </span>
           </div>
         </div>
-        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-2 sm:px-3 pb-2 border-b border-white/5">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="grid grid-cols-[105px_1fr_85px] sm:grid-cols-[135px_1fr_95px] items-center gap-2 sm:gap-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-2 sm:px-3 pb-2 border-b border-white/5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <span className="w-4 sm:w-5 text-right">#</span>
             <span>Stock</span>
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-4">
-            <span className="hidden sm:inline text-right text-gray-500">Day Range</span>
-            <span className="hidden sm:inline text-right">LTP / Chg</span>
-            <span className="w-[76px] sm:w-[85px] text-right">From Low</span>
-          </div>
+          <span className="text-center text-gray-500">Day Range</span>
+          <span className="text-right">From Low</span>
         </div>
         <div className="divide-y divide-white/[0.03] mt-1">
           <AnimatePresence mode="popLayout">
@@ -352,16 +329,13 @@ export default memo(function IntradayDynamicsMovers({
             </span>
           </div>
         </div>
-        <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-2 sm:px-3 pb-2 border-b border-white/5">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="grid grid-cols-[105px_1fr_85px] sm:grid-cols-[135px_1fr_95px] items-center gap-2 sm:gap-4 text-[11px] font-semibold uppercase tracking-wider text-gray-500 px-2 sm:px-3 pb-2 border-b border-white/5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <span className="w-4 sm:w-5 text-right">#</span>
             <span>Stock</span>
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-4">
-            <span className="hidden sm:inline text-right text-gray-500">Day Range</span>
-            <span className="hidden sm:inline text-right">LTP / Chg</span>
-            <span className="w-[76px] sm:w-[85px] text-right">From High</span>
-          </div>
+          <span className="text-center text-gray-500">Day Range</span>
+          <span className="text-right">From High</span>
         </div>
         <div className="divide-y divide-white/[0.03] mt-1">
           <AnimatePresence mode="popLayout">
