@@ -18,7 +18,7 @@ export function isAndroid(): boolean {
   return (
     isCapacitor() &&
     typeof window !== 'undefined' &&
-    !!(window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'android'
+    (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor?.getPlatform?.() === 'android'
   );
 }
 
