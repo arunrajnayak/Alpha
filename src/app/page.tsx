@@ -89,10 +89,12 @@ export default function LivePage() {
 
       const element = document.getElementById('live-dashboard-content');
       const marketOverview = document.getElementById('market-overview');
+      const intradayDynamics = document.getElementById('intraday-dynamics');
       if (element) {
         const { toPng } = await import('html-to-image');
-        // Hide market-overview via display:none so it's excluded from layout/height
+        // Hide market-overview and intraday dynamics via display:none so they are excluded from layout/height
         if (marketOverview) marketOverview.style.display = 'none';
+        if (intradayDynamics) intradayDynamics.style.display = 'none';
         const contentHeight = element.scrollHeight;
         const contentWidth = element.scrollWidth;
         const dataUrl = await toPng(element, {
@@ -103,13 +105,17 @@ export default function LivePage() {
           width: contentWidth,
           backgroundColor: '#0f172a',
           filter: (node) => {
-            if (node instanceof HTMLElement && node.id === 'market-overview') {
+            if (
+              node instanceof HTMLElement &&
+              (node.id === 'market-overview' || node.id === 'intraday-dynamics')
+            ) {
               return false;
             }
             return true;
           },
         });
         if (marketOverview) marketOverview.style.display = '';
+        if (intradayDynamics) intradayDynamics.style.display = '';
 
         const link = document.createElement('a');
         link.download = `market-dashboard-${new Date().toISOString().split('T')[0]}.png`;
@@ -119,6 +125,10 @@ export default function LivePage() {
     } catch (err) {
       console.error('Failed to capture snapshot:', err);
     } finally {
+      const marketOverview = document.getElementById('market-overview');
+      const intradayDynamics = document.getElementById('intraday-dynamics');
+      if (marketOverview) marketOverview.style.display = '';
+      if (intradayDynamics) intradayDynamics.style.display = '';
       setDownloading(false);
     }
   }, []);
@@ -244,6 +254,7 @@ export default function LivePage() {
         {/* Intraday Dynamics Table */}
         {data.allHoldings && data.allHoldings.length > 0 && (
           <LiveStockDynamicsTable
+            id="intraday-dynamics"
             holdings={data.allHoldings}
             lastRefreshed={lastRefreshed}
             marketStatus={data.marketStatus}
@@ -292,6 +303,9 @@ export default function LivePage() {
         .snapshot-capturing * {
           animation-play-state: paused !important;
           transition-duration: 0s !important;
+        }
+        .snapshot-capturing #intraday-dynamics {
+          display: none !important;
         }
         .snapshot-capturing .snapshot-hide {
           opacity: 0 !important;

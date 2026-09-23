@@ -22,6 +22,7 @@ import AnimatedNumber from './AnimatedNumber';
 import type { Variants } from 'framer-motion';
 
 interface LiveStockDynamicsTableProps {
+  id?: string;
   holdings: LiveStockData[];
   lastRefreshed?: Date | null;
   marketStatus?: MarketStatus;
@@ -152,6 +153,7 @@ function getAthDistanceChip(distAth: number, ath?: number) {
 }
 
 const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
+  id = 'intraday-dynamics',
   holdings,
   lastRefreshed,
   marketStatus = 'CLOSED',
@@ -297,6 +299,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
 
   return (
     <motion.div
+      id={id}
       variants={itemVariants}
       data-motion-section
       className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col"
