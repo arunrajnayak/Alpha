@@ -9,6 +9,66 @@
   }
 }
 
+/* ===== Mobile / Capacitor Android — Safe Area & UX ===== */
+
+/*
+ * Expose env() safe-area insets as CSS custom properties so any component
+ * can use var(--sat) / var(--sab) / var(--sal) / var(--sar) without
+ * remembering the env() syntax.
+ */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+/*
+ * Android Material Design minimum touch target: 48 × 48 dp.
+ * We use min-height/min-width instead of height so flexible layouts
+ * still work on desktop.
+ */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  a,
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/*
+ * Prevent elastic over-scroll on Android WebView from triggering
+ * unintended pull-to-refresh or navigation gestures.
+ */
+body {
+  overscroll-behavior: none;
+}
+
+/*
+ * On Capacitor Android the WebView renders edge-to-edge; the bottom
+ * safe area is handled dynamically via paddingBottom on the scroll container
+ * (see layout.tsx). This rule makes sure interactive drawers / modals
+ * also respect the bottom inset.
+ */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Remove tap gray box on Android WebView */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth touch scrolling for wide tables and horizontal containers on mobile */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
 /* ===== Modern Vibrant Color Palette (Professional) ===== */
 :root {
   /* Primary Gradient Colors */

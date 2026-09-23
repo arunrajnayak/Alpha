@@ -4,18 +4,46 @@ const config: CapacitorConfig = {
   appId: 'com.arunrajnayak.alpha',
   appName: 'Alpha Portfolio',
   webDir: 'out',
-  
-  
+
   android: {
     allowMixedContent: false,
-    backgroundColor: '#121212', // Dark theme background
+    backgroundColor: '#0a0f1a', // Dark theme primary background
+    // Resize webview when keyboard opens (prevents content being hidden behind keyboard)
+    webContentsDebuggingEnabled: false,
   },
-  
+
+  server: {
+    ...(process.env.CAPACITOR_SERVER_URL && {
+      url: process.env.CAPACITOR_SERVER_URL,
+      cleartext: process.env.CAPACITOR_SERVER_URL.startsWith('http://'),
+    }),
+  },
+
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
-      backgroundColor: '#121212',
+      launchShowDuration: 1500,
+      launchFadeOutDuration: 500,
+      backgroundColor: '#0a0f1a',
+      androidSplashResourceName: 'splash',
       showSpinner: false,
+      // Keep splash on top until app is ready
+      launchAutoHide: true,
+    },
+    Keyboard: {
+      // Resize body so content stays visible above keyboard on Android
+      resize: 'body',
+      style: 'dark',
+      resizeOnFullScreen: true,
+    },
+    StatusBar: {
+      // Match the dark nav background
+      backgroundColor: '#0a0f1a',
+      style: 'dark',
+      overlaysWebView: false,
+    },
+    // Native HTTP for Capacitor (bypasses CORS issues in WebView)
+    CapacitorHttp: {
+      enabled: true,
     },
   },
 };

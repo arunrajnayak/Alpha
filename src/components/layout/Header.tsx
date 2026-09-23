@@ -10,6 +10,7 @@ import { useRecompute } from '@/context/RecomputeContext';
 import { useLiveData } from '@/context/LiveDataContext';
 import { CircularProgress } from '@mui/material';
 import Image from 'next/image';
+import { haptic } from '@/lib/mobile';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faChartLine,
@@ -151,7 +152,10 @@ export default function Header() {
           <div className="flex-shrink-0 flex items-center gap-3">
              {/* Mobile Menu Button */}
              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                onClick={() => {
+                  haptic('light');
+                  setIsMobileMenuOpen(!isMobileMenuOpen);
+                }}
                 className="md:hidden p-2 text-gray-400 hover:text-white transition-colors"
                 aria-label="Toggle menu"
               >
@@ -225,7 +229,10 @@ export default function Header() {
 
             {/* Privacy Mode Toggle */}
             <button
-              onClick={togglePrivacy}
+              onClick={() => {
+                haptic('light');
+                togglePrivacy();
+              }}
               className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
                 privacyMode
                   ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
@@ -297,7 +304,10 @@ export default function Header() {
                                 ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]' 
                                 : 'text-gray-400 hover:bg-white/5 hover:text-white'
                             }`}
-                            onClick={() => setIsMobileMenuOpen(false)}
+                            onClick={() => {
+                              haptic('light');
+                              setIsMobileMenuOpen(false);
+                            }}
                         >
                             {item.path === '/' ? (
                                 <div className={`relative flex items-center justify-center w-5 h-5 ${isActive ? 'scale-110' : ''}`}>
@@ -317,12 +327,15 @@ export default function Header() {
             </div>
             
             {/* Drawer Footer */}
-            <div className="p-4 border-t border-white/5 bg-black/20 flex items-center justify-between">
+            <div className="p-4 border-t border-white/5 bg-black/20 flex items-center justify-between safe-bottom">
                 <div className="text-xs text-gray-600">
                     &copy; 2026 Alpha Portfolio
                 </div>
                 <button
-                  onClick={togglePrivacy}
+                  onClick={() => {
+                    haptic('light');
+                    togglePrivacy();
+                  }}
                   className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
                     privacyMode
                       ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
