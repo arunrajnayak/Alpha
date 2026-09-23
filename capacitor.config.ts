@@ -13,10 +13,9 @@ const config: CapacitorConfig = {
   },
 
   server: {
-    ...(process.env.CAPACITOR_SERVER_URL && {
-      url: process.env.CAPACITOR_SERVER_URL,
-      cleartext: process.env.CAPACITOR_SERVER_URL.startsWith('http://'),
-    }),
+    url: process.env.CAPACITOR_SERVER_URL || 'https://alpha-velocity.vercel.app',
+    cleartext: (process.env.CAPACITOR_SERVER_URL || '').startsWith('http://'),
+    androidScheme: 'https',
   },
 
   plugins: {
