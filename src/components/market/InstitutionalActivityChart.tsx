@@ -303,110 +303,94 @@ export default function InstitutionalActivityChart({
             No institutional trading activity available for this period.
           </div>
         ) : (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${interval}-${showNetOverall ? 'net' : 'split'}`}
-              initial={{ opacity: 0, scale: 0.985 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.985 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="w-full h-full"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={points}
-                  margin={{ top: 15, right: 10, left: -15, bottom: 5 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255, 255, 255, 0.08)"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="displayDate"
-                    tickLine={false}
-                    axisLine={{ stroke: 'rgba(255, 255, 255, 0.1)' }}
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    minTickGap={20}
-                  />
-                  <YAxis
-                    domain={yDomain}
-                    ticks={yTicks}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: '#64748b', fontSize: 11 }}
-                    tickFormatter={formatYAxisTick}
-                  />
-                  <ReferenceLine
-                    y={0}
-                    stroke="rgba(255, 255, 255, 0.25)"
-                    strokeDasharray="3 3"
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
-                    content={<CustomTooltip />}
-                  />
+          <div className="w-full h-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={points}
+                margin={{ top: 15, right: 10, left: -15, bottom: 5 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(255, 255, 255, 0.08)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="displayDate"
+                  tickLine={false}
+                  axisLine={{ stroke: 'rgba(255, 255, 255, 0.1)' }}
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  minTickGap={20}
+                />
+                <YAxis
+                  domain={yDomain}
+                  ticks={yTicks}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tickFormatter={formatYAxisTick}
+                />
+                <ReferenceLine
+                  y={0}
+                  stroke="rgba(255, 255, 255, 0.25)"
+                  strokeDasharray="3 3"
+                />
+                <Tooltip
+                  cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
+                  content={<CustomTooltip />}
+                />
 
-                  {!showNetOverall ? (
-                    <>
-                      <Bar
-                        dataKey="fiiNet"
-                        name="Net FII Activity"
-                        fill="#3B82F6"
-                        radius={[3, 3, 3, 3]}
-                        maxBarSize={16}
-                        isAnimationActive={true}
-                        animationDuration={600}
-                        animationEasing="ease-out"
-                      />
-                      <Bar
-                        dataKey="diiNet"
-                        name="Net DII Activity"
-                        fill="#F59E0B"
-                        radius={[3, 3, 3, 3]}
-                        maxBarSize={16}
-                        isAnimationActive={true}
-                        animationDuration={600}
-                        animationEasing="ease-out"
-                      />
-                    </>
-                  ) : (
+                {!showNetOverall ? (
+                  <>
                     <Bar
-                      dataKey="netOverall"
-                      name="Net Overall Activity"
-                      radius={[4, 4, 4, 4]}
-                      maxBarSize={22}
+                      dataKey="fiiNet"
+                      name="Net FII Activity"
+                      fill="#3B82F6"
+                      radius={[3, 3, 3, 3]}
+                      maxBarSize={16}
                       isAnimationActive={true}
-                      animationDuration={600}
+                      animationDuration={250}
                       animationEasing="ease-out"
-                    >
-                      {points.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.netOverall >= 0 ? '#10B981' : '#EF4444'}
-                        />
-                      ))}
-                    </Bar>
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
-            </motion.div>
-          </AnimatePresence>
+                    />
+                    <Bar
+                      dataKey="diiNet"
+                      name="Net DII Activity"
+                      fill="#F59E0B"
+                      radius={[3, 3, 3, 3]}
+                      maxBarSize={16}
+                      isAnimationActive={true}
+                      animationDuration={250}
+                      animationEasing="ease-out"
+                    />
+                  </>
+                ) : (
+                  <Bar
+                    dataKey="netOverall"
+                    name="Net Overall Activity"
+                    radius={[4, 4, 4, 4]}
+                    maxBarSize={22}
+                    isAnimationActive={true}
+                    animationDuration={250}
+                    animationEasing="ease-out"
+                  >
+                    {points.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.netOverall >= 0 ? '#10B981' : '#EF4444'}
+                      />
+                    ))}
+                  </Bar>
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 
       {/* Bottom Controls / Legend */}
       <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 pt-3 pb-1 border-t border-white/5">
-        <AnimatePresence mode="wait">
+        <div className="flex items-center gap-4 sm:gap-6 min-h-[20px]">
           {!showNetOverall ? (
-            <motion.div
-              key="split-legend"
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.18 }}
-              className="flex items-center gap-4 sm:gap-6"
-            >
+            <div className="flex items-center gap-4 sm:gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-[#3B82F6]" />
                 <span className="text-xs text-gray-300 font-medium">
@@ -419,16 +403,9 @@ export default function InstitutionalActivityChart({
                   Net DII Activity
                 </span>
               </div>
-            </motion.div>
+            </div>
           ) : (
-            <motion.div
-              key="net-legend"
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              transition={{ duration: 0.18 }}
-              className="flex items-center gap-4"
-            >
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-sm bg-[#10B981]" />
                 <span className="text-xs text-gray-300 font-medium">
@@ -441,9 +418,9 @@ export default function InstitutionalActivityChart({
                   Net Outflow (-ve)
                 </span>
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
 
         {/* Net Overall Activity Toggle Switch */}
         <div className="flex items-center gap-2.5 pl-2 sm:pl-4 sm:border-l sm:border-white/10">
@@ -452,14 +429,14 @@ export default function InstitutionalActivityChart({
             role="switch"
             aria-checked={showNetOverall}
             onClick={() => setShowNetOverall((prev) => !prev)}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-100 ease-in-out focus:outline-none ${
               showNetOverall ? 'bg-indigo-600' : 'bg-slate-700'
             }`}
           >
             <motion.span
               layout
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 ${
+              transition={{ type: 'spring', stiffness: 900, damping: 35 }}
+              className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-md ring-0 ${
                 showNetOverall ? 'translate-x-4' : 'translate-x-0'
               }`}
             />
