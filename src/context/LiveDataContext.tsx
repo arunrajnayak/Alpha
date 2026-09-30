@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import { getLiveDashboardData, LiveDashboardData, LiveStockData, BreadthByCategory, saveIntradayPnL, getIntradayPnLHistory, IntradayPnLPoint } from '@/app/actions/live';
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
+import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import { logger } from '@/lib/logger';
 
 const liveLogger = logger.scope('LiveData');
@@ -610,8 +611,12 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       return ((targetSeconds - seconds) * 1000) - ms;
     };
 
-    // Use server-provided market status via ref (avoids effect churn)
-    const isMarketCurrentlyOpen = () => marketStatusRef.current === 'OPEN';
+    // Active during regular trading session, pre-open discovery, or market hours
+    const isMarketCurrentlyActive = () =>
+      marketStatusRef.current === 'OPEN' ||
+      marketStatusRef.current === 'PRE_OPEN' ||
+      isMarketOpen() ||
+      isPreOpenSession();
 
     let timeoutId: NodeJS.Timeout;
     let intervalId: NodeJS.Timeout;
@@ -624,14 +629,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         // If not streaming, poll every 10 seconds (for real-time live pulse)
         const pollInterval = isStreaming ? 300000 : 10000; // 5 min vs 10 sec
 
-        if (isMarketCurrentlyOpen()) {
+        if (isMarketCurrentlyActive()) {
           if (!isStreaming) {
             refresh();
           }
         }
 
         intervalId = setInterval(() => {
-          if (isMarketCurrentlyOpen()) {
+          if (isMarketCurrentlyActive()) {
             if (!isStreaming) {
               refresh();
             }
@@ -646,7 +651,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     let indicesIntervalId: NodeJS.Timeout | null = null;
     if (isStreaming) {
       indicesIntervalId = setInterval(() => {
-        if (isMarketCurrentlyOpen()) {
+        if (isMarketCurrentlyActive()) {
           refresh();
         }
       }, 300000); // Every 5 minutes
@@ -658,6 +663,26 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       if (indicesIntervalId) clearInterval(indicesIntervalId);
     };
   }, [refresh, isStreaming, initialized]);
+
+  // Session transition monitor: triggers refresh when transitioning between PRE_OPEN and OPEN
+  useEffect(() => {
+    if (!initialized) return;
+
+    let prevActiveState = isMarketOpen() ? 'OPEN' : isPreOpenSession() ? 'PRE_OPEN' : 'CLOSED';
+
+    const checkTransition = () => {
+      const currentActiveState = isMarketOpen() ? 'OPEN' : isPreOpenSession() ? 'PRE_OPEN' : 'CLOSED';
+      if (currentActiveState !== prevActiveState) {
+        liveLogger.info(`[LiveContext] Session transition detected: ${prevActiveState} -> ${currentActiveState}`);
+        prevActiveState = currentActiveState;
+        setIsMarketHours(currentActiveState === 'OPEN' || currentActiveState === 'PRE_OPEN');
+        refresh();
+      }
+    };
+
+    const timer = setInterval(checkTransition, 3000);
+    return () => clearInterval(timer);
+  }, [initialized, refresh]);
 
   const subscribeToPrices = useCallback((callback: (updates: PriceUpdate[]) => void) => {
     priceSubscribersRef.current.add(callback);

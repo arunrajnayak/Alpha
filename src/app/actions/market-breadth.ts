@@ -382,7 +382,11 @@ function upgradeAthDistributionTo100(oldBuckets?: DistributionBucket[]): Distrib
 export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMarketBreadthData> {
   const now = Date.now();
   if (!forceRefresh && cachedBreadthData && now - breadthCacheTime < BREADTH_CACHE_TTL_MS) {
-    return cachedBreadthData;
+    // If cache was populated during PRE_OPEN but market is now OPEN, bypass to avoid stale state
+    const isNowOpen = isMarketOpen();
+    if (!(cachedBreadthData.marketStatus === 'PRE_OPEN' && isNowOpen)) {
+      return cachedBreadthData;
+    }
   }
 
   // 1. Market Status

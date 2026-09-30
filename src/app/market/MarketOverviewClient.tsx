@@ -97,11 +97,32 @@ export default function MarketOverviewClient({
   const { streamStatus, subscribeToPrices, subscribeToInstruments, initialize, data: liveContextData } = useLiveData();
   useEffect(() => { initialize(); }, [initialize]);
 
-  // Market status: prefer API-driven status, fallback to sync time check
-  const currentMarketStatus = breadthData?.marketStatus || data?.marketStatus || liveContextData?.marketStatus;
-  const isMarketCurrentlyActive = currentMarketStatus
-    ? (currentMarketStatus === 'OPEN' || currentMarketStatus === 'PRE_OPEN')
-    : (isMarketOpen() || isPreOpenSession());
+  // Market status: real-time session resolver combining time checks with API state
+  const resolveMarketStatus = useCallback((): 'OPEN' | 'PRE_OPEN' | 'CLOSED' => {
+    // 1. If regular trading hours (09:15 - 15:40 IST on weekdays), it is definitely OPEN
+    if (isMarketOpen()) return 'OPEN';
+    // 2. If pre-open hours (09:00 - 09:15 IST on weekdays), it is PRE_OPEN
+    if (isPreOpenSession()) return 'PRE_OPEN';
+    // 3. Fallback to API status if provided, but guard against stale PRE_OPEN outside pre-open hours
+    const apiStatus = breadthData?.marketStatus || data?.marketStatus || liveContextData?.marketStatus;
+    if (apiStatus === 'OPEN' || apiStatus === 'PRE_OPEN' || apiStatus === 'CLOSED') {
+      if (apiStatus === 'PRE_OPEN' && !isPreOpenSession()) {
+        return isMarketOpen() ? 'OPEN' : 'CLOSED';
+      }
+      return apiStatus;
+    }
+    return 'CLOSED';
+  }, [breadthData?.marketStatus, data?.marketStatus, liveContextData?.marketStatus]);
+
+  const [currentMarketStatus, setCurrentMarketStatus] = useState<'OPEN' | 'PRE_OPEN' | 'CLOSED'>(resolveMarketStatus);
+
+  useEffect(() => {
+    setCurrentMarketStatus(resolveMarketStatus());
+  }, [resolveMarketStatus]);
+
+  const isMarketCurrentlyActive = currentMarketStatus === 'OPEN' || currentMarketStatus === 'PRE_OPEN';
+  const marketActiveRef = useRef(isMarketCurrentlyActive);
+  useEffect(() => { marketActiveRef.current = isMarketCurrentlyActive; }, [isMarketCurrentlyActive]);
 
   // Refresh timers
   const dataRefreshRef = useRef<NodeJS.Timeout | null>(null);
@@ -314,6 +335,33 @@ export default function MarketOverviewClient({
     return () => clearInterval(timer);
   }, [isMarketCurrentlyActive, loadData]);
 
+  // Monitor market session transitions (e.g. 09:00 PRE_OPEN, 09:15 OPEN, 15:40 CLOSED)
+  // Ensures that transitioning from PRE_OPEN to OPEN happens automatically in real-time
+  // without requiring a manual page refresh.
+  const prevMarketStatusRef = useRef(currentMarketStatus);
+  useEffect(() => {
+    const checkTransition = () => {
+      const nextStatus = resolveMarketStatus();
+      if (nextStatus !== prevMarketStatusRef.current) {
+        const prev = prevMarketStatusRef.current;
+        prevMarketStatusRef.current = nextStatus;
+        marketLogger.info(`[MarketOverview] Session transition detected: ${prev} -> ${nextStatus}`);
+        setCurrentMarketStatus(nextStatus);
+
+        // Transition from PRE_OPEN to OPEN (or session boundary)
+        // Automatically trigger immediate full refresh without user needing to reload!
+        loadBreadth(true);
+        loadData(selectedIndexRef.current, false);
+        loadSummaries(false);
+        loadIntradayBreadth();
+      }
+    };
+
+    // Check every 3 seconds for precise boundary transition
+    const intervalId = setInterval(checkTransition, 3000);
+    return () => clearInterval(intervalId);
+  }, [resolveMarketStatus, loadBreadth, loadData, loadSummaries, loadIntradayBreadth]);
+
   // Keep a ref to indexSummaries to avoid stale closures in applyBatchedUpdates
   const indexSummariesRef = useRef(indexSummaries);
   useEffect(() => {
@@ -518,9 +566,6 @@ export default function MarketOverviewClient({
   const isStreamingRef = useRef(isStreaming);
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
-  // Track API-driven market status in ref for interval callbacks
-  const marketActiveRef = useRef(isMarketCurrentlyActive);
-  useEffect(() => { marketActiveRef.current = isMarketCurrentlyActive; }, [isMarketCurrentlyActive]);
 
   useEffect(() => {
     // Clear any existing interval before creating a new one
