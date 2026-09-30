@@ -25,8 +25,8 @@ const LiveMovers = memo(function LiveMovers({
     itemVariants,
     downloading,
 }: LiveMoversProps) {
-    const validGainers = topGainers.filter(stock => stock.dayChangePercent > 0);
-    const validLosers = topLosers.filter(stock => stock.dayChangePercent < 0);
+    const validGainers = topGainers.filter(stock => stock.dayChangePercent > 0).slice(0, 6);
+    const validLosers = topLosers.filter(stock => stock.dayChangePercent < 0).slice(0, 6);
 
     return (
         <>

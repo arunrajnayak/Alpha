@@ -382,8 +382,8 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       if (runExpensive) {
         const sortedByPercent = [...updatedHoldings].sort((a, b) => b.dayChangePercent - a.dayChangePercent);
         allHoldings = sortedByPercent;
-        topGainers = sortedByPercent.slice(0, 5);
-        topLosers = sortedByPercent.slice(-5).reverse();
+        topGainers = sortedByPercent.slice(0, 6);
+        topLosers = sortedByPercent.slice(-6).reverse();
 
         const sectorGroups = new Map<string, { value: number; count: number; weightedChange: number }>();
         for (const holding of updatedHoldings) {

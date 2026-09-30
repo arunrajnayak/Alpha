@@ -458,8 +458,6 @@ export const INDEX_KEYS = {
   'Nifty Smallcap 250': 'NSE_INDEX|NIFTY SMLCAP 250',
   'Nifty Microcap 250': 'NSE_INDEX|NIFTY MICROCAP250',
   'Nifty 500 Momentum 50': 'NSE_INDEX|Nifty500Momentm50',
-  'Nifty Bank': 'NSE_INDEX|Nifty Bank',
-  'Nifty IT': 'NSE_INDEX|Nifty IT',
   'Nifty Next 50': 'NSE_INDEX|Nifty Next 50',
 } as const;
 

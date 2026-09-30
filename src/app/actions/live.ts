@@ -608,8 +608,8 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
 
   // Sorting for Movers
   const sortedByPercent = [...liveData].sort((a, b) => b.dayChangePercent - a.dayChangePercent);
-  const topGainers = sortedByPercent.slice(0, 5);
-  const topLosers = sortedByPercent.slice(-5).reverse();
+  const topGainers = sortedByPercent.slice(0, 6);
+  const topLosers = sortedByPercent.slice(-6).reverse();
 
   // Calculate Sector Allocations
   const sectorGroups = new Map<string, { value: number; count: number; weightedChange: number }>();

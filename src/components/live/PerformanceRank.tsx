@@ -26,10 +26,17 @@ const PerformanceRank = memo(function PerformanceRank({
     itemVariants,
     downloading,
 }: PerformanceRankProps) {
+    // Exclude Nifty Bank and Nifty IT from Performance Rank
+    const filteredIndices = (indices || []).filter((i) => {
+        const name = i.name.toLowerCase();
+        const symbol = i.symbol.toLowerCase();
+        return name !== 'nifty bank' && name !== 'nifty it' && !symbol.includes('nifty bank') && !symbol.includes('nifty it');
+    });
+
     // Combine portfolio with indices and sort by performance
     const allItems = [
         { name: 'My Portfolio', symbol: 'PORTFOLIO', percentChange: dayGainPercent, isPortfolio: true },
-        ...(indices?.map(i => ({ ...i, isPortfolio: false })) || [])
+        ...filteredIndices.map(i => ({ ...i, isPortfolio: false }))
     ];
     allItems.sort((a, b) => b.percentChange - a.percentChange);
 
