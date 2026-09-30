@@ -176,11 +176,8 @@ export default function InstitutionalActivityChart({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <div className="px-3.5 py-1.5 rounded-xl border border-white/10 bg-slate-800/60 text-xs font-semibold text-gray-200 tracking-wide">
-            Cash Market
+            FII & DII Trading Activity
           </div>
-          <span className="text-xs text-gray-500 hidden md:inline">
-            FII & DII Trading Activity (NSE)
-          </span>
         </div>
 
         {/* Interval Selector Pills (Daily | Weekly | Monthly) */}
