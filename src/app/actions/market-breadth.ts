@@ -19,7 +19,7 @@ import { ensureInstrumentMaster } from '@/lib/upstox/instruments';
 import { logger } from '@/lib/logger';
 import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
-import { istDayOfWeek, todayISTYmd } from '@/lib/tz';
+import { istDayOfWeek, todayISTYmd, istTimeParts } from '@/lib/tz';
 
 const breadthLogger = logger.scope('MarketBreadth');
 
@@ -1080,19 +1080,30 @@ export async function getIntradayMarketBreadth(
   try {
     // If no targetDate passed, check if we have data for today
     if (!targetDate) {
-      const countToday = await prisma.intradayMarketBreadth.count({
-        where: { date: today, total: { gte: 3000 } },
-      });
+      const isHoliday = await isTradingHoliday(new Date());
+      const day = istDayOfWeek(new Date());
+      const isTradingDayToday = day >= 1 && day <= 5 && !isHoliday;
+      const { hour, minute } = istTimeParts(new Date());
+      const totalMinutes = hour * 60 + minute;
+      const marketStartedToday = isTradingDayToday && totalMinutes >= 9 * 60 + 15;
 
-      // If today has no records (e.g. weekend, holiday, or before market opens), find latest available date
-      if (countToday === 0) {
-        const latestRecord = await prisma.intradayMarketBreadth.findFirst({
-          where: { total: { gte: 3000 } },
-          select: { date: true },
-          orderBy: { timestamp: 'desc' },
+      // Only fall back to a previous date if the market has NOT started today
+      // (e.g. weekend, holiday, or morning before 09:15 AM IST)
+      if (!marketStartedToday) {
+        const countToday = await prisma.intradayMarketBreadth.count({
+          where: { date: today, total: { gte: 3000 } },
         });
-        if (latestRecord?.date) {
-          selectedDate = latestRecord.date;
+
+        // If today has no records, find latest available date
+        if (countToday === 0) {
+          const latestRecord = await prisma.intradayMarketBreadth.findFirst({
+            where: { total: { gte: 3000 } },
+            select: { date: true },
+            orderBy: { timestamp: 'desc' },
+          });
+          if (latestRecord?.date) {
+            selectedDate = latestRecord.date;
+          }
         }
       }
     }
@@ -1121,6 +1132,27 @@ export async function getIntradayMarketBreadth(
         adRatio: r.adRatio,
       };
     });
+
+    // If market has started today and we have 0 records in DB yet, but have live breadth data:
+    // Synthesize the initial point so the new day graph starts immediately
+    if (selectedDate === today && points.length === 0 && cachedBreadthData && cachedBreadthData.total >= 3000) {
+      const timeStr = new Date().toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      points.push({
+        time: timeStr,
+        timestamp: new Date().toISOString(),
+        advances: cachedBreadthData.advances,
+        declines: cachedBreadthData.declines,
+        unchanged: cachedBreadthData.unchanged,
+        total: cachedBreadthData.total,
+        netAdvances: cachedBreadthData.netAdvances,
+        adRatio: cachedBreadthData.adRatio,
+      });
+    }
 
     return {
       date: selectedDate,

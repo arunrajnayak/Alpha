@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { fetchMarketOverview, fetchAllIndexSummaries } from '@/app/actions/market-overview';
 import type { MarketOverviewData } from '@/app/actions/market-overview';
 import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
+import { todayISTYmd } from '@/lib/tz';
 import AdvanceDecline from '@/components/market/AdvanceDecline';
 import TopMovers from '@/components/market/TopMovers';
 import IntradayDynamicsMovers from '@/components/market/IntradayDynamicsMovers';
@@ -83,6 +84,8 @@ export default function MarketOverviewClient({
   const [breadthData, setBreadthData] = useState<NSEMarketBreadthData | null>(initialBreadthData);
   const [breadthLoading, setBreadthLoading] = useState(!initialBreadthData);
   const [intradayData, setIntradayData] = useState<IntradayMarketBreadthData | null>(initialIntradayData);
+  const intradayDataRef = useRef(intradayData);
+  useEffect(() => { intradayDataRef.current = intradayData; }, [intradayData]);
   const [intradayLoading, setIntradayLoading] = useState(!initialIntradayData);
   const [loading, setLoading] = useState(!initialData); // True when no SSR data
   const [loadError, setLoadError] = useState<string | null>(null); // Track fetch errors for display
@@ -183,7 +186,22 @@ export default function MarketOverviewClient({
   const loadIntradayBreadth = useCallback(async () => {
     try {
       const res = await getIntradayMarketBreadth();
-      setIntradayData(res);
+      const today = todayISTYmd();
+      // If market is currently open today, ensure we show today's data
+      if (isMarketOpen()) {
+        if (res.date === today) {
+          setIntradayData(res);
+        } else {
+          // If server returned previous day but market is open today, shift cleanly to today
+          setIntradayData({
+            date: today,
+            isToday: true,
+            points: [],
+          });
+        }
+      } else {
+        setIntradayData(res);
+      }
     } catch (err) {
       marketLogger.error('Failed to load intraday breadth:', err);
     } finally {
@@ -217,7 +235,7 @@ export default function MarketOverviewClient({
       // If market is active and we have full live breadth (>= 3000), update/append current minute into intradayData points
       if (res.isLive && res.total >= 3000) {
         setIntradayData((prev) => {
-          if (!prev) return prev;
+          const today = todayISTYmd();
           const timeStr = new Date().toLocaleTimeString('en-IN', {
             timeZone: 'Asia/Kolkata',
             hour: '2-digit',
@@ -234,6 +252,17 @@ export default function MarketOverviewClient({
             netAdvances: res.netAdvances,
             adRatio: res.adRatio,
           };
+
+          // If no previous intraday data, or if it was for a previous day:
+          // SHIFT TO NEW DAY: start fresh with [newPoint], do NOT append to yesterday's graph!
+          if (!prev || prev.date !== today || !prev.isToday) {
+            return {
+              date: today,
+              isToday: true,
+              points: [newPoint],
+            };
+          }
+
           const existing = [...prev.points];
           if (existing.length > 0 && existing[existing.length - 1].time === timeStr) {
             existing[existing.length - 1] = newPoint;
@@ -350,6 +379,15 @@ export default function MarketOverviewClient({
 
         // Transition from PRE_OPEN to OPEN (or session boundary)
         // Automatically trigger immediate full refresh without user needing to reload!
+        if (nextStatus === 'OPEN') {
+          const today = todayISTYmd();
+          setIntradayData((curr) => {
+            if (!curr || curr.date !== today || !curr.isToday) {
+              return { date: today, isToday: true, points: [] };
+            }
+            return curr;
+          });
+        }
         loadBreadth(true);
         loadData(selectedIndexRef.current, false);
         loadSummaries(false);
@@ -508,21 +546,29 @@ export default function MarketOverviewClient({
 
   const [isVisible, setIsVisible] = useState(true);
 
-  // Monitor tab visibility — flush pending updates when tab becomes visible
+  // Monitor tab visibility — flush pending updates and reload if day shifted when tab becomes visible
   useEffect(() => {
     const handleVisibilityChange = () => {
       const visible = !document.hidden;
       setIsVisible(visible);
       isVisibleRef.current = visible;
       // Flush any pending updates when tab becomes visible again
-      if (visible && pendingUpdatesRef.current.size > 0) {
-        applyBatchedUpdates();
+      if (visible) {
+        if (pendingUpdatesRef.current.size > 0) {
+          applyBatchedUpdates();
+        }
+        // If tab was in background and date has shifted (e.g. overnight or market start), sync intraday breadth
+        const today = todayISTYmd();
+        if (intradayDataRef.current && intradayDataRef.current.date !== today && isMarketOpen()) {
+          loadIntradayBreadth();
+          loadBreadth(true);
+        }
       }
     };
     
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [applyBatchedUpdates]);
+  }, [applyBatchedUpdates, loadIntradayBreadth, loadBreadth]);
 
   const showStreaming = isVisible && isMarketCurrentlyActive && !!tokenStatus?.hasToken;
 

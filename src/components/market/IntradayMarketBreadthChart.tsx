@@ -14,6 +14,7 @@ import {
 import type { IntradayBreadthPoint, NSEMarketBreadthData } from '@/app/actions/market-breadth';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowTrendUp } from '@fortawesome/free-solid-svg-icons';
+import { todayISTYmd } from '@/lib/tz';
 
 interface IntradayMarketBreadthChartProps {
   points: IntradayBreadthPoint[];
@@ -90,14 +91,29 @@ const CustomTooltip = ({
 export default function IntradayMarketBreadthChart({
   points,
   breadth,
+  date,
+  isToday,
+  isLive,
   loading = false,
 }: IntradayMarketBreadthChartProps) {
-  // Filter points to ensure only full-market snapshots (total >= 3000) are plotted if available
+  // Filter points to ensure:
+  // 1. Only points matching the target date are plotted (prevents cross-day bleeding)
+  // 2. Full-market snapshots (total >= 3000) are preferred
   const validPoints = useMemo(() => {
     if (!points || points.length === 0) return [];
-    const fullPoints = points.filter((p) => p.total >= 3000);
-    return fullPoints.length > 0 ? fullPoints : points;
-  }, [points]);
+    let pts = points;
+    if (date) {
+      pts = pts.filter((p) => {
+        try {
+          return todayISTYmd(new Date(p.timestamp)) === date;
+        } catch {
+          return true;
+        }
+      });
+    }
+    const fullPoints = pts.filter((p) => p.total >= 3000);
+    return fullPoints.length > 0 ? fullPoints : pts;
+  }, [points, date]);
 
   // Latest point from intraday snapshots
   const latest = useMemo(() => {
@@ -148,6 +164,11 @@ export default function IntradayMarketBreadthChart({
             <h3 className="font-semibold text-base md:text-lg text-white tracking-tight">
               Market breadth
             </h3>
+            {date && !isToday && (
+              <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-md bg-slate-800 text-gray-400 border border-white/5 font-mono">
+                {date}
+              </span>
+            )}
           </div>
 
           {/* Stocks count badge placed in top right */}
@@ -291,12 +312,12 @@ export default function IntradayMarketBreadthChart({
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-[360px] md:h-[440px] w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/10 rounded-xl my-3">
+          <div className="h-[260px] sm:h-[340px] md:h-[460px] w-full flex flex-col items-center justify-center text-center p-4 border border-dashed border-white/10 rounded-xl my-3">
             <span className="text-xs text-gray-400 mb-1 font-medium">
-              No intraday snapshots recorded yet
+              Waiting for today&apos;s market snapshots...
             </span>
             <p className="text-[11px] text-gray-500 max-w-xs">
-              Snapshots are recorded every minute between 09:15 AM and 03:40 PM IST on trading days.
+              Today&apos;s session started at 09:15 AM IST. Snapshots will appear automatically.
             </p>
           </div>
         )}
