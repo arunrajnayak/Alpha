@@ -31,7 +31,6 @@ export async function updateIndexHistory(startDate: Date) {
             financeLogger.info(`[Index] Updating ${symbol} (${displayName}) from ${fetchStart.toISOString().split('T')[0]}`);
 
             let dataPoints: { date: Date, close: number }[] = [];
-            const source = 'Upstox';
 
             try {
                 const indexKey = await getInstrumentKey(displayName);

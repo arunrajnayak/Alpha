@@ -6,6 +6,7 @@
  */
 
 import { getAccessToken, clearTokenCache } from './auth';
+import { logger } from '@/lib/logger';
 import {
   UpstoxLiveQuote,
   UpstoxFullQuote,
@@ -17,6 +18,8 @@ import {
   LTPResponseValue,
   OHLCResponseValue,
 } from './types';
+
+const upstoxLogger = logger.scope('Upstox');
 
 // ============================================================================
 // Configuration
@@ -68,7 +71,7 @@ export async function getHistoricalCandles(
   interval: HistoricalInterval,
   fromDate: string,
   toDate: string
-): Promise<UpstoxCandle[]> {
+): Promise<{ candles: UpstoxCandle[] }> {
   const accessToken = await getAccessToken();
   const encodedKey = encodeURIComponent(instrumentKey);
 
@@ -119,7 +122,7 @@ export async function getHistoricalCandles(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`[Upstox] Historical fetch failed for ${instrumentKey}:`, errorText);
+    upstoxLogger.error(`Historical fetch failed for ${instrumentKey}:`, errorText);
     throw new UpstoxError(
       `Historical fetch failed: ${response.status} - ${errorText}`,
       response.status
@@ -141,7 +144,51 @@ export async function getHistoricalCandles(
     })
   );
 
-  return candles;
+  return { candles };
+}
+
+/**
+ * Fetch Intraday Candle Data for current trading day (V3 API)
+ * V3 URL format: /v3/historical-candle/intraday/{instrumentKey}/minutes/{interval}
+ */
+export async function getIntradayCandles(
+  instrumentKey: string,
+  interval: '1minute' | '5minute' | '30minute' = '5minute'
+): Promise<{ candles: UpstoxCandle[] }> {
+  const encodedKey = encodeURIComponent(instrumentKey);
+  const intervalValue = interval === '1minute' ? '1' : interval === '30minute' ? '30' : '5';
+  const url = `${BASE_URL_V3}/historical-candle/intraday/${encodedKey}/minutes/${intervalValue}`;
+
+  try {
+    const accessToken = await getAccessToken();
+    const response = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      upstoxLogger.warn(`Intraday candles fetch failed for ${instrumentKey}: ${response.status}`);
+      return { candles: [] };
+    }
+
+    const json = await response.json();
+    const candles: UpstoxCandle[] = (json.data?.candles || []).map((c: (string | number)[]) => ({
+      timestamp: c[0] as string,
+      open: c[1] as number,
+      high: c[2] as number,
+      low: c[3] as number,
+      close: c[4] as number,
+      volume: c[5] as number,
+      oi: c[6] as number,
+    }));
+
+    return { candles };
+  } catch {
+    return { candles: [] };
+  }
 }
 
 // ============================================================================
@@ -214,13 +261,13 @@ export async function getLiveQuotes(
         }
       } catch (error) {
         if (error instanceof UpstoxError) throw error;
-        console.error(`[Upstox] Batch fetch failed:`, error);
+        upstoxLogger.error('Batch LTP fetch failed:', error);
       }
     })
   );
 
   if (shouldRetry401 && retryOnAuth) {
-    console.log('[Upstox] Got 401, clearing cache and retrying...');
+    upstoxLogger.info('Got 401, clearing cache and retrying with fresh token...');
     clearTokenCache();
     return getLiveQuotes(instrumentKeys, false);
   }
@@ -304,10 +351,18 @@ export async function getFullQuotes(
 
 /**
  * Get OHLC data for multiple instruments using V3 API
+ *
+ * @param instrumentKeys - Array of instrument keys (pipe-format)
+ * @param interval - OHLC interval: '1d' (daily), 'I1' (1-minute), 'I30' (30-minute)
+ * @param preferPrevOhlc - When true (market hours), prefer prev_ohlc (last settled candle)
+ *   over the incomplete live intraday candle. When false (default, after close), use ONLY
+ *   live_ohlc so a missing live_ohlc omits the instrument from the result rather than
+ *   silently returning T-1's price under today's date.
  */
 export async function getOHLC(
   instrumentKeys: string[],
-  interval: OHLCInterval = '1d'
+  interval: OHLCInterval = '1d',
+  preferPrevOhlc = false,
 ): Promise<Map<string, OHLC>> {
   if (instrumentKeys.length === 0) return new Map();
 
@@ -335,7 +390,7 @@ export async function getOHLC(
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error(`[Upstox] Batch OHLC fetch failed: ${response.status} - ${errorText}`);
+          upstoxLogger.error(`Batch OHLC fetch failed: ${response.status} - ${errorText}`);
           return;
         }
 
@@ -344,7 +399,14 @@ export async function getOHLC(
         if (json.data) {
           for (const [responseKey, value] of Object.entries(json.data)) {
             const data = value as OHLCResponseValue;
-            const ohlc = data.live_ohlc || data.prev_ohlc;
+            // Market hours (preferPrevOhlc=true): use the last settled close (prev_ohlc)
+            // rather than the incomplete live candle.
+            // After close (preferPrevOhlc=false): use ONLY live_ohlc. Omitting instruments
+            // with no live_ohlc lets callers detect them as missing and retry via
+            // getHistoricalCandles, which has the official settled EOD candle.
+            const ohlc = preferPrevOhlc
+              ? (data.prev_ohlc || data.live_ohlc)
+              : data.live_ohlc;
             if (ohlc) {
               const ohlcObj = {
                 open: ohlc.open,
@@ -373,7 +435,7 @@ export async function getOHLC(
           }
         }
       } catch (error) {
-        console.error('[Upstox] Batch OHLC fetch error:', error);
+        upstoxLogger.error('Batch OHLC fetch error:', error);
       }
     })
   );
@@ -409,7 +471,7 @@ export type IndexName = keyof typeof INDEX_KEYS;
 export async function getIndexQuotes(): Promise<
   Array<{ name: string; symbol: string; currentPrice: number; percentChange: number }>
 > {
-  const indexNames = Object.keys(INDEX_KEYS).slice(0, 5) as IndexName[];
+  const indexNames = Object.keys(INDEX_KEYS) as IndexName[];
   const indexKeys = indexNames.map((name) => INDEX_KEYS[name]);
 
   try {
@@ -455,7 +517,7 @@ export async function getIndexQuotes(): Promise<
 
     return results;
   } catch (error) {
-    console.error('[Upstox] Failed to fetch index quotes:', error);
+    upstoxLogger.error('Failed to fetch index quotes:', error);
     return [];
   }
 }

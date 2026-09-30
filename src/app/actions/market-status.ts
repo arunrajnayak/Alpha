@@ -3,6 +3,9 @@
 import { prisma } from '@/lib/db';
 import { getMarketTimings, getExchangeStatus, MarketTiming, hasValidToken } from '@/lib/upstox-client';
 import { todayISTYmd } from '@/lib/tz';
+import { logger } from '@/lib/logger';
+
+const marketStatusLogger = logger.scope('MarketStatus');
 
 export interface MarketStatusResult {
     isOpen: boolean;
@@ -49,7 +52,7 @@ export async function checkMarketStatus(date: string): Promise<MarketStatusResul
               }
           }
       } catch (e) {
-          console.warn('[Market Status Action] Failed to fetch CAS status:', e);
+          marketStatusLogger.warn('Failed to fetch CAS status:', e);
       }
 
       // Fetch official timings from Upstox

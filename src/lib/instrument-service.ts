@@ -40,7 +40,7 @@ interface UpstoxInstrument {
     short_name?: string;
 }
 
-interface InstrumentData {
+export interface InstrumentData {
     key: string;
     isin?: string;
     name: string;
@@ -493,4 +493,14 @@ export async function refreshInstrumentMaster(): Promise<void> {
     
     // Re-download and load
     await ensureInstrumentMaster(true);
+}
+
+/**
+ * Clear in-memory instrument caches
+ */
+export function clearInstrumentCache(): void {
+    nseInstrumentMap = null;
+    bseInstrumentMap = null;
+    isinToKeyMap = null;
+    keyToSymbolMap = null;
 }

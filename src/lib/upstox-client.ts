@@ -1,59 +1,40 @@
 /**
- * Upstox Client
+ * Upstox Client (Legacy Facade)
  *
- * Handles Upstox API interactions using the Analytics Token (env var)
- * or legacy DB-stored OAuth tokens.
+ * Re-exports the canonical Upstox client implementation from `@/lib/upstox`.
+ * All underlying network calls and token management are handled by the canonical modules:
+ * - Token management: `src/lib/upstox/auth.ts`
+ * - REST API client: `src/lib/upstox/client.ts`
+ * - Market information: `src/lib/upstox/market-info.ts`
+ * - Instrument mappings: `src/lib/instrument-service.ts`
  */
 
-import {
-    getAccessToken,
-    clearTokenCache,
-} from './upstox/auth';
 import { upstoxLogger } from '@/lib/logger';
-
-const CONFIG = {
-    baseUrl: 'https://api.upstox.com/v2',
-    baseUrlV3: 'https://api.upstox.com/v3',
-};
+import {
+    getHistoricalCandles,
+    getIntradayCandles,
+    getLiveQuotes,
+    getLTP,
+    getFullQuotes,
+    getOHLC,
+    getIndexQuotes,
+    INDEX_KEYS,
+} from './upstox/client';
 
 // ============================================================================
-// Types
+// Types — Re-exported from upstox/types.ts
 // ============================================================================
-
-export interface UpstoxQuote {
-    instrument_token: string;
-    symbol: string;
-    last_price: number;
-    volume: number;
-    average_price: number;
-    ohlc: {
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-        volume?: number;
-        ts?: number;
-    };
-    net_change: number;
-    total_buy_quantity: number;
-    total_sell_quantity: number;
-    lower_circuit_limit: number;
-    upper_circuit_limit: number;
-    last_trade_time: string;
-    oi?: number;
-    oi_day_high?: number;
-    oi_day_low?: number;
-    prev_close_price?: number;
-    year_high?: number;
-    year_low?: number;
-    previous_oi?: number;
-    indicative_equilibrium_price?: number;
-    indicative_equilibrium_quantity?: number;
-    indicative_imbalance_quantity_total?: number;
-    indicative_imbalance_quantity_market?: number;
-    reference_price?: number;
-    cas_eligible?: boolean;
-}
+export type {
+    UpstoxFullQuote as UpstoxQuote,
+    UpstoxLiveQuote as UpstoxLiveQuoteV3,
+    UpstoxCandle,
+    MarketIndex,
+    MarketHoliday,
+    MarketTiming,
+    UpstoxExchangeStatus,
+    CASEligibleStatus,
+    CASStatus,
+} from './upstox/types';
 
 export interface UpstoxLTP {
     instrument_token: string;
@@ -61,43 +42,8 @@ export interface UpstoxLTP {
     last_price: number;
 }
 
-export interface UpstoxCandle {
-    timestamp: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-    oi: number;
-}
-
-export interface MarketIndex {
-    name: string;
-    symbol: string;
-    percentChange: number;
-    currentPrice: number;
-}
-
-export interface MarketHoliday {
-    date: string; // YYYY-MM-DD
-    description: string;
-    holiday_type: 'TRADING_HOLIDAY' | 'SETTLEMENT_HOLIDAY' | 'SPECIAL_TIMING';
-    closed_exchanges: string[];
-    open_exchanges: {
-        exchange: string;
-        start_time: number;
-        end_time: number;
-    }[];
-}
-
-export interface MarketTiming {
-    exchange: string;
-    start_time: number;
-    end_time: number;
-}
-
 // ============================================================================
-// Token Management — Re-exported from upstox/auth.ts (single source of truth)
+// Token Management — Re-exported from upstox/auth.ts
 // ============================================================================
 export {
     getStoredToken,
@@ -109,654 +55,70 @@ export {
 } from './upstox/auth';
 
 // ============================================================================
-// Historical Data (No Auth Required for V3)
+// API Client Functions — Re-exported from upstox/client.ts
 // ============================================================================
-
-/**
- * Fetch Historical Candle Data using V3 API
- * V3 URL format: /v3/historical-candle/{instrumentKey}/{unit}/{interval}/{to_date}/{from_date}
- * 
- * @param instrumentKey - Upstox instrument key (e.g., NSE_EQ|INE002A01018)
- * @param interval - Time interval: '1minute', '30minute', 'day', 'week', 'month'
- * @param fromDate - Start date in YYYY-MM-DD format
- * @param toDate - End date in YYYY-MM-DD format
- */
-export async function getHistoricalCandles(
-    instrumentKey: string,
-    interval: '1minute' | '5minute' | '30minute' | 'day' | 'week' | 'month',
-    fromDate: string, // YYYY-MM-DD
-    toDate: string    // YYYY-MM-DD
-): Promise<{ candles: UpstoxCandle[] }> {
-    const accessToken = await getAccessToken();
-    
-    // URL encode the instrument key (contains | character)
-    const encodedKey = encodeURIComponent(instrumentKey);
-    
-    // V3 API uses plural unit names: minutes, hours, days, weeks, months
-    // Interval is a numeric string: "1", "30", etc.
-    let unit: string;
-    let intervalValue: string;
-
-    switch (interval) {
-        case '1minute':
-            unit = 'minutes';
-            intervalValue = '1';
-            break;
-        case '5minute':
-            unit = 'minutes';
-            intervalValue = '5';
-            break;
-        case '30minute':
-            unit = 'minutes';
-            intervalValue = '30';
-            break;
-        case 'day':
-            unit = 'days';
-            intervalValue = '1';
-            break;
-        case 'week':
-            unit = 'weeks';
-            intervalValue = '1';
-            break;
-        case 'month':
-            unit = 'months';
-            intervalValue = '1';
-            break;
-        default:
-            unit = 'days';
-            intervalValue = '1';
-    }
-
-    // V3 URL: /v3/historical-candle/{instrumentKey}/{unit}/{interval}/{to_date}/{from_date}
-    const url = `${CONFIG.baseUrlV3}/historical-candle/${encodedKey}/${unit}/${intervalValue}/${toDate}/${fromDate}`;
-    
-    upstoxLogger.info(`Historical candle request: ${url}`);
-    
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        upstoxLogger.error(`Historical fetch failed for ${instrumentKey}:`, errorText);
-        throw new Error(`Upstox Historical Fetch Failed: ${response.status} - ${errorText}`);
-    }
-
-    const json = await response.json();
-    
-    // Transform candle array format to object format
-    // API returns: { data: { candles: [[timestamp, open, high, low, close, volume, oi], ...] } }
-    const candles: UpstoxCandle[] = (json.data?.candles || []).map((c: (string | number)[]) => ({
-        timestamp: c[0] as string,
-        open: c[1] as number,
-        high: c[2] as number,
-        low: c[3] as number,
-        close: c[4] as number,
-        volume: c[5] as number,
-        oi: c[6] as number,
-    }));
-
-    upstoxLogger.info(`Got ${candles.length} candles for ${instrumentKey}`);
-
-    return { candles };
-}
-
-/**
- * Fetch Intraday Candle Data for current trading day (V3 API)
- * V3 URL format: /v3/historical-candle/intraday/{instrumentKey}/minutes/{interval}
- */
-export async function getIntradayCandles(
-    instrumentKey: string,
-    interval: '1minute' | '5minute' | '30minute' = '5minute'
-): Promise<{ candles: UpstoxCandle[] }> {
-    const encodedKey = encodeURIComponent(instrumentKey);
-    const intervalValue = interval === '1minute' ? '1' : interval === '30minute' ? '30' : '5';
-    const url = `${CONFIG.baseUrlV3}/historical-candle/intraday/${encodedKey}/minutes/${intervalValue}`;
-
-    try {
-        const response = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-            },
-        });
-
-        if (!response.ok) {
-            return { candles: [] };
-        }
-
-        const json = await response.json();
-        const candles: UpstoxCandle[] = (json.data?.candles || []).map((c: (string | number)[]) => ({
-            timestamp: c[0] as string,
-            open: c[1] as number,
-            high: c[2] as number,
-            low: c[3] as number,
-            close: c[4] as number,
-            volume: c[5] as number,
-            oi: c[6] as number,
-        }));
-
-        return { candles };
-    } catch {
-        return { candles: [] };
-    }
-}
+export {
+    getHistoricalCandles,
+    getIntradayCandles,
+    getLiveQuotes,
+    getLiveQuotes as getLiveQuoteV3,
+    getLTP,
+    getFullQuotes,
+    getFullQuotes as getFullQuote,
+    getOHLC,
+    getIndexQuotes,
+    INDEX_KEYS,
+};
 
 // ============================================================================
-// Live Market Data (Auth Required)
+// Market Info — Re-exported from upstox/market-info.ts
 // ============================================================================
-
-export interface UpstoxLiveQuoteV3 {
-    last_price: number;
-    instrument_token: string;
-    previous_close: number;
-    timestamp?: number;
-    indicative_equilibrium_price?: number;
-    is_pre_open?: boolean;
-}
-
-// chunkArray imported from db.ts (single source of truth)
-import { chunkArray } from './db';
+export { getMarketHolidays, getMarketTimings, getExchangeStatus } from './upstox/market-info';
 
 /**
- * Get Live Quotes (LTP + Previous Close) for multiple instruments (V3)
- * Uses LTP V3 endpoint which is lightweight and provides 'cp' (Close Price)
- * Handles batching (Max 500 instruments per call)
- * 
- * IMPORTANT: Upstox response keys use colon format (NSE_EQ:RELIANCE) but we request
- * with pipe format (NSE_EQ|INE002A01018). We need to map both directions.
- */
-export async function getLiveQuoteV3(instrumentKeys: string[], retryOnAuth = true): Promise<Map<string, UpstoxLiveQuoteV3>> {
-    const accessToken = await getAccessToken();
-    const result = new Map<string, UpstoxLiveQuoteV3>();
-    
-    // Build a lookup map: colon-format -> original request key
-    // This helps us map response keys back to the keys we requested with
-    const requestKeyLookup = new Map<string, string>();
-    for (const key of instrumentKeys) {
-        // Convert pipe to colon for lookup: NSE_EQ|INE002A01018 -> NSE_EQ:INE002A01018
-        const colonKey = key.replace(/\|/g, ':');
-        requestKeyLookup.set(colonKey, key);
-        requestKeyLookup.set(key, key); // Also map original to itself
-    }
-    
-    // Upstox V3 Limit: 500 instruments per LTP request
-    const BATCH_SIZE = 500;
-    const batches = chunkArray(instrumentKeys, BATCH_SIZE);
-    
-    for (const batch of batches) {
-        const url = `${CONFIG.baseUrlV3}/market-quote/ltp?instrument_key=${batch.map(k => encodeURIComponent(k)).join(',')}`;
-        
-        try {
-            const response = await fetch(url, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`,
-                },
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                upstoxLogger.error(`LTP V3 fetch failed:`, errorText);
-                
-                // If we get a 401 and haven't retried yet, clear cache and retry once
-                if (response.status === 401 && retryOnAuth) {
-                    upstoxLogger.info('Got 401, clearing cache and retrying with fresh token...');
-                    clearTokenCache();
-                    // Retry once with fresh token from database
-                    return getLiveQuoteV3(instrumentKeys, false);
-                }
-                
-                throw new Error(`Upstox V3 LTP Fetch Failed: ${response.status} - ${errorText}`);
-            }
-
-            const json = await response.json();
-            
-            // Response format: { status: "success", data: { "NSE_EQ:RELIANCE": { last_price: ..., cp: ..., instrument_token: "NSE_EQ|INE..." } } }
-            if (json.data) {
-                for (const [responseKey, val] of Object.entries(json.data)) {
-                     
-                    const value = val as any;
-                    
-                    // Map response key back to request key
-                    const mappedKey = 
-                        (value.instrument_token && requestKeyLookup.get(value.instrument_token)) ||
-                        requestKeyLookup.get(responseKey) ||
-                        requestKeyLookup.get(responseKey.replace(/:/g, '|')) ||
-                        value.instrument_token ||
-                        responseKey.replace(/:/g, '|');
-                    
-                    result.set(mappedKey, {
-                        last_price: value.last_price,
-                        instrument_token: value.instrument_token || mappedKey,
-                        previous_close: value.cp, // 'cp' is Previous Close (Close Price)
-                        timestamp: value.ltt ? parseInt(value.ltt, 10) : undefined
-                    });
-                }
-            }
-        } catch (error) {
-            upstoxLogger.error(`Batch fetch failed for ${batch.length} instruments:`, error);
-            throw error;
-        }
-    }
-
-    return result;
-}
-
-/**
- * Get Last Traded Price for multiple instruments
- * Lightweight endpoint for bulk price checks
- * Refactored to use V3 LTP endpoint internally
- */
-export async function getLTP(instrumentKeys: string[]): Promise<Map<string, number>> {
-    try {
-        const quotes = await getLiveQuoteV3(instrumentKeys);
-        const result = new Map<string, number>();
-        
-        for (const [key, quote] of quotes.entries()) {
-            result.set(key, quote.last_price);
-        }
-        
-        return result;
-    } catch (error) {
-        upstoxLogger.error('getLTP fallback failed:', error);
-        throw error;
-    }
-}
-
-/**
- * Get Full Market Quote for multiple instruments
- * Uses V3 endpoint which includes OHLC, volume, circuit limits, CAS & Pre-Open IEP data.
- */
-export async function getFullQuote(instrumentKeys: string[]): Promise<Map<string, UpstoxQuote>> {
-    if (instrumentKeys.length === 0) return new Map();
-
-    const accessToken = await getAccessToken();
-    const result = new Map<string, UpstoxQuote>();
-    
-    // Build lookup map for key normalization
-    const requestKeyLookup = new Map<string, string>();
-    for (const key of instrumentKeys) {
-        const colonKey = key.replace(/\|/g, ':');
-        requestKeyLookup.set(colonKey, key);
-        requestKeyLookup.set(key, key);
-    }
-    
-    // Upstox V3 supports up to 500 instruments per request
-    const batches = chunkArray(instrumentKeys, 500);
-
-    for (const batch of batches) {
-        const url = `${CONFIG.baseUrlV3}/market-quote/quotes?instrument_key=${batch.map(k => encodeURIComponent(k)).join(',')}`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
-            },
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            upstoxLogger.error(`Full quote V3 fetch failed:`, errorText);
-            throw new Error(`Upstox Quote Fetch Failed: ${response.status} - ${errorText}`);
-        }
-
-        const json = await response.json();
-        
-        if (json.data) {
-            for (const [responseKey, value] of Object.entries(json.data)) {
-                const quoteVal = value as UpstoxQuote;
-                const normalizedKey = responseKey.replace(/:/g, '|');
-                
-                // Try to find the original request key
-                const mappedKey = 
-                    (quoteVal.instrument_token && requestKeyLookup.get(quoteVal.instrument_token)) ||
-                    requestKeyLookup.get(responseKey) || 
-                    requestKeyLookup.get(normalizedKey) || 
-                    quoteVal.instrument_token ||
-                    normalizedKey;
-                
-                result.set(mappedKey, quoteVal);
-            }
-        }
-    }
-
-    return result;
-}
-
-/**
- * Get OHLC data for multiple instruments using V3 API
- * V3 provides live_ohlc and prev_ohlc with better granularity
+ * Check if a specific date is a trading holiday.
+ * @deprecated Import `isTradingHoliday` from '@/lib/upstox/market-info' instead.
  *
- * @param instrumentKeys - Array of instrument keys
- * @param interval - OHLC interval: '1d' (daily), 'I1' (1-minute), 'I30' (30-minute)
- * @param preferPrevOhlc - When true, prefer prev_ohlc (previous session's closed candle)
- *   over live_ohlc. Pass true during market hours so an incomplete intraday candle is
- *   never used for scoring.
- *
- *   When false (after market close): ONLY live_ohlc is used — no prev_ohlc fallback.
- *   If live_ohlc is absent (Upstox hasn't yet published the EOD candle, ~20 min after
- *   close), the instrument is omitted from the result map so patchTodayPrices can flag
- *   it as "missing" and the pipeline can retry it via getHistoricalCandles instead of
- *   silently storing T-1's price under T's date.
- */
-export async function getOHLC(
-    instrumentKeys: string[],
-    interval: '1d' | 'I1' | 'I30' = '1d',
-    preferPrevOhlc = false,
-): Promise<Map<string, { open: number; high: number; low: number; close: number; volume?: number }>> {
-    const accessToken = await getAccessToken();
-    
-    // Build lookup map for key normalization
-    const requestKeyLookup = new Map<string, string>();
-    for (const key of instrumentKeys) {
-        const colonKey = key.replace(/\|/g, ':');
-        requestKeyLookup.set(colonKey, key);
-        requestKeyLookup.set(key, key);
-    }
-    
-    // Use V3 OHLC endpoint
-    const url = `${CONFIG.baseUrlV3}/market-quote/ohlc?instrument_key=${instrumentKeys.map(k => encodeURIComponent(k)).join(',')}&interval=${interval}`;
-    
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        upstoxLogger.error(`OHLC V3 fetch failed:`, errorText);
-        throw new Error(`Upstox OHLC Fetch Failed: ${response.status} - ${errorText}`);
-    }
-
-    const json = await response.json();
-    const result = new Map<string, { open: number; high: number; low: number; close: number; volume?: number }>();
-    
-    // V3 Response format:
-    // { data: { "NSE_EQ:SYMBOL": { last_price, instrument_token, live_ohlc: { open, high, low, close, volume, ts }, prev_ohlc: {...} } } }
-    if (json.data) {
-        for (const [responseKey, value] of Object.entries(json.data)) {
-             
-            const data = value as any;
-            
-            // During market hours (preferPrevOhlc=true): prev_ohlc is the last settled
-            // close — prefer it over the incomplete intraday candle.
-            // After market close (preferPrevOhlc=false): use ONLY live_ohlc.
-            // Do NOT fall back to prev_ohlc here: that would store T-1's close under
-            // today's date, making borderline stocks (close to their 200 DMA) fail the
-            // filter incorrectly. Absent live_ohlc → omit from result map so the pipeline
-            // can retry via getHistoricalCandles which has the official settled EOD candle.
-            const ohlc = preferPrevOhlc
-              ? (data.prev_ohlc || data.live_ohlc)
-              : data.live_ohlc;
-            
-            if (ohlc) {
-                const ohlcData = {
-                    open: ohlc.open,
-                    high: ohlc.high,
-                    low: ohlc.low,
-                    close: ohlc.close,
-                    volume: ohlc.volume,
-                    ts: ohlc.ts,
-                };
-
-                // Use instrument_token (pipe format, e.g. NSE_EQ|INE585B01010) as primary key.
-                // The response key (e.g. NSE_EQ:MARUTI) uses symbol names, not the ISIN-based
-                // instrument keys we send — so requestKeyLookup misses. instrument_token matches.
-                const instrumentToken = data.instrument_token;
-                if (instrumentToken) {
-                    result.set(instrumentToken, ohlcData);
-                    // Also look up original request key in case format differs
-                    const reqKey = requestKeyLookup.get(instrumentToken);
-                    if (reqKey && reqKey !== instrumentToken) {
-                        result.set(reqKey, ohlcData);
-                    }
-                }
-
-                // Also store with response key formats for backward compat
-                const normalizedKey = responseKey.replace(/:/g, '|');
-                if (!result.has(normalizedKey)) {
-                    result.set(normalizedKey, ohlcData);
-                }
-            }
-        }
-    }
-
-    return result;
-}
-
-// ============================================================================
-// Index Quotes
-// ============================================================================
-
-// Index instrument keys for common indices (exact names from Upstox API)
-// IMPORTANT: These must match EXACTLY what Upstox instrument master returns - case sensitive!
-// Verified from: https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz
-export const INDEX_KEYS = {
-    'Nifty 50': 'NSE_INDEX|Nifty 50',
-    'Nifty Midcap 100': 'NSE_INDEX|NIFTY MIDCAP 100',      // UPPERCASE
-    'Nifty Smallcap 250': 'NSE_INDEX|NIFTY SMLCAP 250',    // UPPERCASE, SMLCAP not SMALLCAP
-    'Nifty Microcap 250': 'NSE_INDEX|NIFTY MICROCAP250',   // UPPERCASE, no space before 250
-    'Nifty 500 Momentum 50': 'NSE_INDEX|Nifty500Momentm50', // No spaces, Momentm not Momentum
-    'Nifty Bank': 'NSE_INDEX|Nifty Bank',
-    'Nifty IT': 'NSE_INDEX|Nifty IT',
-    'Nifty Next 50': 'NSE_INDEX|Nifty Next 50',
-} as const;
-
-/**
- * Get quotes for major market indices
- * Uses LTP V3 endpoint which provides last_price and previous close (cp)
- */
-export async function getIndexQuotes(): Promise<MarketIndex[]> {
-    const indexNames = Object.keys(INDEX_KEYS).slice(0, 5) as (keyof typeof INDEX_KEYS)[];
-    const indexKeys = indexNames.map(name => INDEX_KEYS[name]);
-    
-    try {
-        upstoxLogger.info('Fetching quotes for:', indexNames);
-        upstoxLogger.info('Using keys:', indexKeys);
-        
-        // Use LTP V3 which provides both last_price and cp (previous close)
-        const quotes = await getLiveQuoteV3(indexKeys);
-        const results: MarketIndex[] = [];
-
-        upstoxLogger.info('Response keys:', Array.from(quotes.keys()));
-        upstoxLogger.info(`Got ${quotes.size} quotes`);
-
-        // Track which quotes we've already used to avoid duplicates
-        const usedQuotes = new Set<string>();
-
-        for (let i = 0; i < indexNames.length; i++) {
-            const name = indexNames[i];
-            const key = indexKeys[i];
-            
-            // Try to find the quote with exact key match first
-            let quote = quotes.get(key);
-            let matchedKey: string = key;
-            
-            if (!quote) {
-                // Try with colon format
-                const colonKey = key.replace(/\|/g, ':');
-                quote = quotes.get(colonKey);
-                if (quote) matchedKey = colonKey;
-            }
-            
-            // Only use partial matching if we haven't found an exact match
-            // AND make sure we don't reuse the same quote for multiple indices
-            if (!quote) {
-                for (const [qKey, qVal] of quotes.entries()) {
-                    if (usedQuotes.has(qKey)) continue; // Skip already used quotes
-                    
-                    // Extract the index name from the key for matching
-                    const keyParts = qKey.split('|');
-                    const qIndexName = keyParts[1] || '';
-                    
-                    // Check if this quote matches our target index
-                    if (qIndexName.toLowerCase().includes(name.toLowerCase().replace(/ /g, '').substring(0, 8))) {
-                        quote = qVal;
-                        matchedKey = qKey;
-                        break;
-                    }
-                }
-            }
-            
-            if (quote && !usedQuotes.has(matchedKey)) {
-                usedQuotes.add(matchedKey);
-                
-                const lastPrice = quote.last_price;
-                const prevClose = quote.previous_close || lastPrice;
-                const change = lastPrice - prevClose;
-                const percentChange = prevClose > 0 ? (change / prevClose) * 100 : 0;
-                
-                results.push({
-                    name,
-                    symbol: key,
-                    currentPrice: lastPrice,
-                    percentChange,
-                });
-                upstoxLogger.info(`${name}: ${lastPrice} (${percentChange.toFixed(2)}%) [matched: ${matchedKey}]`);
-            } else {
-                upstoxLogger.warn(`No quote found for ${name} (key: ${key})`);
-            }
-        }
-
-        return results;
-    } catch (error) {
-        upstoxLogger.error('Failed to fetch index quotes:', error);
-        return [];
-    }
-}
-
-// ============================================================================
-// Market Holidays
-// ============================================================================
-
-/**
- * Get market holidays for the current year or check a specific date
- * @param date Optional date in YYYY-MM-DD format to check specific date
- * @returns Array of holidays if no date specified, or single holiday object for specific date
- */
-export async function getMarketHolidays(date?: string): Promise<MarketHoliday[]> {
-    const accessToken = await getAccessToken();
-    
-    const url = date 
-        ? `${CONFIG.baseUrl}/market/holidays/${date}`
-        : `${CONFIG.baseUrl}/market/holidays`;
-    
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upstox Market Holidays Fetch Failed: ${response.status} - ${errorText}`);
-    }
-
-    const json = await response.json();
-    
-    // API returns: { status: "success", data: [...holidays] } or { status: "success", data: {...single holiday} }
-    if (json.status === 'success' && json.data) {
-        return Array.isArray(json.data) ? json.data : [json.data];
-    }
-    
-    return [];
-}
-
-/**
- * Check if a specific date is a trading holiday
- * @param date Date in YYYY-MM-DD format
- * @returns true if market is closed for trading, false if open
+ * NOTE: This thin wrapper preserves backward compatibility. It checks only string dates
+ * (not Date objects) and queries the Upstox API per-date (no year-level caching).
  */
 export async function isMarketHoliday(date: string): Promise<boolean> {
     try {
-        const holidays = await getMarketHolidays(date);
-        
-        if (holidays.length === 0) {
-            return false; // No holiday found for this date
-        }
-        
+        const { getMarketHolidays: _getHolidays } = await import('./upstox/market-info');
+        const holidays = await _getHolidays(date);
+
+        if (holidays.length === 0) return false;
+
         const holiday = holidays[0];
-        
-        // Check if NSE is closed (we primarily trade on NSE)
-        const nseIsClosed = holiday.closed_exchanges?.includes('NSE') || 
+
+        const nseIsClosed = holiday.closed_exchanges?.includes('NSE') ||
                           holiday.closed_exchanges?.includes('NFO');
-        
-        // If it's a trading holiday and NSE is closed, return true
+
         if (holiday.holiday_type === 'TRADING_HOLIDAY' && nseIsClosed) {
             return true;
         }
-        
-        // If NSE is not in open_exchanges list and it's a trading holiday, assume closed
+
         if (holiday.holiday_type === 'TRADING_HOLIDAY') {
             const nseIsOpen = holiday.open_exchanges?.some(
                 ex => ex.exchange === 'NSE' || ex.exchange === 'NFO'
             );
             return !nseIsOpen;
         }
-        
+
         return false;
     } catch (error) {
         upstoxLogger.error('Error checking market holiday:', error);
-        // On error, assume not a holiday (fail open to time-based logic)
-        return false;
+        return false; // fail open
     }
 }
 
-/**
- * Get market timings for a specific date
- * Useful for checking special trading sessions (e.g. Muhurat trading)
- * @param date YYYY-MM-DD
- */
-export async function getMarketTimings(date: string): Promise<MarketTiming[]> {
-    const accessToken = await getAccessToken();
-    
-    // Check local cache first avoiding circular dependency is tricky here if we put it in this file
-    // So we will rely on the caller to handle caching (market-holidays-cache.ts)
-    
-    const url = `${CONFIG.baseUrl}/market/timings/${date}`;
-    
-    const response = await fetch(url, {
-        headers: {
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-        },
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upstox Market Timings Fetch Failed: ${response.status} - ${errorText}`);
-    }
-
-    const json = await response.json();
-    
-    if (json.status === 'success' && json.data) {
-        return json.data;
-    }
-    
-    return [];
-}
-
-export { getExchangeStatus } from './upstox/market-info';
-export type { UpstoxExchangeStatus, CASEligibleStatus, CASStatus } from './upstox/types';
-
 // ============================================================================
-// Legacy Export (for backward compatibility during migration)
+// Legacy Exports (backward compatibility during migration)
 // ============================================================================
 
 /**
- * @deprecated Use getFullQuote instead
+ * @deprecated Use getFullQuotes from '@/lib/upstox/client' instead.
  */
 export async function getMarketQuote(instrumentKeys: string[]): Promise<unknown> {
-    return Object.fromEntries(await getFullQuote(instrumentKeys));
+    return Object.fromEntries(await getFullQuotes(instrumentKeys));
 }

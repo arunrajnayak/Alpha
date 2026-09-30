@@ -24,6 +24,7 @@ export {
 // API Client
 export {
   getHistoricalCandles,
+  getIntradayCandles,
   getLiveQuotes,
   getLTP,
   getFullQuotes,

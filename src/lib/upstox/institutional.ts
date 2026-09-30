@@ -2,7 +2,10 @@ import 'server-only';
 
 import { getAccessToken } from './auth';
 import { UpstoxError } from './types';
+import { todayISTYmd } from '@/lib/tz';
+import { logger } from '@/lib/logger';
 
+const institutionalLogger = logger.scope('Institutional');
 const BASE_URL = 'https://api.upstox.com/v2';
 const IST_TZ = 'Asia/Kolkata';
 
@@ -125,15 +128,6 @@ const monthlyFullFormatter = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
-function getISTDateString(timestamp: number): string {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: IST_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return formatter.format(new Date(timestamp));
-}
 
 // Helper to get ISO week key (e.g., "2026-W38") in IST
 function getISTWeekKey(timestamp: number): { weekKey: string; startTimestamp: number; endTimestamp: number } {
@@ -186,11 +180,11 @@ export async function getInstitutionalCashActivity(
     // 1D: Fetch up to 30 trading days
     const [fiiRecords, diiRecords] = await Promise.all([
       fetchUpstoxEndpoint('fii', '1D').catch((err) => {
-        console.error('[Institutional Service] Failed to fetch FII 1D:', err);
+        institutionalLogger.error('Failed to fetch FII 1D:', err);
         return [] as UpstoxInstitutionalRecord[];
       }),
       fetchUpstoxEndpoint('dii', '1D').catch((err) => {
-        console.error('[Institutional Service] Failed to fetch DII 1D:', err);
+        institutionalLogger.error('Failed to fetch DII 1D:', err);
         return [] as UpstoxInstitutionalRecord[];
       }),
     ]);
@@ -213,7 +207,7 @@ export async function getInstitutionalCashActivity(
 
       const dateObj = new Date(fii.time_stamp);
       mergedPoints.push({
-        date: getISTDateString(fii.time_stamp),
+        date: todayISTYmd(new Date(fii.time_stamp)),
         timestamp: fii.time_stamp,
         displayDate: dailyXFormatter.format(dateObj),
         fullDate: dailyFullFormatter.format(dateObj),
@@ -235,11 +229,11 @@ export async function getInstitutionalCashActivity(
     // Fetch recent daily data (up to 30 trading days = ~6-7 weeks of trading)
     const [fiiRecords, diiRecords] = await Promise.all([
       fetchUpstoxEndpoint('fii', '1D').catch((err) => {
-        console.error('[Institutional Service] Failed to fetch FII 1D for Weekly:', err);
+        institutionalLogger.error('Failed to fetch FII 1D for Weekly:', err);
         return [] as UpstoxInstitutionalRecord[];
       }),
       fetchUpstoxEndpoint('dii', '1D').catch((err) => {
-        console.error('[Institutional Service] Failed to fetch DII 1D for Weekly:', err);
+        institutionalLogger.error('Failed to fetch DII 1D for Weekly:', err);
         return [] as UpstoxInstitutionalRecord[];
       }),
     ]);
@@ -275,7 +269,7 @@ export async function getInstitutionalCashActivity(
         diiSell: 0,
       };
 
-      existing.dates.push(getISTDateString(fii.time_stamp));
+      existing.dates.push(todayISTYmd(new Date(fii.time_stamp)));
       existing.fiiBuy += fii.buy_amount || 0;
       existing.fiiSell += fii.sell_amount || 0;
       existing.diiBuy += dii?.buy_amount || 0;
@@ -315,11 +309,11 @@ export async function getInstitutionalCashActivity(
     // 1M: Sourced directly from Upstox interval=1M
     const [fiiRecords, diiRecords] = await Promise.all([
       fetchUpstoxEndpoint('fii', '1M').catch((err) => {
-        console.error('[Institutional Service] Failed to fetch FII 1M:', err);
+        institutionalLogger.error('Failed to fetch FII 1M:', err);
         return [] as UpstoxInstitutionalRecord[];
       }),
       fetchUpstoxEndpoint('dii', '1M').catch((err) => {
-        console.error('[Institutional Service] Failed to fetch DII 1M:', err);
+        institutionalLogger.error('Failed to fetch DII 1M:', err);
         return [] as UpstoxInstitutionalRecord[];
       }),
     ]);
@@ -342,7 +336,7 @@ export async function getInstitutionalCashActivity(
 
       const dateObj = new Date(fii.time_stamp);
       mergedPoints.push({
-        date: getISTDateString(fii.time_stamp),
+        date: todayISTYmd(new Date(fii.time_stamp)),
         timestamp: fii.time_stamp,
         displayDate: monthlyXFormatter.format(dateObj),
         fullDate: monthlyFullFormatter.format(dateObj),

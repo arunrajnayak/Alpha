@@ -128,9 +128,10 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       return null;
     }
 
-    // 3. Fetch full quotes in batches (Upstox URL length limit) + index quote in parallel
-    // Use larger batches for large indices (e.g. Microcap 250) to reduce round-trips.
-    // Upstox Full Quote URL can handle ~50 keys before hitting URL length limits.
+    // 3. Fetch full quotes in batches + index quote in parallel.
+    // Upstox Full Quote GET endpoint passes instrument keys in query param (?instrument_key=...).
+    // While LTP supports up to 500 keys, full quote URLs with >50 encoded ISIN keys (~25 chars each)
+    // risk exceeding standard 8KB / proxy URL length limits. 50 is the optimal safe batch size here.
     const BATCH_SIZE = 50;
     const batches: string[][] = [];
     for (let i = 0; i < instrumentKeys.length; i += BATCH_SIZE) {

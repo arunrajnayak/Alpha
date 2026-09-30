@@ -13,6 +13,8 @@ export interface UpstoxLiveQuote {
   instrument_token: string;
   previous_close: number;
   timestamp?: number;
+  indicative_equilibrium_price?: number;
+  is_pre_open?: boolean;
 }
 
 export interface UpstoxFullQuote {

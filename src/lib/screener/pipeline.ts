@@ -12,7 +12,7 @@
 
 import { prisma, chunkArray } from '@/lib/db';
 import { ensureInstrumentMaster, getAllSymbols, getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
-import { getFullQuote } from '@/lib/upstox-client';
+import { getFullQuotes } from '@/lib/upstox/client';
 import { getCategoriesBatch } from '@/lib/amfi/service';
 import { fetchAndStoreBhavcopy, isBhavcopyStale } from './bhavcopy';
 import { fetchAndStoreCandles, patchTodayPrices } from './prices';
@@ -257,7 +257,7 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
       const chunks = chunkArray(allKeys, 500);
       for (let i = 0; i < chunks.length; i++) {
         if (i > 0) await new Promise(r => setTimeout(r, 250));
-        const quotes = await getFullQuote(chunks[i]);
+        const quotes = await getFullQuotes(chunks[i]);
         for (const [, quote] of quotes) {
           if (quote.lower_circuit_limit > 0) {
             const bandWidth = (quote.upper_circuit_limit - quote.lower_circuit_limit) / quote.lower_circuit_limit;

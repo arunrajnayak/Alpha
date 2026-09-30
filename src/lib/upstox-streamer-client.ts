@@ -87,7 +87,11 @@ export class UpstoxStreamerClient extends EventEmitter {
         }
 
         const json = await response.json();
-        return json.data.authorizedRedirectUri;
+        const uri = json.data?.authorized_redirect_uri || json.data?.authorizedRedirectUri;
+        if (!uri) {
+            throw new Error('No authorized redirect URI returned by Upstox feed authorization');
+        }
+        return uri;
     }
 
     private connectWebSocket(url: string): Promise<void> {

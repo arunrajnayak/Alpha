@@ -10,6 +10,9 @@
 
 import { prisma } from '../db';
 import { TokenStatus, TokenExpiredError, NoTokenError } from './types';
+import { logger } from '@/lib/logger';
+
+const authLogger = logger.scope('UpstoxAuth');
 
 // ============================================================================
 // Analytics Token (Long-lived, env var based)
@@ -72,7 +75,7 @@ export async function getStoredToken(): Promise<string | null> {
 
     if (token) {
       if (tokenCache && token.id !== tokenCache.tokenId) {
-        console.log(`[Upstox Auth] New token detected (ID: ${token.id}), updating cache`);
+        authLogger.info(`New token detected (ID: ${token.id}), updating cache`);
       }
 
       tokenCache = {
@@ -87,7 +90,7 @@ export async function getStoredToken(): Promise<string | null> {
     tokenCache = null;
     return null;
   } catch (error) {
-    console.error('[Upstox Auth] Error fetching stored token:', error);
+    authLogger.error('Error fetching stored token:', error);
     return null;
   }
 }

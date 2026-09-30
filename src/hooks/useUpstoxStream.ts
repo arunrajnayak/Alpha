@@ -272,6 +272,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
   const instrumentKeysRef = useRef<string[]>([]);
   const dynamicKeysRef = useRef<Set<string>>(new Set());
   const protoRootRef = useRef<protobuf.Root | null>(null);
+  const connectRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   // Callback refs
   const onPriceUpdateRef = useRef(onPriceUpdate);
@@ -508,7 +509,7 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
 
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;
-            connect();
+            connectRef.current();
           }, delay);
         } else {
           updateStatus('disconnected');
@@ -525,12 +526,16 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;
-            connect();
+            connectRef.current();
           }, delay);
         }
       }
     }
   }, [updateStatus, handleError, decodeMessage, processMessage, subscribe]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
@@ -541,8 +546,14 @@ export function useUpstoxStream(options: UseUpstoxStreamOptions = {}): UseUpstox
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    updateStatus('disconnected');
-  }, [updateStatus]);
+    setStatus((prev) => {
+      if (prev !== 'disconnected') {
+        onStatusChangeRef.current?.('disconnected');
+        return 'disconnected';
+      }
+      return prev;
+    });
+  }, []);
 
   const reconnect = useCallback(() => {
     disconnect();

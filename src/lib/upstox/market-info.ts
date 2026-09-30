@@ -7,7 +7,9 @@
 import { getAccessToken } from './auth';
 import { MarketHoliday, MarketTiming, UpstoxError, UpstoxExchangeStatus } from './types';
 import { istDayOfWeek, istTimeParts, todayISTYmd } from '@/lib/tz';
+import { logger } from '@/lib/logger';
 
+const marketInfoLogger = logger.scope('MarketInfo');
 const BASE_URL = 'https://api.upstox.com/v2';
 
 // ============================================================================
@@ -71,8 +73,14 @@ export async function getMarketHolidays(date?: string): Promise<MarketHoliday[]>
 }
 
 /**
- * Get all NSE trading holidays for a year (cached)
- * Returns a Set of date strings in YYYY-MM-DD format
+ * Get all NSE trading holidays for a year (cached, 24-hour TTL).
+ * Returns a Set of date strings in YYYY-MM-DD format.
+ *
+ * @note The Upstox holidays API returns **only the current calendar year**'s holidays.
+ * When `year` differs from the current year (e.g. checking dates in late Dec or early Jan),
+ * this function will return an empty set — which causes `isTradingHoliday` to fail-open
+ * (treating the date as a trading day). This is acceptable for the current use-case but
+ * callers near year boundaries should handle the empty set explicitly if correctness matters.
  */
 export async function getTradingHolidays(year: number): Promise<Set<string>> {
   const now = Date.now();
@@ -82,7 +90,7 @@ export async function getTradingHolidays(year: number): Promise<Set<string>> {
     return cached.holidays;
   }
 
-  console.log(`[Market Info] Fetching holidays for year ${year}...`);
+  marketInfoLogger.info(`Fetching holidays for year ${year}...`);
 
   try {
     const allHolidays = await getMarketHolidays();
@@ -118,11 +126,11 @@ export async function getTradingHolidays(year: number): Promise<Set<string>> {
     }
 
     holidayCache.set(year, { holidays: yearHolidays, fetchedAt: now });
-    console.log(`[Market Info] Cached ${yearHolidays.size} holidays for ${year}`);
+    marketInfoLogger.info(`Cached ${yearHolidays.size} holidays for ${year}`);
 
     return yearHolidays;
   } catch (error) {
-    console.error(`[Market Info] Failed to fetch holidays for ${year}:`, error);
+    marketInfoLogger.error(`Failed to fetch holidays for ${year}:`, error);
     // Return empty set on error - fail open
     return new Set();
   }
@@ -161,7 +169,7 @@ export async function getSpecialTradingDays(year: number): Promise<Set<string>> 
     }
     return yearSpecialDays;
   } catch (error) {
-    console.warn(`[Market Info] Failed to fetch special trading days for ${year}`, error);
+    marketInfoLogger.warn(`Failed to fetch special trading days for ${year}:`, error);
     return new Set();
   }
 }
@@ -268,7 +276,7 @@ export async function isMarketOpen(): Promise<boolean> {
     const nowMs = now.getTime();
     return nowMs >= nseTimings.start_time && nowMs <= nseTimings.end_time;
   } catch (error) {
-    console.error('[Market Info] Failed to check market status:', error);
+    marketInfoLogger.error('Failed to check market status:', error);
     const currentMinutes = minutesInIST();
     return currentMinutes >= NSE_OPEN_MINUTES && currentMinutes <= NSE_CLOSE_MINUTES;
   }
@@ -303,7 +311,7 @@ export async function getExchangeStatus(exchange: string = 'NSE_EQ'): Promise<Up
 
     return null;
   } catch (error) {
-    console.warn(`[Market Info] Failed to fetch exchange status for ${exchange}:`, error);
+    marketInfoLogger.warn(`Failed to fetch exchange status for ${exchange}:`, error);
     return null;
   }
 }

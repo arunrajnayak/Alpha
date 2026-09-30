@@ -12,6 +12,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getWebSocketAuthUrl, getInstrumentKeys } from '@/lib/upstox';
 import { INDEX_KEYS } from '@/lib/upstox/client';
+import { apiLogger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,13 +52,7 @@ export async function GET(): Promise<NextResponse<AuthorizeResponse | { error: s
     }
 
     // Add index keys for benchmark comparison
-    const indexKeys = [
-      INDEX_KEYS['Nifty 50'],
-      INDEX_KEYS['Nifty Midcap 100'],
-      INDEX_KEYS['Nifty Smallcap 250'],
-      INDEX_KEYS['Nifty Microcap 250'],
-      INDEX_KEYS['Nifty 500 Momentum 50'],
-    ].filter(Boolean) as string[];
+    const indexKeys = Object.values(INDEX_KEYS).filter(Boolean) as string[];
 
     for (const key of indexKeys) {
       if (!instrumentKeys.includes(key)) {
@@ -72,7 +67,7 @@ export async function GET(): Promise<NextResponse<AuthorizeResponse | { error: s
       indices: indexKeys,
     });
   } catch (error) {
-    console.error('[Stream Authorize] Error:', error);
+    apiLogger.error('Error in stream authorize:', error);
 
     const message = error instanceof Error ? error.message : 'Failed to authorize WebSocket';
 

@@ -6,6 +6,9 @@ import { getInstrumentKey, getLiveQuotes, getOHLC } from '@/lib/upstox';
 import type { CandleData, TradeMarker, ChartInterval } from '@/lib/chart-types';
 import { todayISTYmd, istDayOfWeek, istTimeParts } from '@/lib/tz';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
+import { logger } from '@/lib/logger';
+
+const chartLogger = logger.scope('Chart');
 
 /**
  * Fetch OHLCV candle data for a stock from Upstox API.
@@ -72,7 +75,7 @@ export async function getStockCandles(
 
     const [historicalRes, ohlcMap] = await Promise.all([
         getHistoricalCandles(instrumentKey, interval, safeFromDate, toDate).catch((err) => {
-            console.warn(`Historical candles fetch failed for ${symbol} (${safeFromDate} to ${toDate}):`, err?.message || err);
+            chartLogger.warn(`Historical candles fetch failed for ${symbol} (${safeFromDate} to ${toDate}):`, err?.message || err);
             return { candles: [] };
         }),
         interval === 'day' ? getOHLC([instrumentKey], '1d').catch(() => new Map()) : Promise.resolve(new Map()),
