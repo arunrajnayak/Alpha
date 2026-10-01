@@ -251,6 +251,8 @@ export default function RebalanceModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [addingStock, setAddingStock] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isWithdrawal, setIsWithdrawal] = useState(false);
@@ -419,14 +421,40 @@ export default function RebalanceModal({
     setState(prev => removeStock(prev, symbol));
   };
 
-  const handleAddStock = async (result: StockSearchResult) => {
-    // Show local loading state if needed, or rely on async/await
-    const price = await getStockPrice(result.symbol);
-    if (price) {
-      setState(prev => addStock(prev, result.symbol, price, result.sector));
+  const handleAddStock = async (result: StockSearchResult | string) => {
+    const rawSymbol = typeof result === 'string' ? result : result.symbol;
+    const cleanSymbol = rawSymbol.trim().toUpperCase();
+    if (!cleanSymbol) return;
+
+    // Check if stock already exists in current rebalance state
+    if (state.holdings.some(h => h.symbol.toUpperCase() === cleanSymbol)) {
+      setAddError(`${cleanSymbol} is already in the portfolio`);
+      setTimeout(() => setAddError(null), 3000);
+      setSearchQuery('');
+      setSearchResults([]);
+      return;
     }
-    setSearchQuery('');
-    setSearchResults([]);
+
+    setAddingStock(true);
+    setAddError(null);
+    try {
+      const price = await getStockPrice(cleanSymbol);
+      if (price && price > 0) {
+        const sector = typeof result === 'string' ? 'Other' : (result.sector || 'Other');
+        setState(prev => addStock(prev, cleanSymbol, price, sector));
+        setSearchQuery('');
+        setSearchResults([]);
+      } else {
+        setAddError(`Could not fetch price for ${cleanSymbol}.`);
+        setTimeout(() => setAddError(null), 4000);
+      }
+    } catch (err) {
+      rebalanceLogger.error('Failed to add stock', err);
+      setAddError(`Failed to add ${cleanSymbol}.`);
+      setTimeout(() => setAddError(null), 4000);
+    } finally {
+      setAddingStock(false);
+    }
   };
 
   const handleCopyTrades = async () => {
@@ -490,14 +518,20 @@ export default function RebalanceModal({
              </Box>
 
              {/* Stock Search in Header */}
-             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                 <Box sx={{ width: 300 }}>
+             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative' }}>
+                 <Box sx={{ width: 320, position: 'relative' }}>
                     <Autocomplete
                       freeSolo
+                      filterOptions={(x) => x}
                       options={searchResults}
-                      getOptionLabel={(option) => 
-                        typeof option === 'string' ? option : `${option.symbol} - ${option.sector}`
-                      }
+                      getOptionLabel={(option) => {
+                        if (typeof option === 'string') return option;
+                        return option.name ? `${option.symbol} - ${option.name}` : `${option.symbol} - ${option.sector}`;
+                      }}
+                      isOptionEqualToValue={(option, value) => {
+                        if (typeof option === 'string' || typeof value === 'string') return option === value;
+                        return option.symbol === value.symbol;
+                      }}
                       inputValue={searchQuery}
                       onInputChange={(_, value) => {
                         setSearchQuery(value);
@@ -506,16 +540,17 @@ export default function RebalanceModal({
                         }
                       }}
                       onChange={(_, value) => {
-                        if (value && typeof value !== 'string') {
+                        if (value) {
                           handleAddStock(value);
                         }
                       }}
-                      loading={searchLoading}
+                      loading={searchLoading || addingStock}
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          placeholder="Add Stock (e.g. TCS)"
+                          placeholder="Add Stock (e.g. ATHERENERG)"
                           size="small"
+                          disabled={addingStock}
                           sx={{
                             '& .MuiInputBase-root': { 
                                 bgcolor: 'rgba(255,255,255,0.03)', 
@@ -537,7 +572,7 @@ export default function RebalanceModal({
                               ),
                               endAdornment: (
                                 <>
-                                  {searchLoading ? <CircularProgress size={16} /> : null}
+                                  {searchLoading || addingStock ? <CircularProgress size={16} /> : null}
                                   {params.slotProps.input.endAdornment}
                                 </>
                               ),
@@ -545,15 +580,49 @@ export default function RebalanceModal({
                           }}
                         />
                       )}
-                      renderOption={(props, option) => (
-                        <li {...props} key={option.symbol}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                            <span className="font-semibold">{option.symbol}</span>
-                            <span className="text-gray-400 text-sm">{option.sector}</span>
-                          </Box>
-                        </li>
-                      )}
+                      renderOption={(props, option) => {
+                        const { key, ...restProps } = props;
+                        return (
+                          <li key={option.symbol || key} {...restProps} className="hover:bg-white/5 cursor-pointer px-3 py-2 border-b border-white/5 last:border-0">
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                              <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, pr: 1 }}>
+                                <span className="font-semibold text-white text-sm">{option.symbol}</span>
+                                {option.name && (
+                                  <span className="text-xs text-gray-400 truncate max-w-[190px]">{option.name}</span>
+                                )}
+                              </Box>
+                              <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-gray-300 font-mono">
+                                  {option.sector || option.exchange}
+                                </span>
+                              </Box>
+                            </Box>
+                          </li>
+                        );
+                      }}
                     />
+                    {addError && (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          mt: 0.5,
+                          color: '#f87171',
+                          bgcolor: 'rgba(15, 23, 42, 0.95)',
+                          px: 1,
+                          py: 0.25,
+                          borderRadius: 1,
+                          border: '1px solid rgba(248, 113, 113, 0.3)',
+                          zIndex: 10,
+                          fontSize: '0.75rem',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {addError}
+                      </Typography>
+                    )}
                  </Box>
                  <Tooltip title="Reset">
                    <IconButton onClick={handleReset} size="small" sx={{ height: 32, width: 32, color: '#fb923c', p: 0, borderRadius: 1.5, bgcolor: 'rgba(251, 146, 60, 0.1)', '&:hover': { color: '#fdba74', bgcolor: 'rgba(251, 146, 60, 0.2)' } }}>

@@ -8,10 +8,11 @@ const sectorsLogger = logger.scope('Sectors');
 
 
 
-// All 34 sectors from Zerodha
+// All 35 sectors from Zerodha
 const SECTORS = [
   { name: 'Agriculture', slug: 'agriculture' },
   { name: 'Auto Ancillary', slug: 'auto-ancillary' },
+  { name: 'Automobile', slug: 'automobile' },
   { name: 'Aviation', slug: 'aviation' },
   { name: 'Building Materials', slug: 'building-materials' },
   { name: 'Chemicals', slug: 'chemicals' },

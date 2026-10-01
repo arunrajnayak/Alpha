@@ -237,10 +237,13 @@ async function loadInstruments(exchange: 'NSE' | 'BSE') {
             // Uppercase symbol for consistent lookup (enables O(1) case-insensitive search)
             const symbol = rawSymbol.toUpperCase();
             
-            // Only include EQUITY, BE (trade-to-trade), and INDEX types
-            // BE stocks are valid equities with settlement restrictions (no intraday)
+            // Only include EQUITY, BE, SM, ST, BZ, and INDEX types
             const type = instr.instrument_type?.toUpperCase();
-            if (type !== 'EQ' && type !== 'EQUITY' && type !== 'BE' && type !== 'INDEX') continue;
+            if (exchange === 'NSE') {
+                if (type !== 'EQ' && type !== 'EQUITY' && type !== 'BE' && type !== 'INDEX' && type !== 'SM' && type !== 'ST' && type !== 'BZ') continue;
+            } else {
+                if (instr.segment !== 'BSE_EQ' && type !== 'INDEX' && type !== 'EQ') continue;
+            }
             
             const instrData: InstrumentData = {
                 key: instr.instrument_key,
@@ -503,4 +506,83 @@ export function clearInstrumentCache(): void {
     bseInstrumentMap = null;
     isinToKeyMap = null;
     keyToSymbolMap = null;
+}
+
+export interface InstrumentSearchResult {
+    symbol: string;
+    name: string;
+    exchange: string;
+    instrumentType: string;
+    key: string;
+}
+
+/**
+ * Search instruments by symbol or company name
+ */
+export async function searchInstruments(
+    query: string,
+    limit: number = 25
+): Promise<InstrumentSearchResult[]> {
+    await ensureInstrumentMaster();
+    
+    const q = query.trim().toUpperCase();
+    if (!q || q.length < 2) return [];
+
+    const matches: { item: InstrumentSearchResult; score: number }[] = [];
+    const seenSymbols = new Set<string>();
+
+    const scanMap = (map: Map<string, InstrumentData> | null, defaultExchange: string) => {
+        if (!map) return;
+        for (const [symbol, data] of map.entries()) {
+            if (data.instrumentType === 'INDEX') continue;
+            if (seenSymbols.has(symbol)) continue;
+
+            const upperSymbol = symbol.toUpperCase();
+            const upperName = (data.name || '').toUpperCase();
+
+            let score = -1;
+
+            if (upperSymbol === q) {
+                score = 100; // Exact symbol match
+            } else if (upperSymbol.startsWith(q)) {
+                score = 80; // Symbol prefix match
+            } else if (upperSymbol.includes(q)) {
+                score = 60; // Symbol contains query
+            } else if (upperName.startsWith(q) || upperName.includes(' ' + q)) {
+                score = 40; // Company name word match
+            } else if (upperName.includes(q)) {
+                score = 20; // Company name contains query
+            }
+
+            if (score >= 0) {
+                seenSymbols.add(symbol);
+                matches.push({
+                    score,
+                    item: {
+                        symbol,
+                        name: data.name || symbol,
+                        exchange: data.exchange || defaultExchange,
+                        instrumentType: data.instrumentType,
+                        key: data.key,
+                    },
+                });
+            }
+        }
+    };
+
+    scanMap(nseInstrumentMap, 'NSE');
+
+    if (matches.length < limit && bseInstrumentMap) {
+        scanMap(bseInstrumentMap, 'BSE');
+    }
+
+    matches.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.item.symbol.length !== b.item.symbol.length) {
+            return a.item.symbol.length - b.item.symbol.length;
+        }
+        return a.item.symbol.localeCompare(b.item.symbol);
+    });
+
+    return matches.slice(0, limit).map(m => m.item);
 }
