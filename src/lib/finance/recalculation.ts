@@ -979,6 +979,93 @@ export async function recalculatePortfolioHistoryInternal(
         await prisma.monthlyPortfolioSnapshot.createMany({ data: filteredMonthly });
     }
 
+    if (dataLockDate) {
+        // Backfill market cap segmentation on locked historical weekly snapshots
+        // so that Nanocap history is continuous across all time without
+        // modifying locked NAV, equity, returns, or accounting records.
+        const lockedWeeklyData = weeklyData.filter(d => d.date <= dataLockDate!);
+        if (lockedWeeklyData.length > 0) {
+            financeLogger.info(`Backfilling market cap segmentation for ${lockedWeeklyData.length} locked weekly snapshots...`);
+            const existingWeekly = await prisma.weeklyPortfolioSnapshot.findMany({
+                where: { date: { lte: dataLockDate! } },
+                select: { id: true, date: true }
+            });
+            const simMap = new Map<string, typeof weeklyData[0]>();
+            for (const d of lockedWeeklyData) {
+                const istKey = new Date(d.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                simMap.set(istKey, d);
+            }
+            const updates: Promise<any>[] = [];
+            for (const row of existingWeekly) {
+                const rowTime = new Date(row.date).getTime();
+                const istKey = new Date(row.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+                let sim = simMap.get(istKey);
+                if (!sim) {
+                    // Fall back to closest simulated week within ±4 days (for holiday Fridays vs Thursdays)
+                    let closestDiff = Infinity;
+                    for (const d of lockedWeeklyData) {
+                        const diff = Math.abs(new Date(d.date).getTime() - rowTime);
+                        if (diff <= 4 * 24 * 60 * 60 * 1000 && diff < closestDiff) {
+                            closestDiff = diff;
+                            sim = d;
+                        }
+                    }
+                }
+                if (sim) {
+                    updates.push(
+                        prisma.weeklyPortfolioSnapshot.update({
+                            where: { id: row.id },
+                            data: {
+                                largeCapPercent: sim.largeCapPercent,
+                                midCapPercent: sim.midCapPercent,
+                                smallCapPercent: sim.smallCapPercent,
+                                microCapPercent: sim.microCapPercent,
+                                nanoCapPercent: sim.nanoCapPercent,
+                            }
+                        })
+                    );
+                }
+            }
+
+            for (let i = 0; i < updates.length; i += 20) {
+                await Promise.all(updates.slice(i, i + 20));
+            }
+        }
+
+        const lockedMonthlyData = Array.from(monthlyDeduped.values()).filter(d => d.date <= dataLockDate!);
+        if (lockedMonthlyData.length > 0) {
+            financeLogger.info(`Backfilling market cap segmentation for ${lockedMonthlyData.length} locked monthly snapshots...`);
+            const existingMonthly = await prisma.monthlyPortfolioSnapshot.findMany({
+                where: { date: { lte: dataLockDate! } },
+                select: { id: true, date: true }
+            });
+            const simMap = new Map<string, typeof monthlyData[0]>();
+            for (const d of lockedMonthlyData) {
+                const monthKey = new Date(d.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(0, 7);
+                simMap.set(monthKey, d);
+            }
+            const monthlyUpdates = existingMonthly.map(row => {
+                const monthKey = new Date(row.date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(0, 7);
+                const sim = simMap.get(monthKey);
+                if (!sim) return null;
+                return prisma.monthlyPortfolioSnapshot.update({
+                    where: { id: row.id },
+                    data: {
+                        largeCapPercent: sim.largeCapPercent,
+                        midCapPercent: sim.midCapPercent,
+                        smallCapPercent: sim.smallCapPercent,
+                        microCapPercent: sim.microCapPercent,
+                        nanoCapPercent: sim.nanoCapPercent,
+                    }
+                });
+            }).filter((u): u is NonNullable<typeof u> => u !== null);
+
+            for (let i = 0; i < monthlyUpdates.length; i += 20) {
+                await Promise.all(monthlyUpdates.slice(i, i + 20));
+            }
+        }
+    }
+
     financeLogger.info("Recalculation Complete.");
         try {
             // Invalidate caches - using 'as any' to bypass potential signature mismatch in tooling
