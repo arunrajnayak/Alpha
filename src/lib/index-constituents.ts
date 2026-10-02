@@ -9,7 +9,6 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { parse } from 'csv-parse/sync';
-import { extractText } from 'unpdf';
 import { getInstrumentKeys } from './instrument-service';
 import totalMarketRebalancesData from './data/total-market-rebalances.json';
 import { prisma } from '@/lib/db';
@@ -366,13 +365,35 @@ export function getTotalMarketRebalanceEpochKey(asOfDate: Date, rebalances: Tota
 }
 
 /**
+ * Load current Nifty Total Market symbols, prioritizing AppConfig in database,
+ * falling back to niftyindices.com / disk cache.
+ */
+export async function loadCurrentTotalMarketSymbols(): Promise<string[]> {
+  try {
+    const configRow = await prisma.appConfig.findUnique({
+      where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
+    });
+    if (configRow?.value) {
+      const parsed = JSON.parse(configRow.value);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {
+    // fallback
+  }
+  const result = await getIndexConstituentData('NIFTY Total Market');
+  return result.symbols;
+}
+
+/**
  * Get Nifty Total Market constituents as of a specific date.
  * If asOfDate is omitted, returns the current constituent set.
  * Otherwise, unwinds historical rebalances (exclusions & inclusions from NSE circulars)
  * backwards from current constituents to construct the exact constituent set for that historical date.
  */
 export async function getTotalMarketConstituents(asOfDate?: Date): Promise<Set<string>> {
-  const currentSymbols = await getIndexConstituents('NIFTY Total Market');
+  const currentSymbols = await loadCurrentTotalMarketSymbols();
   if (!asOfDate) {
     return new Set(currentSymbols.map((s) => s.toUpperCase()));
   }
@@ -429,190 +450,19 @@ export interface TotalMarketSyncResult {
   message: string;
 }
 
-const NSE_API_HEADERS: Record<string, string> = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36',
-  'Referer': 'https://www.nseindia.com/resources/exchange-communication-press-releases',
-  'Accept': '*/*',
-};
-
-const MONTH_MAP: Record<string, string> = {
-  january: '01', february: '02', march: '03', april: '04',
-  may: '05', june: '06', july: '07', august: '08',
-  september: '09', october: '10', november: '11', december: '12',
-};
-
-function parseWefDate(body: string): string | null {
-  const match = body.match(/w\.e\.f\.\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/i);
-  if (!match) return null;
-  const [, monthStr, dayStr, yearStr] = match;
-  const month = MONTH_MAP[monthStr.toLowerCase()];
-  if (!month) return null;
-  const day = dayStr.padStart(2, '0');
-  return `${yearStr}-${month}-${day}`;
-}
-
 /**
- * Extract exclusions and inclusions for Nifty Total Market from an official NSE press release PDF.
- */
-export async function parseNseCircularPdf(pdfUrl: string): Promise<{ excluded: string[]; included: string[] }> {
-  const res = await fetch(pdfUrl, {
-    headers: {
-      ...NSE_API_HEADERS,
-      'Referer': 'https://www.nseindia.com/',
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to download NSE circular PDF (${res.status} ${res.statusText}): ${pdfUrl}`);
-  }
-  const arrayBuffer = await res.arrayBuffer();
-  const { text } = await extractText(new Uint8Array(arrayBuffer));
-  const pages = Array.isArray(text) ? text : [text];
-  const allLines = pages.flatMap((p) => p.split('\n').map((l) => l.trim()));
-
-  let inTm = false;
-  let mode: 'excluded' | 'included' | null = null;
-  const excluded: string[] = [];
-  const included: string[] = [];
-
-  for (const line of allLines) {
-    if (/(?:[a-z]|\d+)\)\s*Nifty Total Market/i.test(line)) {
-      inTm = true;
-      continue;
-    }
-    if (inTm && /^(?:[a-z]|\d+)\)\s*Nifty/i.test(line)) {
-      break;
-    }
-    if (inTm) {
-      if (line.toLowerCase().includes('following companies are being excluded')) {
-        mode = 'excluded';
-        continue;
-      } else if (line.toLowerCase().includes('following companies are being included')) {
-        mode = 'included';
-        continue;
-      }
-
-      const m = line.match(/^\d+\s+(.+?)\s+([A-Z0-9&\-_]+)\*?$/);
-      if (m) {
-        const sym = m[2].replace(/\*+$/, '').trim().toUpperCase();
-        if (!['SYMBOL', 'NSE', 'ISIN'].includes(sym)) {
-          if (mode === 'excluded') excluded.push(sym);
-          else if (mode === 'included') included.push(sym);
-        }
-      }
-    }
-  }
-
-  return {
-    excluded: Array.from(new Set(excluded)).sort(),
-    included: Array.from(new Set(included)).sort(),
-  };
-}
-
-/**
- * Query the official NSE Press Release CMS API to find and parse any newly announced
- * semi-annual rebalance circulars for Nifty Total Market.
- */
-export async function fetchRecentNseCircularRebalances(
-  knownEffectiveDates: Set<string>
-): Promise<TotalMarketRebalance[]> {
-  try {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const years = now.getMonth() < 3 ? [currentYear - 1, currentYear] : [currentYear];
-    const windows: Array<{ from: string; to: string }> = [];
-
-    for (const y of years) {
-      windows.push({ from: `01-02-${y}`, to: `28-02-${y}` });
-      windows.push({ from: `01-08-${y}`, to: `31-08-${y}` });
-    }
-
-    const newRebalances: TotalMarketRebalance[] = [];
-
-    for (const { from, to } of windows) {
-      const url = `https://www.nseindia.com/api/press-release-cms20?fromDate=${from}&toDate=${to}`;
-      const res = await fetch(url, { headers: NSE_API_HEADERS });
-      if (!res.ok) continue;
-
-      const items = (await res.json()) as Array<{
-        content?: {
-          field_date?: string;
-          body?: string;
-          field_file_attachement?: { url?: string };
-        };
-      }>;
-
-      for (const item of items) {
-        const body = item.content?.body || '';
-        if (body.toLowerCase().includes('replacements in indices') && body.toLowerCase().includes('w.e.f.')) {
-          const pdfUrl = item.content?.field_file_attachement?.url;
-          const circDate = item.content?.field_date || '';
-          const effIso = parseWefDate(body);
-
-          if (!effIso || !pdfUrl || knownEffectiveDates.has(effIso)) {
-            continue;
-          }
-
-          console.log(`[IndexConstituents] Discovered new NSE rebalance circular: ${effIso} (${circDate}) -> ${pdfUrl}`);
-          const { excluded, included } = await parseNseCircularPdf(pdfUrl);
-          if (excluded.length > 0 || included.length > 0) {
-            newRebalances.push({
-              effectiveDate: effIso,
-              circularDate: circDate,
-              url: pdfUrl,
-              excluded,
-              included,
-            });
-            knownEffectiveDates.add(effIso);
-          }
-        }
-      }
-    }
-
-    return newRebalances;
-  } catch (err) {
-    console.warn('[IndexConstituents] Warning: Failed to query NSE Press Release API:', err);
-    return [];
-  }
-}
-
-/**
- * Automatically synchronize Nifty Total Market constituents.
- * 1. Checks official NSE press release circulars for newly announced semi-annual rebalances (using unpdf).
- * 2. Checks niftyindices.com live CSV to keep the current constituent set updated.
- * 3. Records changes into AppConfig in Turso and clears point-in-time constituent caches.
+ * Automatically synchronize Nifty Total Market constituents from niftyindices.com CSV.
+ * Runs weekly on Sundays.
+ * 
+ * When a semi-annual reconstitution is published by niftyindices.com:
+ * 1. Computes exact inclusions (freshSet \ storedSet) and exclusions (storedSet \ freshSet)
+ * 2. Records a new rebalance entry for this 6-month period in AppConfig (TOTAL_MARKET_REBALANCES)
+ * 3. Updates the stored active symbols in AppConfig (TOTAL_MARKET_CURRENT_SYMBOLS)
+ * 4. Clears point-in-time caches so historical 6-month periods remain isolated and intact
+ * 5. Returns status: 'rebalanced' which automatically triggers portfolio history recalculation
  */
 export async function syncTotalMarketConstituents(): Promise<TotalMarketSyncResult> {
-  const existingRebalances = await loadTotalMarketRebalances();
-  const knownDates = new Set(existingRebalances.map((r) => r.effectiveDate));
-  
-  // 1. Proactively query NSE Press Release CMS for newly announced circulars
-  let circularRebalancesFound: TotalMarketRebalance[] = [];
-  try {
-    circularRebalancesFound = await fetchRecentNseCircularRebalances(knownDates);
-  } catch (err) {
-    console.warn('[IndexConstituents] NSE circular check failed (non-fatal):', err);
-  }
-
-  let updatedRebalances = [...existingRebalances];
-  if (circularRebalancesFound.length > 0) {
-    updatedRebalances = [...circularRebalancesFound, ...updatedRebalances];
-    updatedRebalances.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
-
-    await prisma.appConfig.upsert({
-      where: { key: 'TOTAL_MARKET_REBALANCES' },
-      create: {
-        key: 'TOTAL_MARKET_REBALANCES',
-        value: JSON.stringify(updatedRebalances),
-      },
-      update: {
-        value: JSON.stringify(updatedRebalances),
-      },
-    });
-
-    historicalTotalMarketCache.clear();
-  }
-
-  // 2. Fetch current constituent list from niftyindices.com
+  // 1. Fetch fresh CSV from niftyindices.com
   const freshSymbols = await refreshIndexConstituents('NIFTY Total Market');
   if (freshSymbols.length === 0) {
     throw new Error('Failed to fetch NIFTY Total Market constituents from niftyindices.com');
@@ -620,7 +470,7 @@ export async function syncTotalMarketConstituents(): Promise<TotalMarketSyncResu
 
   const freshSet = new Set(freshSymbols.map((s) => s.toUpperCase()));
 
-  // 3. Load stored state from AppConfig
+  // 2. Load stored state from AppConfig
   const storedConfig = await prisma.appConfig.findUnique({
     where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
   });
@@ -638,18 +488,16 @@ export async function syncTotalMarketConstituents(): Promise<TotalMarketSyncResu
       },
     });
 
-    if (updatedRebalances.length > 0) {
-      await prisma.appConfig.upsert({
-        where: { key: 'TOTAL_MARKET_REBALANCES' },
-        create: {
-          key: 'TOTAL_MARKET_REBALANCES',
-          value: JSON.stringify(updatedRebalances),
-        },
-        update: {
-          value: JSON.stringify(updatedRebalances),
-        },
-      });
-    }
+    await prisma.appConfig.upsert({
+      where: { key: 'TOTAL_MARKET_REBALANCES' },
+      create: {
+        key: 'TOTAL_MARKET_REBALANCES',
+        value: JSON.stringify(totalMarketRebalancesData),
+      },
+      update: {
+        value: JSON.stringify(totalMarketRebalancesData),
+      },
+    });
 
     return {
       status: 'initialized',
@@ -661,72 +509,61 @@ export async function syncTotalMarketConstituents(): Promise<TotalMarketSyncResu
   const storedSymbolsArray: string[] = JSON.parse(storedConfig.value);
   const storedSet = new Set(storedSymbolsArray.map((s) => s.toUpperCase()));
 
-  // 4. Detect CSV changes against stored snapshot
+  // 3. Detect changes between fresh CSV and previous stored snapshot
   const included = Array.from(freshSet).filter((s) => !storedSet.has(s)).sort();
   const excluded = Array.from(storedSet).filter((s) => !freshSet.has(s)).sort();
 
-  // If CSV changed and we did NOT discover an NSE circular for today's date, record the CSV diff
-  if (included.length > 0 || excluded.length > 0) {
-    const todayYmd = todayISTYmd();
-    const csvRebalance: TotalMarketRebalance = {
-      effectiveDate: todayYmd,
-      circularDate: todayYmd,
-      url: 'https://www.niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv',
-      excluded,
-      included,
-    };
-
-    if (!updatedRebalances.some((r) => r.effectiveDate === todayYmd)) {
-      updatedRebalances = [csvRebalance, ...updatedRebalances];
-      updatedRebalances.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
-
-      await prisma.appConfig.upsert({
-        where: { key: 'TOTAL_MARKET_REBALANCES' },
-        create: {
-          key: 'TOTAL_MARKET_REBALANCES',
-          value: JSON.stringify(updatedRebalances),
-        },
-        update: {
-          value: JSON.stringify(updatedRebalances),
-        },
-      });
-    }
-
-    await prisma.appConfig.upsert({
-      where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
-      create: {
-        key: 'TOTAL_MARKET_CURRENT_SYMBOLS',
-        value: JSON.stringify(Array.from(freshSet).sort()),
-      },
-      update: {
-        value: JSON.stringify(Array.from(freshSet).sort()),
-      },
-    });
-
-    historicalTotalMarketCache.clear();
-
+  if (included.length === 0 && excluded.length === 0) {
     return {
-      status: 'rebalanced',
+      status: 'up_to_date',
       totalConstituents: freshSymbols.length,
-      newRebalance: circularRebalancesFound[0] || csvRebalance,
-      message: `Rebalance detected! Added ${included.length} stocks, removed ${excluded.length} stocks.`,
+      message: `Nifty Total Market is up to date (${freshSymbols.length} constituents, 0 changes)`,
     };
   }
 
-  // If a circular was found even if CSV hasn't flipped yet
-  if (circularRebalancesFound.length > 0) {
-    return {
-      status: 'rebalanced',
-      totalConstituents: freshSymbols.length,
-      newRebalance: circularRebalancesFound[0],
-      message: `New NSE rebalance circular discovered (${circularRebalancesFound[0].effectiveDate}) with ${circularRebalancesFound[0].included.length} inclusions and ${circularRebalancesFound[0].excluded.length} exclusions.`,
-    };
-  }
+  // 4. Semi-annual reconstitution detected on niftyindices.com!
+  const todayYmd = todayISTYmd();
+  const newRebalance: TotalMarketRebalance = {
+    effectiveDate: todayYmd,
+    circularDate: todayYmd,
+    url: 'https://www.niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv',
+    excluded,
+    included,
+  };
+
+  const existingRebalances = await loadTotalMarketRebalances();
+  const updatedRebalances = [newRebalance, ...existingRebalances.filter((r) => r.effectiveDate !== todayYmd)];
+  updatedRebalances.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+
+  await prisma.appConfig.upsert({
+    where: { key: 'TOTAL_MARKET_REBALANCES' },
+    create: {
+      key: 'TOTAL_MARKET_REBALANCES',
+      value: JSON.stringify(updatedRebalances),
+    },
+    update: {
+      value: JSON.stringify(updatedRebalances),
+    },
+  });
+
+  await prisma.appConfig.upsert({
+    where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
+    create: {
+      key: 'TOTAL_MARKET_CURRENT_SYMBOLS',
+      value: JSON.stringify(Array.from(freshSet).sort()),
+    },
+    update: {
+      value: JSON.stringify(Array.from(freshSet).sort()),
+    },
+  });
+
+  historicalTotalMarketCache.clear();
 
   return {
-    status: 'up_to_date',
+    status: 'rebalanced',
     totalConstituents: freshSymbols.length,
-    message: `Nifty Total Market is up to date (${freshSymbols.length} constituents, 0 changes)`,
+    newRebalance,
+    message: `Rebalance detected from niftyindices.com CSV! Added ${included.length} stocks, removed ${excluded.length} stocks.`,
   };
 }
 
