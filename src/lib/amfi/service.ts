@@ -22,7 +22,7 @@ import { prisma, chunkArray } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { istDateParts } from '@/lib/tz';
 import { stripSeriesSuffix } from '@/lib/symbol-utils';
-import { getIndexConstituents } from '@/lib/index-constituents';
+import { getTotalMarketConstituents } from '@/lib/index-constituents';
 import type {
   AMFICategory,
   AMFIPeriod,
@@ -265,8 +265,8 @@ export async function getCategoriesBatch(
   }
 
   // Load Nifty Total Market constituents to distinguish Micro (in index) from Nano (outside index)
-  const totalMarketRaw = await getIndexConstituents('NIFTY Total Market');
-  const totalMarketSymbols = new Set(totalMarketRaw.map((s) => s.toUpperCase()));
+  // Resolves point-in-time constituents using semi-annual NSE circular rebalances when snapshotDate is supplied
+  const totalMarketSymbols = await getTotalMarketConstituents(snapshotDate);
 
   // Map results back to original symbols
   for (const [original, normalized] of originalToNormalized.entries()) {

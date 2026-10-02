@@ -10,6 +10,20 @@ import path from 'path';
 import os from 'os';
 import { parse } from 'csv-parse/sync';
 import { getInstrumentKeys } from './instrument-service';
+import totalMarketRebalancesData from './data/total-market-rebalances.json';
+
+export interface TotalMarketRebalance {
+  effectiveDate: string;
+  circularDate: string;
+  url: string;
+  excluded: string[];
+  included: string[];
+}
+
+const totalMarketRebalances: TotalMarketRebalance[] = (
+  totalMarketRebalancesData as TotalMarketRebalance[]
+).slice().sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+
 
 // ============================================================================
 // Configuration
@@ -310,14 +324,79 @@ async function fetchCSV(url: string): Promise<string | null> {
   }
 }
 
+// In-memory cache for historical total market constituent sets by epoch key
+const historicalTotalMarketCache = new Map<string, Set<string>>();
+
+/**
+ * Get the Total Market rebalance epoch key for a given date.
+ * Returns the effective date of the latest rebalance that has taken effect on or before asOfDate.
+ */
+export function getTotalMarketRebalanceEpochKey(asOfDate: Date): string {
+  const asOfDateStr = new Date(asOfDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  for (const r of totalMarketRebalances) {
+    if (asOfDateStr >= r.effectiveDate) {
+      return r.effectiveDate;
+    }
+  }
+  return 'pre_2024';
+}
+
+/**
+ * Get Nifty Total Market constituents as of a specific date.
+ * If asOfDate is omitted, returns the current constituent set.
+ * Otherwise, unwinds historical rebalances (exclusions & inclusions from NSE circulars)
+ * backwards from current constituents to construct the exact constituent set for that historical date.
+ */
+export async function getTotalMarketConstituents(asOfDate?: Date): Promise<Set<string>> {
+  const currentSymbols = await getIndexConstituents('NIFTY Total Market');
+  if (!asOfDate) {
+    return new Set(currentSymbols.map((s) => s.toUpperCase()));
+  }
+
+  const asOfDateStr = new Date(asOfDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const epochKey = getTotalMarketRebalanceEpochKey(asOfDate);
+
+  const cached = historicalTotalMarketCache.get(epochKey);
+  if (cached) {
+    return cached;
+  }
+
+  // Start with current constituents
+  const constituentSet = new Set(currentSymbols.map((s) => s.toUpperCase()));
+
+  // Unwind each rebalance that took effect after asOfDate (sorted descending)
+  for (const r of totalMarketRebalances) {
+    if (asOfDateStr < r.effectiveDate) {
+      // Rebalance happened after asOfDate:
+      // Remove stocks that were included in this rebalance
+      for (const inc of r.included) {
+        constituentSet.delete(inc.toUpperCase());
+      }
+      // Add back stocks that were excluded in this rebalance
+      for (const exc of r.excluded) {
+        constituentSet.add(exc.toUpperCase());
+      }
+    }
+  }
+
+  historicalTotalMarketCache.set(epochKey, constituentSet);
+  return constituentSet;
+}
+
 /**
  * Get constituent symbols for an index.
- * Uses multi-layer caching: memory → disk → fetch from niftyindices.com
+ * Uses multi-layer caching: memory → disk → fetch from niftyindices.com.
+ * When indexName is 'NIFTY Total Market' and asOfDate is supplied, resolves point-in-time constituents.
  */
-export async function getIndexConstituents(indexName: string): Promise<string[]> {
+export async function getIndexConstituents(indexName: string, asOfDate?: Date): Promise<string[]> {
+  if (indexName === 'NIFTY Total Market' && asOfDate) {
+    const set = await getTotalMarketConstituents(asOfDate);
+    return Array.from(set);
+  }
   const result = await getIndexConstituentData(indexName);
   return result.symbols;
 }
+
 
 /**
  * Get constituent symbols AND weights for an index.

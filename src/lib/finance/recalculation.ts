@@ -10,6 +10,7 @@ import { getDataLockDate } from '../config';
 import { SectorAllocation } from '../types';
 import { getSymbolResolver } from '../amfi';
 import { getAMFICategoriesBatch, getCurrentAMFIPeriod } from '../amfi';
+import { getTotalMarketRebalanceEpochKey } from '@/lib/index-constituents';
 import { roundPrice, roundPercent, roundQuantity, roundEquity } from '../precision-utils';
 import { getMarketHolidays, getSpecialTradingDays } from '../upstox/market-info';
 import { getMarketStatus } from '../market-holidays-cache';
@@ -337,9 +338,9 @@ export async function recalculatePortfolioHistoryInternal(
         indexMap.get(dKey)!.set(h.symbol, h.close);
     });
 
-    // 4b. AMFI Market Cap Classifications will be loaded dynamically in the loop below
+    // 4b. Market Cap Classifications (AMFI + Nifty Total Market point-in-time)
     let amfiCategories = new Map<string, import('./types').MarketCapCategory>();
-    let lastAmfiPeriod: string | null = null;
+    let lastClassificationKey: string | null = null;
 
     // 4c. Pre-load Sector Mappings (with symbol mapping support)
     const sectorMappingsList = await prisma.sectorMapping.findMany();
@@ -542,14 +543,16 @@ export async function recalculatePortfolioHistoryInternal(
         daysProcessed++;
         const dKey = format(currentDate, 'yyyy-MM-dd');
 
-        // Update AMFI categories if period changes
+        // Update Market Cap categories if AMFI period or Total Market rebalance epoch changes
         const amfiPeriod = getCurrentAMFIPeriod(currentDate);
         const amfiPeriodStr = `${amfiPeriod.year}_${amfiPeriod.halfYear}`;
-        if (amfiPeriodStr !== lastAmfiPeriod) {
-            financeLogger.info(`[Recalc] AMFI Period changed to ${amfiPeriodStr} at ${dKey}. Refreshing categories...`);
-            // Pass the current date to use the appropriate AMFI period
+        const tmEpoch = getTotalMarketRebalanceEpochKey(currentDate);
+        const classificationKey = `${amfiPeriodStr}_${tmEpoch}`;
+        if (classificationKey !== lastClassificationKey) {
+            financeLogger.info(`[Recalc] Classification epoch changed to ${classificationKey} at ${dKey}. Refreshing categories...`);
+            // Pass currentDate to retrieve point-in-time AMFI period and Total Market constituent set
             amfiCategories = await getAMFICategoriesBatch(symbols, currentDate);
-            lastAmfiPeriod = amfiPeriodStr;
+            lastClassificationKey = classificationKey;
         }
         // B. Process Events for Today (Transactions & Corporate Actions)
         // These can occur even on non-trading days (e.g. off-market transfers, Sunday IPO allotment, splits)
