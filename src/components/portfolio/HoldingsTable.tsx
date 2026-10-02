@@ -81,6 +81,7 @@ const MarketCapChip = memo(function MarketCapChip({ category }: { category?: str
         case 'Mid': color = '#c4b5fd'; bg = 'rgba(196, 181, 253, 0.1)'; break; // violet
         case 'Small': color = '#f0abfc'; bg = 'rgba(240, 171, 252, 0.1)'; break; // fuchsia
         case 'Micro': color = '#bef264'; bg = 'rgba(190, 242, 100, 0.1)'; break; // lime
+        case 'Nano': color = '#ff785b'; bg = 'rgba(255, 120, 91, 0.1)'; break; // salmon
     }
 
     return (

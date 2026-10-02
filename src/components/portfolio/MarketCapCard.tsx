@@ -10,13 +10,15 @@ interface MarketCapCardProps {
     midCapPercent: number;
     smallCapPercent: number;
     microCapPercent: number;
+    nanoCapPercent?: number;
 }
 
 export default function MarketCapCard({
     largeCapPercent,
     midCapPercent,
     smallCapPercent,
-    microCapPercent
+    microCapPercent,
+    nanoCapPercent = 0
 }: MarketCapCardProps) {
     const formatPercent = (val: number) => `${val.toFixed(1)}%`;
 
@@ -70,10 +72,19 @@ export default function MarketCapCard({
                             delay={800}
                         />
                     )}
+                    {nanoCapPercent > 0 && (
+                        <AnimatedBar 
+                            targetWidth={nanoCapPercent}
+                            className="h-full bg-gradient-to-r from-[#ff785b] to-[#ff9077]"
+                            title={`Nano: ${formatPercent(nanoCapPercent)}`}
+                            duration={1200}
+                            delay={1000}
+                        />
+                    )}
                 </div>
 
                 {/* Legend - Responsive Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 px-2">
                     <div className="text-center">
                         <div className="flex items-center gap-1.5 justify-center mb-0.5">
                             <div className="w-2 h-2 rounded-full bg-cyan-400"></div>
@@ -109,6 +120,15 @@ export default function MarketCapCard({
                             </span>
                         </div>
                         <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Micro Cap</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="flex items-center gap-1.5 justify-center mb-0.5">
+                            <div className="w-2 h-2 rounded-full bg-[#ff785b]"></div>
+                            <span className="text-lg font-bold text-gray-200">
+                                <AnimatedNumber value={nanoCapPercent} suffix="%" decimals={1} duration={1400} />
+                            </span>
+                        </div>
+                        <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Nano Cap</div>
                     </div>
                 </div>
             </div>

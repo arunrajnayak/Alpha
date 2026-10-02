@@ -39,7 +39,7 @@ export interface SectorMapping {
 /** Request cache type for deduplicating API calls */
 export type RequestCache = Map<string, Promise<StockHistoryResult | null>>;
 
-export type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro';
+export type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro' | 'Nano';
 
 export type ProgressCallback = (message: string, progress: number) => Promise<void> | void;
 
@@ -50,4 +50,5 @@ export interface MarketCapResult {
     mid: number;
     small: number;
     micro: number;
+    nano: number;
 }

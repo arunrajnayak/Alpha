@@ -109,13 +109,14 @@ export async function captureWeeklySnapshot() {
 
     // 3. Market Cap Segmentation (using AMFI classifications)
     const mcapResult = await computeMarketCapSegmentation(holdings);
-    const { large, mid, small, micro } = mcapResult;
+    const { large, mid, small, micro, nano } = mcapResult;
 
-    const stockTotal = large + mid + small + micro;
+    const stockTotal = large + mid + small + micro + nano;
     const largePct = stockTotal > 0 ? (large / stockTotal) * 100 : 0;
     const midPct = stockTotal > 0 ? (mid / stockTotal) * 100 : 0;
     const smallPct = stockTotal > 0 ? (small / stockTotal) * 100 : 0;
     const microPct = stockTotal > 0 ? (micro / stockTotal) * 100 : 0;
+    const nanoPct = stockTotal > 0 ? (nano / stockTotal) * 100 : 0;
 
     // 4. Sector Allocation
     const sectorAllocations = computeSectorAllocations(holdings);
@@ -155,6 +156,7 @@ export async function captureWeeklySnapshot() {
              midCapPercent: roundPercent(midPct),
              smallCapPercent: roundPercent(smallPct),
              microCapPercent: roundPercent(microPct),
+             nanoCapPercent: roundPercent(nanoPct),
 
              marketCap: 0,
              xirr: xirrVal,
@@ -175,6 +177,7 @@ export async function captureWeeklySnapshot() {
              midCapPercent: roundPercent(midPct),
              smallCapPercent: roundPercent(smallPct),
              microCapPercent: roundPercent(microPct),
+             nanoCapPercent: roundPercent(nanoPct),
 
              marketCap: 0,
              xirr: xirrVal,
@@ -229,13 +232,14 @@ export async function captureMonthlySnapshot() {
 
     // 3. Market Cap Segmentation (using AMFI classifications)
     const mcapResult = await computeMarketCapSegmentation(holdings);
-    const { large, mid, small, micro } = mcapResult;
+    const { large, mid, small, micro, nano } = mcapResult;
 
-    const stockTotal = large + mid + small + micro;
+    const stockTotal = large + mid + small + micro + nano;
     const largePct = stockTotal > 0 ? (large / stockTotal) * 100 : 0;
     const midPct = stockTotal > 0 ? (mid / stockTotal) * 100 : 0;
     const smallPct = stockTotal > 0 ? (small / stockTotal) * 100 : 0;
     const microPct = stockTotal > 0 ? (micro / stockTotal) * 100 : 0;
+    const nanoPct = stockTotal > 0 ? (nano / stockTotal) * 100 : 0;
 
     // 4. Sector Allocation
     const sectorAllocations = computeSectorAllocations(holdings);
@@ -289,6 +293,7 @@ export async function captureMonthlySnapshot() {
              midCapPercent: roundPercent(midPct),
              smallCapPercent: roundPercent(smallPct),
              microCapPercent: roundPercent(microPct),
+             nanoCapPercent: roundPercent(nanoPct),
              marketCap: 0,
              xirr: xirrVal,
              pnl,
@@ -310,6 +315,7 @@ export async function captureMonthlySnapshot() {
              midCapPercent: roundPercent(midPct),
              smallCapPercent: roundPercent(smallPct),
              microCapPercent: roundPercent(microPct),
+             nanoCapPercent: roundPercent(nanoPct),
              marketCap: 0,
              xirr: xirrVal,
              pnl,
@@ -365,6 +371,7 @@ async function getLatestPortfolioStatsInternal() {
         midCapPercent: snapshot?.midCapPercent || 0,
         smallCapPercent: snapshot?.smallCapPercent || 0,
         microCapPercent: snapshot?.microCapPercent || 0,
+        nanoCapPercent: snapshot?.nanoCapPercent || 0,
         winPercent,
         lossPercent,
         avgHoldingPeriod,

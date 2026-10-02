@@ -246,6 +246,7 @@ export default function DashboardPage() {
                   midCapPercent={portfolioStats.midCapPercent}
                   smallCapPercent={portfolioStats.smallCapPercent}
                   microCapPercent={portfolioStats.microCapPercent}
+                  nanoCapPercent={portfolioStats.nanoCapPercent}
               />
           </div>
 

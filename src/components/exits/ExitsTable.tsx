@@ -15,7 +15,7 @@ interface ExitsTableProps {
 
 type SortKey = 'sellDate' | 'symbol' | 'quantity' | 'buyDate' | 'changePercent' | 'gainLoss' | 'timeHeld' | 'marketCapCategory';
 type SortDirection = 'asc' | 'desc';
-type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro';
+type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro' | 'Nano';
 
 // Stats Component
 const StatsSummary = ({ exits, privacyMode = false }: { exits: ExitRecord[]; privacyMode?: boolean }) => {
@@ -148,7 +148,7 @@ export default function ExitsTable({ exits, privacyMode = false }: ExitsTablePro
                     </span>
                  </h1>
                  <div className="flex gap-2 flex-wrap">
-                    {(['All', 'Large', 'Mid', 'Small', 'Micro'] as const).map(cat => (
+                    {(['All', 'Large', 'Mid', 'Small', 'Micro', 'Nano'] as const).map(cat => (
                         <button
                             key={cat}
                             onClick={() => setFilterCategory(cat)}

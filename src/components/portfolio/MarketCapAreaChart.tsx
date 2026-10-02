@@ -18,6 +18,7 @@ export interface MarketCapData {
   midCapPercent: number | null;
   smallCapPercent: number | null;
   microCapPercent: number | null;
+  nanoCapPercent?: number | null;
 }
 
 export interface MarketCapAreaChartProps {
@@ -36,6 +37,7 @@ export default function MarketCapAreaChart({ data }: MarketCapAreaChartProps) {
       mid: d.midCapPercent || 0,
       small: d.smallCapPercent || 0,
       micro: d.microCapPercent || 0,
+      nano: d.nanoCapPercent || 0,
     }));
 
   if (!data || data.length === 0) {
@@ -51,6 +53,7 @@ export default function MarketCapAreaChart({ data }: MarketCapAreaChartProps) {
       { key: 'mid', label: 'Mid Cap', color: '#a78bfa', gradId: 'colorMid' },
       { key: 'small', label: 'Small Cap', color: '#e879f9', gradId: 'colorSmall' },
       { key: 'micro', label: 'Micro Cap', color: '#a3e635', gradId: 'colorMicro' },
+      { key: 'nano', label: 'Nano Cap', color: '#ff785b', gradId: 'colorNano' },
   ];
 
   return (
@@ -78,6 +81,10 @@ export default function MarketCapAreaChart({ data }: MarketCapAreaChartProps) {
             <linearGradient id="colorMicro" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#a3e635" stopOpacity={0.95}/>
               <stop offset="95%" stopColor="#a3e635" stopOpacity={0.4}/>
+            </linearGradient>
+            <linearGradient id="colorNano" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#ff785b" stopOpacity={0.95}/>
+              <stop offset="95%" stopColor="#ff785b" stopOpacity={0.4}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />

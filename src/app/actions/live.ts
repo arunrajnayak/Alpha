@@ -6,7 +6,7 @@ import { prisma, chunkArray } from '@/lib/db';
 import { SectorAllocation } from '@/lib/types';
 import { getLiveQuoteV3, hasValidToken, UpstoxLiveQuoteV3 } from '@/lib/upstox-client';
 import { getInstrumentKeys } from '@/lib/instrument-service';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '@/lib/amfi';
+import { getAMFICategoriesBatch } from '@/lib/amfi';
 import { isMarketOpenAsync } from '@/lib/marketHours';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
 import { subDays } from 'date-fns';
@@ -54,6 +54,7 @@ export interface BreadthByCategory {
   mid: { advances: number; declines: number };
   small: { advances: number; declines: number };
   micro: { advances: number; declines: number };
+  nano: { advances: number; declines: number };
 }
 
 export type MarketStatus = 'OPEN' | 'CLOSED' | 'PRE_OPEN' | 'UNKNOWN';
@@ -286,7 +287,8 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       large: { advances: 0, declines: 0 },
       mid: { advances: 0, declines: 0 },
       small: { advances: 0, declines: 0 },
-      micro: { advances: 0, declines: 0 }
+      micro: { advances: 0, declines: 0 },
+      nano: { advances: 0, declines: 0 },
     };
 
     if (holdings.length === 0) {
@@ -525,11 +527,8 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     const rvol = avgVolume1m > 0 ? todayVolume / avgVolume1m : 0;
 
     // Get market cap category from AMFI classification
-    // getAMFICategoriesBatch returns original symbol keys
-    const amfiCategory = amfiCategories.get(h.symbol);
-    const marketCapCategory: MarketCapCategory | undefined = amfiCategory 
-      ? mapAMFIToMarketCapCategory(amfiCategory)
-      : undefined;
+    // getAMFICategoriesBatch now returns MarketCapCategory (incl. 'Nano') via resolveCapCategory
+    const marketCapCategory: MarketCapCategory | undefined = amfiCategories.get(h.symbol);
 
     const value = h.qty * price;
     const prevValue = h.qty * prevClose;
@@ -593,12 +592,14 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     large: { advances: 0, declines: 0 },
     mid: { advances: 0, declines: 0 },
     small: { advances: 0, declines: 0 },
-    micro: { advances: 0, declines: 0 }
+    micro: { advances: 0, declines: 0 },
+    nano: { advances: 0, declines: 0 },
   };
 
   for (const stock of liveData) {
     if (!stock.marketCapCategory) continue;
-    const key = stock.marketCapCategory.toLowerCase() as 'large' | 'mid' | 'small' | 'micro';
+    const key = stock.marketCapCategory.toLowerCase() as 'large' | 'mid' | 'small' | 'micro' | 'nano';
+    if (!(key in breadthByCategory)) continue;
     if (stock.dayChange > 0) {
       breadthByCategory[key].advances++;
     } else if (stock.dayChange < 0) {

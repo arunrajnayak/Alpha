@@ -29,7 +29,7 @@ export default memo(function StatsBar({
   onSignalFilterChange,
 }: StatsBarProps) {
   const { total, allTotal, portfolioCount, rankedPortfolioCount, rankBuckets, mcapBreakdown } = stats;
-  const totalMcap = mcapBreakdown.large + mcapBreakdown.mid + mcapBreakdown.small + mcapBreakdown.micro;
+  const totalMcap = mcapBreakdown.large + mcapBreakdown.mid + mcapBreakdown.small + mcapBreakdown.micro + (mcapBreakdown.nano || 0);
 
   const tabs = [
     { key: 'all' as const,         label: 'All',          count: allTotal },
@@ -127,6 +127,7 @@ export default memo(function StatsBar({
               <McapPill label="MID" value={mcapBreakdown.mid} total={totalMcap} color="text-yellow-400" />
               <McapPill label="SMALL" value={mcapBreakdown.small} total={totalMcap} color="text-green-400" />
               <McapPill label="MICRO" value={mcapBreakdown.micro} total={totalMcap} color="text-purple-400" />
+              <McapPill label="NANO" value={mcapBreakdown.nano || 0} total={totalMcap} color="text-[#ff785b]" />
             </div>
           </div>
         )}

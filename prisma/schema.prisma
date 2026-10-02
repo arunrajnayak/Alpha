@@ -70,6 +70,7 @@ model WeeklyPortfolioSnapshot {
   midCapPercent    Float?
   smallCapPercent  Float?
   microCapPercent  Float?
+  nanoCapPercent   Float?
   marketCap        Float?
   xirr             Float?
   pnl              Float?
@@ -91,6 +92,7 @@ model MonthlyPortfolioSnapshot {
   midCapPercent    Float?
   smallCapPercent  Float?
   microCapPercent  Float?
+  nanoCapPercent   Float?
   marketCap        Float?
   xirr             Float?
   pnl              Float?
@@ -248,6 +250,8 @@ model IntradayMarketBreadth {
   smallDec    Int?
   microAdv    Int?
   microDec    Int?
+  nanoAdv     Int?
+  nanoDec     Int?
 
   @@index([date])
   @@index([timestamp])

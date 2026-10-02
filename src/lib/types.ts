@@ -6,7 +6,7 @@ export interface SectorAllocation {
   dayChangePercent: number;
 }
 
-export type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro';
+export type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro' | 'Nano';
 
 /**
  * Portfolio Holding - shared type for current holdings display

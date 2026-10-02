@@ -37,6 +37,9 @@ const MCAP_BADGE: Record<string, { label: string; cls: string }> = {
   'Micro Cap': { label: 'Micro', cls: 'text-lime-400' },
   'Micro':     { label: 'Micro', cls: 'text-lime-400' },
   'micro':     { label: 'Micro', cls: 'text-lime-400' },
+  'Nano Cap':  { label: 'Nano',  cls: 'text-[#ff785b]' },
+  'Nano':      { label: 'Nano',  cls: 'text-[#ff785b]' },
+  'nano':      { label: 'Nano',  cls: 'text-[#ff785b]' },
 };
 
 function getRankAccent(rank: number): string {

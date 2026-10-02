@@ -20,13 +20,18 @@ config();
 const TURSO_URL = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL;
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
-if (!TURSO_URL || !TURSO_URL.startsWith('libsql')) {
-  console.error('❌ DATABASE_URL (or TURSO_DATABASE_URL) must point to a libsql:// Turso database');
+if (!TURSO_URL) {
+  console.error('❌ DATABASE_URL (or TURSO_DATABASE_URL) must point to a Turso database');
   process.exit(1);
 }
 
+let cleanUrl = TURSO_URL.trim().replace(/^["']|["']$/g, '');
+if (/^libsql:\/\//i.test(cleanUrl)) {
+  cleanUrl = cleanUrl.replace(/^libsql:\/\//i, 'https://');
+}
+
 const client = createClient({
-  url: TURSO_URL,
+  url: cleanUrl,
   authToken: TURSO_TOKEN,
 });
 

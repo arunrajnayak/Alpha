@@ -55,6 +55,7 @@ export function getCapColor(cap: string | undefined): string {
   if (c.includes('mid')) return 'bg-violet-500/20 text-violet-400 border border-violet-500/30';
   if (c.includes('small')) return 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/30';
   if (c.includes('micro')) return 'bg-lime-500/20 text-lime-400 border border-lime-500/30';
+  if (c.includes('nano')) return 'bg-[#ff785b]/20 text-[#ff785b] border border-[#ff785b]/30';
   return 'bg-slate-700/50 text-gray-400 border border-white/5';
 }
 

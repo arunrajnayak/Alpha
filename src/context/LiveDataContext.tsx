@@ -360,12 +360,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         large: { advances: 0, declines: 0 },
         mid: { advances: 0, declines: 0 },
         small: { advances: 0, declines: 0 },
-        micro: { advances: 0, declines: 0 }
+        micro: { advances: 0, declines: 0 },
+        nano: { advances: 0, declines: 0 },
       };
 
       for (const stock of updatedHoldings) {
         if (!stock.marketCapCategory) continue;
-        const key = stock.marketCapCategory.toLowerCase() as 'large' | 'mid' | 'small' | 'micro';
+        const key = stock.marketCapCategory.toLowerCase() as 'large' | 'mid' | 'small' | 'micro' | 'nano';
+        if (!(key in breadthByCategory)) continue;
         if (stock.dayChange > 0) {
           breadthByCategory[key].advances++;
         } else if (stock.dayChange < 0) {

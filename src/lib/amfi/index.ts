@@ -23,6 +23,7 @@ export {
 
   // Utility functions
   mapAMFIToMarketCapCategory,
+  resolveCapCategory,
   getSymbolResolver,
 
   // Excel processing

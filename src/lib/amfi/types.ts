@@ -3,7 +3,7 @@
  */
 
 export type AMFICategory = 'Large' | 'Mid' | 'Small' | 'Micro';
-export type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro';
+export type MarketCapCategory = 'Large' | 'Mid' | 'Small' | 'Micro' | 'Nano';
 
 export interface AMFIPeriod {
   year: number;

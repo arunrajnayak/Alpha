@@ -467,7 +467,11 @@ function renderEntries(entries: EntryCandidate[]): string {
   const rows = entries.map((e) => {
     const newBadge = e.isNewEntrant ? `&nbsp;${pill('NEW', C.purple)}` : '';
     const capColor: Record<string, string> = {
-      'Large Cap': C.blue, 'Mid Cap': C.green, 'Small Cap': C.amber,
+      'Large Cap': C.blue, 'Large': C.blue,
+      'Mid Cap': C.green, 'Mid': C.green,
+      'Small Cap': C.amber, 'Small': C.amber,
+      'Micro Cap': '#bef264', 'Micro': '#bef264',
+      'Nano Cap': '#ff785b', 'Nano': '#ff785b',
     };
     const capBg = capColor[e.marketCapCategory ?? ''] ?? C.muted;
     const capBadge = e.marketCapCategory

@@ -9,6 +9,7 @@ import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 import { getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
 import { createJob, completeJob, failJob } from '@/lib/jobs';
 import { fetchASMList } from '@/lib/nse-api';
+import { getCategoriesBatch } from '@/lib/amfi';
 
 // ── Types ──
 
@@ -65,7 +66,7 @@ export interface ScreenerStats {
   portfolioCount: number;
   rankedPortfolioCount: number;
   rankBuckets: { hold: number; warning: number; exit: number };
-  mcapBreakdown: { large: number; mid: number; small: number; micro: number };
+  mcapBreakdown: { large: number; mid: number; small: number; micro: number; nano: number };
   dataDate: string | null;
 }
 
@@ -196,7 +197,7 @@ export async function getScreenerData(
       stats: {
         total: 0, allTotal: 0, portfolioCount: 0, rankedPortfolioCount: 0,
         rankBuckets: { hold: 0, warning: 0, exit: 0 },
-        mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
+        mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0, nano: 0 },
         dataDate: null,
       },
     };
@@ -527,7 +528,7 @@ export async function getScreenerData(
   const stats = await computeStats(rows, portfolioSymbols.size, portfolioSymbols);
 
   // Mcap breakdown by actual portfolio position value (qty × currentPrice)
-  let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0;
+  let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0, mcNano = 0;
   for (const r of rows) {
     if (!r.inPortfolio || r.currentPrice <= 0) continue;
     const posVal = (holdingQty.get(r.symbol) || 0) * r.currentPrice;
@@ -535,9 +536,11 @@ export async function getScreenerData(
     if (cat.includes('large')) mcLarge += posVal;
     else if (cat.includes('mid')) mcMid += posVal;
     else if (cat.includes('small')) mcSmall += posVal;
-    else if (r.marketCapCategory) mcMicro += posVal;
+    else if (cat.includes('micro')) mcMicro += posVal;
+    else if (cat.includes('nano')) mcNano += posVal;
+    else if (r.marketCapCategory) mcNano += posVal;
   }
-  stats.mcapBreakdown = { large: mcLarge, mid: mcMid, small: mcSmall, micro: mcMicro };
+  stats.mcapBreakdown = { large: mcLarge, mid: mcMid, small: mcSmall, micro: mcMicro, nano: mcNano };
 
   return { rows, stats };
 }
@@ -577,7 +580,7 @@ async function computeStats(
     portfolioCount,                // always total portfolio size (holdings)
     rankedPortfolioCount,          // portfolio stocks in pre-filtered set
     rankBuckets: { hold: holdCount, warning: warningCount, exit: exitCount },
-    mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0 },
+    mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0, nano: 0 },
     dataDate: null,
   };
 }

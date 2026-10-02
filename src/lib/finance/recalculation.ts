@@ -9,7 +9,7 @@ import { PortfolioEngine } from '../portfolio-engine';
 import { getDataLockDate } from '../config';
 import { SectorAllocation } from '../types';
 import { getSymbolResolver } from '../amfi';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory, getCurrentAMFIPeriod, AMFICategory } from '../amfi';
+import { getAMFICategoriesBatch, getCurrentAMFIPeriod } from '../amfi';
 import { roundPrice, roundPercent, roundQuantity, roundEquity } from '../precision-utils';
 import { getMarketHolidays, getSpecialTradingDays } from '../upstox/market-info';
 import { getMarketStatus } from '../market-holidays-cache';
@@ -338,7 +338,7 @@ export async function recalculatePortfolioHistoryInternal(
     });
 
     // 4b. AMFI Market Cap Classifications will be loaded dynamically in the loop below
-    let amfiCategories = new Map<string, AMFICategory>();
+    let amfiCategories = new Map<string, import('./types').MarketCapCategory>();
     let lastAmfiPeriod: string | null = null;
 
     // 4c. Pre-load Sector Mappings (with symbol mapping support)
@@ -389,16 +389,17 @@ export async function recalculatePortfolioHistoryInternal(
 
     // Shared helper for weekly/monthly snapshot stats to avoid duplication
     function computeSnapshotStats(
-        large: number, mid: number, small: number, micro: number,
+        large: number, mid: number, small: number, micro: number, nano: number,
         wins: number, losses: number, closedTradesCount: number,
         totalWinPct: number, totalLossPct: number, totalHoldDays: number
     ) {
-        const stockTotal = large + mid + small + micro;
+        const stockTotal = large + mid + small + micro + nano;
         return {
             largePct: stockTotal > 0 ? (large / stockTotal) * 100 : 0,
             midPct: stockTotal > 0 ? (mid / stockTotal) * 100 : 0,
             smallPct: stockTotal > 0 ? (small / stockTotal) * 100 : 0,
             microPct: stockTotal > 0 ? (micro / stockTotal) * 100 : 0,
+            nanoPct: stockTotal > 0 ? (nano / stockTotal) * 100 : 0,
             winPercent: closedTradesCount > 0 ? (wins / closedTradesCount) * 100 : 0,
             lossPercent: closedTradesCount > 0 ? (losses / closedTradesCount) * 100 : 0,
             avgWinnerGain: wins > 0 ? (totalWinPct / wins) * 100 : 0,
@@ -479,6 +480,7 @@ export async function recalculatePortfolioHistoryInternal(
         midCapPercent: number;
         smallCapPercent: number;
         microCapPercent: number;
+        nanoCapPercent: number;
 
         marketCap: number;
         xirr: number;
@@ -500,6 +502,7 @@ export async function recalculatePortfolioHistoryInternal(
         midCapPercent: number;
         smallCapPercent: number;
         microCapPercent: number;
+        nanoCapPercent: number;
         marketCap: number;
         xirr: number;
         pnl: number;
@@ -634,23 +637,22 @@ export async function recalculatePortfolioHistoryInternal(
         const totalDisplayCashflow = accumulatedDisplayCashflow + displayCashflow;
 
         // C. Calculate End-of-Day Equity
-        let large = 0, mid = 0, small = 0, micro = 0;
+        let large = 0, mid = 0, small = 0, micro = 0, nano = 0;
 
         const valuation = engine.getValuation(lastKnownPrices);
 
         // Use AMFI classifications for market cap segmentation
+        // amfiCategories now returns MarketCapCategory (incl. 'Nano') via resolveCapCategory
         for (const h of valuation.holdings) {
             const val = h.currentValue;
-
-            // Get AMFI category for this symbol
-            const amfiCategory = amfiCategories.get(h.symbol) || 'Small';
-            const category = mapAMFIToMarketCapCategory(amfiCategory);
+            const category = amfiCategories.get(h.symbol) || 'Small';
 
             switch (category) {
                 case 'Large': large += val; break;
-                case 'Mid': mid += val; break;
+                case 'Mid':   mid   += val; break;
                 case 'Small': small += val; break;
                 case 'Micro': micro += val; break;
+                case 'Nano':  nano  += val; break;
             }
         }
 
@@ -836,7 +838,7 @@ export async function recalculatePortfolioHistoryInternal(
              weeklyReturn = (nav / prevNav) - 1;
 
              // Shared stats for weekly/monthly snapshots
-             const stats = computeSnapshotStats(large, mid, small, micro, wins, losses, closedTradesCount, totalWinPct, totalLossPct, totalHoldDays);
+             const stats = computeSnapshotStats(large, mid, small, micro, nano, wins, losses, closedTradesCount, totalWinPct, totalLossPct, totalHoldDays);
 
              /**
               * Reuse the incremental XIRR already computed in the F2 block for this
@@ -856,6 +858,7 @@ export async function recalculatePortfolioHistoryInternal(
                      midCapPercent: roundPercent(stats.midPct),
                      smallCapPercent: roundPercent(stats.smallPct),
                      microCapPercent: roundPercent(stats.microPct),
+                     nanoCapPercent: roundPercent(stats.nanoPct),
 
                      marketCap: 0,
                      xirr: roundPercent(xirrVal),
@@ -879,7 +882,7 @@ export async function recalculatePortfolioHistoryInternal(
              const prevNav = lastMonthlyNav > 0 ? lastMonthlyNav : 100;
              monthlyReturn = (nav / prevNav) - 1;
 
-             const stats = computeSnapshotStats(large, mid, small, micro, wins, losses, closedTradesCount, totalWinPct, totalLossPct, totalHoldDays);
+             const stats = computeSnapshotStats(large, mid, small, micro, nano, wins, losses, closedTradesCount, totalWinPct, totalLossPct, totalHoldDays);
 
              // Exit Stats
              // const avgExitsPerMonth = monthsActive > 0 ? closedTradesCount / (monthsActive + 1) : closedTradesCount;
@@ -905,6 +908,7 @@ export async function recalculatePortfolioHistoryInternal(
                      midCapPercent: roundPercent(stats.midPct),
                      smallCapPercent: roundPercent(stats.smallPct),
                      microCapPercent: roundPercent(stats.microPct),
+                     nanoCapPercent: roundPercent(stats.nanoPct),
                      marketCap: 0,
                      xirr: roundPercent(xirrVal),
                      pnl: roundEquity(pnl),

@@ -150,21 +150,21 @@ const LiveStatsCards = memo(function LiveStatsCards({
             </motion.div>
 
             {/* Breadth by MCap Card */}
-            <motion.div variants={itemVariants} data-motion-section className="relative overflow-hidden rounded-2xl border border-slate-700/50 shadow-xl h-[160px] bg-gradient-to-br from-slate-900 via-slate-800/50 to-slate-900">
+            <motion.div variants={itemVariants} data-motion-section className="relative overflow-hidden rounded-2xl border border-slate-700/50 shadow-xl h-auto min-h-[160px] bg-gradient-to-br from-slate-900 via-slate-800/50 to-slate-900">
                 <div className="relative z-10 p-4 h-full flex flex-col">
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Breadth by MCap</p>
-                    <div className="flex-1 flex flex-col justify-center gap-2.5">
-                        {(['Large', 'Mid', 'Small', 'Micro'] as const).map((label, idx) => {
-                            const categories = ['large', 'mid', 'small', 'micro'] as const;
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2.5">Breadth by MCap</p>
+                    <div className="flex-1 flex flex-col justify-center gap-1.5">
+                        {(['Large', 'Mid', 'Small', 'Micro', 'Nano'] as const).map((label, idx) => {
+                            const categories = ['large', 'mid', 'small', 'micro', 'nano'] as const;
                             const key = categories[idx];
-                            const catData = data.breadthByCategory[key];
+                            const catData = data.breadthByCategory?.[key] || { advances: 0, declines: 0 };
                             const totalCount = catData.advances + catData.declines;
                             const hasStocks = totalCount > 0;
                             const total = totalCount || 1;
                             const advPercent = Math.round((catData.advances / total) * 100);
                             return (
                                 <div key={key} className="flex items-center gap-2">
-                                    <div className={`flex-1 h-4 rounded-full relative overflow-hidden ${hasStocks ? 'bg-red-900/40' : 'bg-slate-800/60 border border-slate-700/40'}`}>
+                                    <div className={`flex-1 h-3.5 rounded-full relative overflow-hidden ${hasStocks ? 'bg-red-900/40' : 'bg-slate-800/60 border border-slate-700/40'}`}>
                                         {hasStocks ? (
                                             <>
                                                 <div className="absolute inset-0 bg-gradient-to-r from-red-900/60 to-red-800/40" />
@@ -180,10 +180,10 @@ const LiveStatsCards = memo(function LiveStatsCards({
                                         )}
                                         <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
                                             {catData.advances > 0 ? (
-                                                <span className="text-[10px] font-extrabold text-emerald-950 z-10">{catData.advances}</span>
+                                                <span className="text-[9px] font-extrabold text-emerald-950 z-10">{catData.advances}</span>
                                             ) : <span />}
                                             {catData.declines > 0 ? (
-                                                <span className="text-[10px] font-extrabold text-white drop-shadow-md z-10">{catData.declines}</span>
+                                                <span className="text-[9px] font-extrabold text-white drop-shadow-md z-10">{catData.declines}</span>
                                             ) : <span />}
                                         </div>
                                     </div>

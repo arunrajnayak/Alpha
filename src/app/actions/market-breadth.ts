@@ -74,6 +74,7 @@ export interface NSEMarketBreadthData {
     mid: CapTierBreadth;
     small: CapTierBreadth;
     micro: CapTierBreadth;
+    nano: CapTierBreadth;
   };
   topGainers: TopMoverItem[];
   topLosers: TopMoverItem[];
@@ -141,7 +142,7 @@ export interface IntradayMarketBreadthData {
 interface UniverseItem {
   symbol: string;
   instrumentKey: string;
-  category: 'large' | 'mid' | 'small' | 'micro';
+  category: 'large' | 'mid' | 'small' | 'micro' | 'nano';
   currentPrice: number;
   ath: number;
   prevPrice?: number;
@@ -242,7 +243,7 @@ async function getActiveNSEUniverse(): Promise<UniverseItem[]> {
       );
 
       if (equityInstruments.length >= 3000) {
-        // Load AMFI classifications for cap tier mapping (Large, Mid, Small)
+        // Load AMFI classifications for cap tier mapping (Large, Mid, Small, Micro)
         const amfiRecords = await prisma.aMFIClassification.findMany({
           select: { symbol: true, category: true },
           distinct: ['symbol'],
@@ -253,7 +254,13 @@ async function getActiveNSEUniverse(): Promise<UniverseItem[]> {
           if (cat.includes('large')) amfiMap.set(a.symbol.toUpperCase(), 'large');
           else if (cat.includes('mid')) amfiMap.set(a.symbol.toUpperCase(), 'mid');
           else if (cat.includes('small')) amfiMap.set(a.symbol.toUpperCase(), 'small');
+          else if (cat.includes('micro')) amfiMap.set(a.symbol.toUpperCase(), 'micro');
         }
+
+        // Load Nifty Total Market constituents to identify nano (outside Total Market)
+        const { getIndexConstituents } = await import('@/lib/index-constituents');
+        const totalMarketRaw = await getIndexConstituents('NIFTY Total Market');
+        const totalMarketSymbols = new Set(totalMarketRaw.map((s) => s.toUpperCase()));
 
         // Load ATH from StockATH
         const athRecords = await prisma.stockATH.findMany({
@@ -267,7 +274,14 @@ async function getActiveNSEUniverse(): Promise<UniverseItem[]> {
         const items: UniverseItem[] = equityInstruments
           .map((inst) => {
             const symbol = (inst.trading_symbol || inst.tradingsymbol || '').toUpperCase();
-            const category = amfiMap.get(symbol) || 'micro';
+            const amfiCat = amfiMap.get(symbol);
+            const inTotalMarket = totalMarketSymbols.has(symbol);
+            // Nano = not in Total Market (regardless of AMFI rank)
+            const category: UniverseItem['category'] = amfiCat
+              ? amfiCat === 'micro'
+                ? inTotalMarket ? 'micro' : 'nano'
+                : amfiCat
+              : inTotalMarket ? 'micro' : 'nano';
             const ath = athMap.get(symbol) || 0;
             return {
               symbol,
@@ -431,6 +445,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
         mid: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
         small: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
         micro: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
+        nano: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
       },
       topGainers: [],
       topLosers: [],
@@ -450,7 +465,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     symbol: string;
     changePercent: number;
     lastPrice: number;
-    category: 'large' | 'mid' | 'small' | 'micro';
+    category: 'large' | 'mid' | 'small' | 'micro' | 'nano';
     awayFromAth: number | null;
     marketCap: number;
     dayLow: number;
@@ -582,6 +597,10 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
         const microDec = latestBreadth.microDec ?? 0;
         const microTotal = microAdv + microDec;
 
+        const nanoAdv = (latestBreadth as unknown as Record<string, number>).nanoAdv ?? 0;
+        const nanoDec = (latestBreadth as unknown as Record<string, number>).nanoDec ?? 0;
+        const nanoTotal = nanoAdv + nanoDec;
+
         const fallbackResult: NSEMarketBreadthData = {
           total: latestBreadth.total,
           advances: latestBreadth.advances,
@@ -622,6 +641,13 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
               total: microTotal,
               advPercent: microTotal > 0 ? Number(((microAdv / microTotal) * 100).toFixed(1)) : 0,
             },
+            nano: {
+              advances: nanoAdv,
+              declines: nanoDec,
+              unchanged: 0,
+              total: nanoTotal,
+              advPercent: nanoTotal > 0 ? Number(((nanoAdv / nanoTotal) * 100).toFixed(1)) : 0,
+            },
           },
           topGainers: [],
           topLosers: [],
@@ -653,6 +679,7 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
     mid: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
     small: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
     micro: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
+    nano: { advances: 0, declines: 0, unchanged: 0, total: 0, advPercent: 0 },
   };
 
   const buckets = createEmptyBuckets();
@@ -1054,6 +1081,11 @@ export async function saveIntradayMarketBreadth(
         smallDec: breadthData.tiers.small.declines,
         microAdv: breadthData.tiers.micro.advances,
         microDec: breadthData.tiers.micro.declines,
+        // nanoAdv/nanoDec added after schema migration (fields will exist after apply-turso-schema.ts)
+        ...(breadthData.tiers.nano && {
+          nanoAdv: breadthData.tiers.nano.advances,
+          nanoDec: breadthData.tiers.nano.declines,
+        }),
       },
     });
 

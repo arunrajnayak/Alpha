@@ -39,15 +39,13 @@ const StyledTableRow = styled(TableRow)(() => ({
 //     }).format(val);
 // };
 
-const formatMcap = (large: number | null, mid: number | null, small: number | null, micro: number | null) => {
+const formatMcap = (large: number | null, mid: number | null, small: number | null, micro: number | null, nano?: number | null) => {
     const l = large ? Math.round(large) : 0;
     const m = mid ? Math.round(mid) : 0;
     const s = small ? Math.round(small) : 0;
     const mi = micro ? Math.round(micro) : 0;
+    const na = nano ? Math.round(nano) : 0;
     
-    // Calculate total roughly to ensure it fits 100% or close to it
-    // const total = l + m + s + mi;
-
     return (
         <Tooltip title={
             <div className="text-xs">
@@ -55,6 +53,7 @@ const formatMcap = (large: number | null, mid: number | null, small: number | nu
                 <div>Mid: <span className="text-violet-400">{m}%</span></div>
                 <div>Small: <span className="text-fuchsia-400">{s}%</span></div>
                 <div>Micro: <span className="text-lime-400">{mi}%</span></div>
+                <div>Nano: <span className="text-[#ff785b]">{na}%</span></div>
             </div>
         }>
             <div className="flex h-3 w-32 rounded-full overflow-hidden bg-gray-800 mx-auto border border-gray-700">
@@ -62,6 +61,7 @@ const formatMcap = (large: number | null, mid: number | null, small: number | nu
                 {m > 0 && <div style={{ width: `${m}%` }} className="h-full bg-violet-500" />}
                 {s > 0 && <div style={{ width: `${s}%` }} className="h-full bg-fuchsia-500" />}
                 {mi > 0 && <div style={{ width: `${mi}%` }} className="h-full bg-lime-500" />}
+                {na > 0 && <div style={{ width: `${na}%` }} className="h-full bg-[#ff785b]" />}
             </div>
         </Tooltip>
     );
@@ -120,7 +120,7 @@ export default function WeeklySnapshotTable({ snapshots, privacyMode = false }: 
                              </Tooltip>
                          </StyledTableCell>
                         <StyledTableCell align="center">
-                            <Tooltip title="Large/Mid/Small/Micro %">
+                            <Tooltip title="Large/Mid/Small/Micro/Nano %">
                                 <span>Mcap Split</span>
                             </Tooltip>
                         </StyledTableCell>
@@ -164,7 +164,7 @@ export default function WeeklySnapshotTable({ snapshots, privacyMode = false }: 
                                     </span>
                                 </StyledTableCell>
                                 <StyledTableCell align="center">
-                                    {formatMcap(row.largeCapPercent, row.midCapPercent, row.smallCapPercent, row.microCapPercent)}
+                                    {formatMcap(row.largeCapPercent, row.midCapPercent, row.smallCapPercent, row.microCapPercent, row.nanoCapPercent)}
                                 </StyledTableCell>
                             </StyledTableRow>
                         );

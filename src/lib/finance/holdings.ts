@@ -4,7 +4,7 @@ import xirr from 'xirr';
 import { unstable_cache } from 'next/cache';
 import { getInstrumentKeys } from '../instrument-service';
 import { getLTP, hasValidToken } from '../upstox-client';
-import { getAMFICategoriesBatch, mapAMFIToMarketCapCategory } from '../amfi';
+import { getAMFICategoriesBatch } from '../amfi';
 import { isMarketOpenAsync } from '../marketHours';
 import { financeLogger } from '@/lib/logger';
 import { fetchNSECorporateActions } from '@/lib/nse-api';
@@ -158,9 +158,8 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
         const pnl = currentValue - h.invested;
         const pnlPercent = h.invested > 0 ? (pnl / h.invested) * 100 : 0;
 
-        // Get market cap category from AMFI classification
-        const amfiCategory = amfiCategories.get(h.symbol);
-        const marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory || 'Small');
+        // Get market cap category (already includes 'Nano' via getCategoriesBatch)
+        const marketCapCategory = amfiCategories.get(h.symbol) || 'Small';
 
         return {
             symbol: h.symbol,
@@ -395,22 +394,23 @@ export async function computeMarketCapSegmentation(
     holdings: Holding[]
 ): Promise<MarketCapResult> {
     // Fetch AMFI classifications for all holdings
+    // getCategoriesBatch now uses resolveCapCategory internally, returning Nano where appropriate
     const symbols = holdings.map(h => h.symbol);
-    const amfiCategories = await getAMFICategoriesBatch(symbols);
+    const categories = await getAMFICategoriesBatch(symbols);
 
-    let large = 0, mid = 0, small = 0, micro = 0;
+    let large = 0, mid = 0, small = 0, micro = 0, nano = 0;
 
     for (const holding of holdings) {
-        const amfiCategory = amfiCategories.get(holding.symbol) || 'Small';
-        const category = mapAMFIToMarketCapCategory(amfiCategory);
+        const category = categories.get(holding.symbol) || 'Small';
 
         switch (category) {
             case 'Large': large += holding.currentValue; break;
-            case 'Mid': mid += holding.currentValue; break;
+            case 'Mid':   mid   += holding.currentValue; break;
             case 'Small': small += holding.currentValue; break;
             case 'Micro': micro += holding.currentValue; break;
+            case 'Nano':  nano  += holding.currentValue; break;
         }
     }
 
-    return { large, mid, small, micro };
+    return { large, mid, small, micro, nano };
 }

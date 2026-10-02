@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { differenceInCalendarDays } from 'date-fns';
-import type { AMFICategory, MarketCapCategory } from './amfi';
-import { getCategoriesBatch, mapAMFIToMarketCapCategory, getSymbolResolver, getApplicablePeriod, periodToString } from './amfi';
+import type { MarketCapCategory } from './amfi';
+import { getCategoriesBatch, getSymbolResolver, getApplicablePeriod, periodToString } from './amfi';
 import { calculateBrokerageCharges, calculateCapitalGainsTax, ChargesBreakdown, TaxBreakdown } from './charges';
 
 export interface ExitRecord {
@@ -147,7 +147,7 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
         list.push({ symbol: exit.symbol, date: exit.sellDate });
     }
 
-    const periodCategories = new Map<string, Map<string, AMFICategory>>();
+    const periodCategories = new Map<string, Map<string, MarketCapCategory>>();
     await Promise.all(
         Array.from(periodToExits.entries()).map(async ([periodStr, items]) => {
             const symbols = Array.from(new Set(items.map(i => i.symbol)));
@@ -158,8 +158,7 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
 
     for (const exit of exits) {
         const periodStr = periodToString(getApplicablePeriod(exit.sellDate));
-        const amfiCategory = periodCategories.get(periodStr)?.get(exit.symbol) || 'Small';
-        exit.marketCapCategory = mapAMFIToMarketCapCategory(amfiCategory);
+        exit.marketCapCategory = periodCategories.get(periodStr)?.get(exit.symbol) || 'Small';
     }
 
     // Sort by Sell Date Descending

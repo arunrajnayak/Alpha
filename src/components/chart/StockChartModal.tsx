@@ -655,11 +655,19 @@ function StockChartModalContent({
                 )}
               </div>
             )}
-            {holding?.marketCapCategory && (
-              <span className="text-[10px] sm:text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md leading-none">
-                {holding.marketCapCategory}
-              </span>
-            )}
+            {holding?.marketCapCategory && (() => {
+              const cat = holding.marketCapCategory.toLowerCase();
+              let cls = 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+              if (cat.includes('mid')) cls = 'text-violet-400 bg-violet-500/10 border-violet-500/20';
+              else if (cat.includes('small')) cls = 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20';
+              else if (cat.includes('micro')) cls = 'text-lime-400 bg-lime-500/10 border-lime-500/20';
+              else if (cat.includes('nano')) cls = 'text-[#ff785b] bg-[#ff785b]/10 border-[#ff785b]/20';
+              return (
+                <span className={`text-[10px] sm:text-xs border px-2 py-0.5 rounded-md leading-none ${cls}`}>
+                  {holding.marketCapCategory}
+                </span>
+              );
+            })()}
             {holding?.sector && (
               <span className="text-[10px] sm:text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md truncate max-w-[120px] sm:max-w-[200px] leading-none">
                 {holding.sector}

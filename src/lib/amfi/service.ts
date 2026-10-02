@@ -22,6 +22,7 @@ import { prisma, chunkArray } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { istDateParts } from '@/lib/tz';
 import { stripSeriesSuffix } from '@/lib/symbol-utils';
+import { getIndexConstituents } from '@/lib/index-constituents';
 import type {
   AMFICategory,
   AMFIPeriod,
@@ -170,43 +171,9 @@ export async function getAMFIPeriodStatus(snapshotDate: Date = new Date()): Prom
  * @param symbol - Stock symbol
  * @param snapshotDate - Date for which to get the classification (for historical snapshots)
  */
-export async function getCategory(symbol: string, snapshotDate?: Date): Promise<AMFICategory> {
-  const normalizedSymbol = stripSeriesSuffix(symbol.replace(/\.(NS|BO)$/i, '').toUpperCase().trim());
-  const status = await getAMFIPeriodStatus(snapshotDate);
-
-  if (!status.hasData) {
-    return 'Small'; // Default when no data
-  }
-
-  // 1. Try direct match
-  let classification = await prisma.aMFIClassification.findFirst({
-    where: { symbol: normalizedSymbol, period: status.applicablePeriod },
-  });
-
-  if (classification) {
-    return classification.category as AMFICategory;
-  }
-
-  // 2. Try symbol mapping (for renamed symbols)
-  const mapping = await prisma.symbolMapping.findFirst({
-    where: {
-      OR: [{ oldSymbol: normalizedSymbol }, { newSymbol: normalizedSymbol }],
-    },
-  });
-
-  if (mapping) {
-    const otherSymbol = mapping.oldSymbol === normalizedSymbol ? mapping.newSymbol : mapping.oldSymbol;
-    classification = await prisma.aMFIClassification.findFirst({
-      where: { symbol: otherSymbol, period: status.applicablePeriod },
-    });
-
-    if (classification) {
-      return classification.category as AMFICategory;
-    }
-  }
-
-  // 3. Default to Small for unknown stocks
-  return 'Small';
+export async function getCategory(symbol: string, snapshotDate?: Date): Promise<MarketCapCategory> {
+  const batch = await getCategoriesBatch([symbol], snapshotDate);
+  return batch.get(symbol) || 'Nano';
 }
 
 /**
@@ -215,8 +182,8 @@ export async function getCategory(symbol: string, snapshotDate?: Date): Promise<
 export async function getCategoriesBatch(
   symbols: string[],
   snapshotDate?: Date
-): Promise<Map<string, AMFICategory>> {
-  const result = new Map<string, AMFICategory>();
+): Promise<Map<string, MarketCapCategory>> {
+  const result = new Map<string, MarketCapCategory>();
   if (symbols.length === 0) return result;
 
   const status = await getAMFIPeriodStatus(snapshotDate);
@@ -297,25 +264,38 @@ export async function getCategoriesBatch(
     amfiMap.set(c.symbol.toUpperCase(), c.category as AMFICategory);
   }
 
+  // Load Nifty Total Market constituents to distinguish Micro (in index) from Nano (outside index)
+  const totalMarketRaw = await getIndexConstituents('NIFTY Total Market');
+  const totalMarketSymbols = new Set(totalMarketRaw.map((s) => s.toUpperCase()));
+
   // Map results back to original symbols
   for (const [original, normalized] of originalToNormalized.entries()) {
     // Try direct match
-    let category = amfiMap.get(normalized);
+    let amfiCategory: AMFICategory | undefined = amfiMap.get(normalized);
 
     // Try mapped symbols
-    if (!category) {
+    if (!amfiCategory) {
       const mappedSymbols = symbolToMapped.get(normalized) || [];
       for (const ms of mappedSymbols) {
-        category = amfiMap.get(ms);
-        if (category) break;
+        amfiCategory = amfiMap.get(ms);
+        if (amfiCategory) break;
       }
     }
 
-    result.set(original, category || 'Small');
+    const isInTotalMarket = totalMarketSymbols.has(normalized);
+
+    if (amfiCategory && amfiCategory !== 'Micro') {
+      // Large / Mid / Small — no Total Market check needed
+      result.set(original, amfiCategory as MarketCapCategory);
+    } else {
+      // Micro (rank 501+) or unknown — resolve via Total Market membership
+      result.set(original, resolveCapCategory(amfiCategory ?? null, isInTotalMarket));
+    }
   }
 
   return result;
 }
+
 
 // ============================================================================
 // Excel Parsing
@@ -636,8 +616,9 @@ export async function hasPeriodData(period?: AMFIPeriod): Promise<boolean> {
 // ============================================================================
 
 /**
- * Map AMFI category to MarketCapCategory
- * AMFI only has Large/Mid/Small, we treat unlisted stocks as 'Micro'
+ * Map AMFI category to MarketCapCategory (no Total Market context available).
+ * AMFI only has Large/Mid/Small, we treat unlisted stocks as 'Micro'.
+ * Prefer resolveCapCategory() when Total Market membership is known.
  */
 export function mapAMFIToMarketCapCategory(amfiCategory: AMFICategory): MarketCapCategory {
   switch (amfiCategory) {
@@ -646,6 +627,27 @@ export function mapAMFIToMarketCapCategory(amfiCategory: AMFICategory): MarketCa
     case 'Small': return 'Small';
     default: return 'Micro';
   }
+}
+
+/**
+ * Resolve the final MarketCapCategory for a symbol given its AMFI classification
+ * and whether it belongs to the Nifty Total Market index.
+ *
+ * Rules:
+ *   - Large / Mid / Small   → unchanged (always in Total Market)
+ *   - AMFI Micro (rank 501+) AND in Total Market → 'Micro'
+ *   - AMFI Micro (rank 501+) NOT in Total Market → 'Nano'
+ *   - Not in AMFI at all AND in Total Market → 'Micro'
+ *   - Not in AMFI at all AND NOT in Total Market → 'Nano'
+ */
+export function resolveCapCategory(
+  amfiCategory: AMFICategory | null,
+  isInTotalMarket: boolean,
+): MarketCapCategory {
+  if (!amfiCategory || amfiCategory === 'Micro') {
+    return isInTotalMarket ? 'Micro' : 'Nano';
+  }
+  return amfiCategory as MarketCapCategory; // 'Large' | 'Mid' | 'Small'
 }
 
 /**
