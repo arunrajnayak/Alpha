@@ -1,8 +1,11 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { ResponsivePie } from '@nivo/pie';
 import { formatNumber } from '@/lib/format';
 import { SectorAllocation } from '@/lib/types';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSort, faSortUp, faSortDown } from '@fortawesome/free-solid-svg-icons';
 
 interface SectorAllocationChartProps {
   allocations: SectorAllocation[];
@@ -67,7 +70,61 @@ function getSectorColor(sector: string): string {
   return SECTOR_COLORS[sector] || `hsl(${sector.charCodeAt(0) * 10 % 360}, 60%, 50%)`;
 }
 
+type SortKey = 'allocation' | 'count' | 'sector';
+type SortDirection = 'asc' | 'desc';
+
 export default function SectorAllocationChart({ allocations, privacyMode }: SectorAllocationChartProps) {
+  const [sortKey, setSortKey] = useState<SortKey>('allocation');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDirection(key === 'sector' ? 'asc' : 'desc');
+    }
+  };
+
+  const sortedAllocations = useMemo(() => {
+    if (!allocations) return [];
+    return [...allocations].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'allocation') {
+        cmp = a.allocation - b.allocation;
+      } else if (sortKey === 'count') {
+        cmp = a.count - b.count;
+      } else if (sortKey === 'sector') {
+        cmp = a.sector.localeCompare(b.sector);
+      }
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [allocations, sortKey, sortDirection]);
+
+  const totalStocks = useMemo(() => {
+    return (allocations || []).reduce((sum, a) => sum + (a.count || 0), 0);
+  }, [allocations]);
+
+  const totalWeight = useMemo(() => {
+    return (allocations || []).reduce((sum, a) => sum + (a.allocation || 0), 0);
+  }, [allocations]);
+
+  // Prepare data for pie chart (always ordered by allocation descending)
+  const pieData = useMemo(() => {
+    if (!allocations) return [];
+    return [...allocations]
+      .sort((a, b) => b.allocation - a.allocation)
+      .map(a => ({
+        id: a.sector,
+        label: a.sector,
+        value: a.value,
+        allocation: a.allocation,
+        count: a.count,
+        dayChangePercent: a.dayChangePercent,
+        color: getSectorColor(a.sector),
+      }));
+  }, [allocations]);
+
   if (!allocations || allocations.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
@@ -76,77 +133,176 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
     );
   }
 
-  // Prepare data for pie chart
-  const pieData = allocations.map(a => ({
-    id: a.sector,
-    label: a.sector,
-    value: a.value,
-    allocation: a.allocation,
-    count: a.count,
-    dayChangePercent: a.dayChangePercent,
-    color: getSectorColor(a.sector),
-  }));
-
   return (
-    <div className="h-full w-full">
-      <ResponsivePie
-        data={pieData}
-        margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        innerRadius={0.4}
-        padAngle={2}
-        cornerRadius={8}
-        activeOuterRadiusOffset={8}
-        colors={{ datum: 'data.color' }}
-        borderWidth={0}
-        enableArcLinkLabels={false}
-        arcLabelsSkipAngle={10}
-        arcLabelsTextColor="#ffffff"
-        arcLabel={d => {
+    <div className="flex flex-col lg:flex-row gap-6 items-center h-full w-full">
+      {/* Donut Chart */}
+      <div className="w-full lg:w-[45%] h-[320px] sm:h-[360px] lg:h-full min-h-[300px] flex items-center justify-center">
+        <ResponsivePie
+          data={pieData}
+          margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+          innerRadius={0.45}
+          padAngle={2}
+          cornerRadius={8}
+          activeOuterRadiusOffset={8}
+          colors={{ datum: 'data.color' }}
+          borderWidth={0}
+          enableArcLinkLabels={false}
+          arcLabelsSkipAngle={10}
+          arcLabelsTextColor="#ffffff"
+          arcLabel={d => {
             if (d.data.allocation > 5) {
-                // Return string with \n for newline support in Nivo/AVG
-                return `${getSectorLabel(d.id as string)}\n(${d.data.allocation.toFixed(0)}%)`;
+              return `${getSectorLabel(d.id as string)}\n(${d.data.allocation.toFixed(0)}%)`;
             }
             return '';
-        }}
-        theme={{
+          }}
+          theme={{
             labels: {
-                text: {
-                    fontWeight: 600,
-                    fontSize: 11,
-                    textShadow: '0px 0px 2px rgba(0,0,0,0.4)'
-                }
-            }
-        }}
-        tooltip={({ datum }) => (
-          <div className="backdrop-blur-md bg-slate-900/95 border border-white/10 px-3 py-2 rounded-lg shadow-xl">
-            <div className="flex items-center gap-2 mb-1">
-              <div 
-                className="w-3 h-3 rounded-full" 
-                style={{ backgroundColor: datum.color }} 
-              />
-              <span className="font-semibold text-white text-sm">{getSectorLabel(datum.id as string)}</span>
+              text: {
+                fontWeight: 600,
+                fontSize: 11,
+                textShadow: '0px 0px 2px rgba(0,0,0,0.4)',
+              },
+            },
+          }}
+          tooltip={({ datum }) => (
+            <div className="backdrop-blur-md bg-slate-900/95 border border-white/10 px-3 py-2 rounded-lg shadow-xl">
+              <div className="flex items-center gap-2 mb-1">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: datum.color }}
+                />
+                <span className="font-semibold text-white text-sm">{getSectorLabel(datum.id as string)}</span>
+              </div>
+              <div className="space-y-0.5 text-xs">
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-400">Allocation</span>
+                  <span className="text-white font-medium">{datum.data.allocation.toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-400">Value</span>
+                  <span className="text-white font-mono">
+                    {privacyMode ? '****' : `₹${formatNumber(datum.value, 0, 0)}`}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-400">Stocks</span>
+                  <span className="text-white">{datum.data.count}</span>
+                </div>
+              </div>
             </div>
-            <div className="space-y-0.5 text-xs">
-              <div className="flex justify-between gap-4">
-                <span className="text-gray-400">Allocation</span>
-                <span className="text-white font-medium">{datum.data.allocation.toFixed(1)}%</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-gray-400">Value</span>
-                <span className="text-white font-mono">
-                  {privacyMode ? '****' : `₹${formatNumber(datum.value, 0, 0)}`}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-gray-400">Stocks</span>
-                <span className="text-white">{datum.data.count}</span>
-              </div>
-            </div>
-          </div>
-        )}
-        legends={[]}
-        motionConfig="gentle"
-      />
+          )}
+          legends={[]}
+          motionConfig="gentle"
+        />
+      </div>
+
+      {/* Table */}
+      <div className="w-full lg:w-[55%] flex flex-col h-full max-h-[380px] lg:max-h-[420px] rounded-xl border border-white/5 bg-slate-950/40 overflow-hidden shadow-inner">
+        <div className="overflow-y-auto flex-1 custom-scrollbar">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-md border-b border-white/10 text-gray-400 text-[11px] uppercase tracking-wider select-none">
+              <tr>
+                <th
+                  scope="col"
+                  onClick={() => handleSort('sector')}
+                  className="py-3 px-3.5 font-semibold cursor-pointer hover:text-white transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Sector</span>
+                    {sortKey === 'sector' ? (
+                      <FontAwesomeIcon icon={sortDirection === 'asc' ? faSortUp : faSortDown} className="text-blue-400 text-xs" />
+                    ) : (
+                      <FontAwesomeIcon icon={faSort} className="text-gray-600 text-[10px]" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  onClick={() => handleSort('count')}
+                  className="py-3 px-3 font-semibold text-center cursor-pointer hover:text-white transition-colors w-24"
+                >
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span>Stocks</span>
+                    {sortKey === 'count' ? (
+                      <FontAwesomeIcon icon={sortDirection === 'asc' ? faSortUp : faSortDown} className="text-blue-400 text-xs" />
+                    ) : (
+                      <FontAwesomeIcon icon={faSort} className="text-gray-600 text-[10px]" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  onClick={() => handleSort('allocation')}
+                  className="py-3 px-3.5 font-semibold text-right cursor-pointer hover:text-white transition-colors w-36"
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span>Weight</span>
+                    {sortKey === 'allocation' ? (
+                      <FontAwesomeIcon icon={sortDirection === 'asc' ? faSortUp : faSortDown} className="text-blue-400 text-xs" />
+                    ) : (
+                      <FontAwesomeIcon icon={faSort} className="text-gray-600 text-[10px]" />
+                    )}
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {sortedAllocations.map(a => {
+                const color = getSectorColor(a.sector);
+                return (
+                  <tr key={a.sector} className="hover:bg-white/[0.04] transition-colors group">
+                    <td className="py-2.5 px-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm transition-transform group-hover:scale-125"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-gray-200 font-medium truncate" title={a.sector}>
+                          {a.sector}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-gray-300 font-mono">
+                      <span className="px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/5">
+                        {a.count}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2.5">
+                        <span className="text-white font-semibold font-mono">
+                          {a.allocation.toFixed(1)}%
+                        </span>
+                        <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden shrink-0 hidden sm:block">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${Math.min(100, a.allocation)}%`,
+                              backgroundColor: color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="sticky bottom-0 z-10 bg-slate-900/95 backdrop-blur-md border-t border-white/10 text-[11px] text-gray-400 font-semibold select-none">
+              <tr>
+                <td className="py-2.5 px-3.5">
+                  Total ({allocations.length} {allocations.length === 1 ? 'Sector' : 'Sectors'})
+                </td>
+                <td className="py-2.5 px-3 text-center text-gray-200 font-mono">
+                  {totalStocks}
+                </td>
+                <td className="py-2.5 px-3.5 text-right text-gray-200 font-mono">
+                  {totalWeight.toFixed(1)}%
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

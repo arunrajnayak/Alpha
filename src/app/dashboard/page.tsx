@@ -270,40 +270,7 @@ export default function DashboardPage() {
           </div>
       </motion.div>
 
-      {/* Row 4: Sector Allocation & Drawdown Chart */}
-      <motion.div
-        variants={sectionVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={viewportConfig}
-        className="flex flex-col md:flex-row gap-6 md:gap-8 h-auto flex-none"
-      >
-          {/* Sector Allocation (40% width) */}
-          <div className="w-full md:w-[40%] h-[500px]">
-              <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 flex items-center justify-center">
-                            <FontAwesomeIcon icon={faChartPie} className="text-violet-400 text-lg" />
-                        </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sector Allocation</span>
-                    </div>
-                    <div className="flex-1 min-h-[400px]">
-                        <SectorAllocationWrapper allocations={sectorAllocations} privacyMode={privacyMode} />
-                    </div>
-              </div>
-          </div>
-
-          {/* Drawdown Chart (60% width) */}
-          <div className="w-full md:w-[60%] h-[500px]">
-              <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
-                    <ChartErrorBoundary componentName="Drawdown Chart">
-                      <DrawdownChart data={drawdownData} />
-                    </ChartErrorBoundary>
-              </div>
-          </div>
-      </motion.div>
-
-      {/* Row 5: Equity Curve */}
+      {/* Row 4: Equity Curve */}
       <motion.div
         variants={sectionVariants}
         initial="hidden"
@@ -315,6 +282,51 @@ export default function DashboardPage() {
                 <div className="flex-1">
                      <ChartErrorBoundary componentName="Equity Curve">
                        <EquityCurve data={chartData} />
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5: Sector Allocation */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 flex items-center justify-center">
+                            <FontAwesomeIcon icon={faChartPie} className="text-violet-400 text-lg" />
+                        </div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sector Allocation</span>
+                    </div>
+                    <span className="text-xs text-gray-400 font-medium">
+                      {sectorAllocations.length} {sectorAllocations.length === 1 ? 'Sector' : 'Sectors'}
+                    </span>
+                </div>
+                <div className="flex-1 min-h-[360px]">
+                    <ChartErrorBoundary componentName="Sector Allocation">
+                      <SectorAllocationWrapper allocations={sectorAllocations} privacyMode={privacyMode} />
+                    </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 6: Drawdown Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-[420px] md:h-[500px] bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1 min-h-0">
+                     <ChartErrorBoundary componentName="Drawdown Chart">
+                       <DrawdownChart data={drawdownData} />
                      </ChartErrorBoundary>
                 </div>
           </div>
