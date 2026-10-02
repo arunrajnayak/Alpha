@@ -101,14 +101,6 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
     });
   }, [allocations, sortKey, sortDirection]);
 
-  const totalStocks = useMemo(() => {
-    return (allocations || []).reduce((sum, a) => sum + (a.count || 0), 0);
-  }, [allocations]);
-
-  const totalWeight = useMemo(() => {
-    return (allocations || []).reduce((sum, a) => sum + (a.allocation || 0), 0);
-  }, [allocations]);
-
   // Prepare data for pie chart (always ordered by allocation descending)
   const pieData = useMemo(() => {
     if (!allocations) return [];
@@ -134,9 +126,9 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 items-center h-full w-full">
-      {/* Donut Chart */}
-      <div className="w-full lg:w-[45%] h-[320px] sm:h-[360px] lg:h-full min-h-[300px] flex items-center justify-center">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
+      {/* Donut Chart (Left Side) */}
+      <div className="w-full lg:col-span-5 h-[360px] relative">
         <ResponsivePie
           data={pieData}
           margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
@@ -196,8 +188,8 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
         />
       </div>
 
-      {/* Table */}
-      <div className="w-full lg:w-[55%] flex flex-col h-full max-h-[380px] lg:max-h-[420px] rounded-xl border border-white/5 bg-slate-950/40 overflow-hidden shadow-inner">
+      {/* Table (Right Side) */}
+      <div className="w-full lg:col-span-7 flex flex-col h-[360px] rounded-xl border border-white/5 bg-slate-950/40 overflow-hidden shadow-inner">
         <div className="overflow-y-auto flex-1 custom-scrollbar">
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-md border-b border-white/10 text-gray-400 text-[11px] uppercase tracking-wider select-none">
@@ -287,19 +279,6 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
                 );
               })}
             </tbody>
-            <tfoot className="sticky bottom-0 z-10 bg-slate-900/95 backdrop-blur-md border-t border-white/10 text-[11px] text-gray-400 font-semibold select-none">
-              <tr>
-                <td className="py-2.5 px-3.5">
-                  Total ({allocations.length} {allocations.length === 1 ? 'Sector' : 'Sectors'})
-                </td>
-                <td className="py-2.5 px-3 text-center text-gray-200 font-mono">
-                  {totalStocks}
-                </td>
-                <td className="py-2.5 px-3.5 text-right text-gray-200 font-mono">
-                  {totalWeight.toFixed(1)}%
-                </td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </div>
