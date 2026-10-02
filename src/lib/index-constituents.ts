@@ -11,6 +11,8 @@ import os from 'os';
 import { parse } from 'csv-parse/sync';
 import { getInstrumentKeys } from './instrument-service';
 import totalMarketRebalancesData from './data/total-market-rebalances.json';
+import { prisma } from '@/lib/db';
+import { todayISTYmd } from '@/lib/tz';
 
 export interface TotalMarketRebalance {
   effectiveDate: string;
@@ -328,12 +330,33 @@ async function fetchCSV(url: string): Promise<string | null> {
 const historicalTotalMarketCache = new Map<string, Set<string>>();
 
 /**
+ * Load Total Market rebalances from AppConfig (if available in database),
+ * falling back to the bundled total-market-rebalances.json.
+ */
+export async function loadTotalMarketRebalances(): Promise<TotalMarketRebalance[]> {
+  try {
+    const configRow = await prisma.appConfig.findUnique({
+      where: { key: 'TOTAL_MARKET_REBALANCES' },
+    });
+    if (configRow?.value) {
+      const parsed = JSON.parse(configRow.value);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return (parsed as TotalMarketRebalance[]).slice().sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+      }
+    }
+  } catch {
+    // If DB is temporarily unreachable or table not ready, fallback to bundled JSON
+  }
+  return (totalMarketRebalancesData as TotalMarketRebalance[]).slice().sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+}
+
+/**
  * Get the Total Market rebalance epoch key for a given date.
  * Returns the effective date of the latest rebalance that has taken effect on or before asOfDate.
  */
-export function getTotalMarketRebalanceEpochKey(asOfDate: Date): string {
+export function getTotalMarketRebalanceEpochKey(asOfDate: Date, rebalances: TotalMarketRebalance[] = totalMarketRebalances): string {
   const asOfDateStr = new Date(asOfDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  for (const r of totalMarketRebalances) {
+  for (const r of rebalances) {
     if (asOfDateStr >= r.effectiveDate) {
       return r.effectiveDate;
     }
@@ -353,8 +376,9 @@ export async function getTotalMarketConstituents(asOfDate?: Date): Promise<Set<s
     return new Set(currentSymbols.map((s) => s.toUpperCase()));
   }
 
+  const rebalances = await loadTotalMarketRebalances();
   const asOfDateStr = new Date(asOfDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-  const epochKey = getTotalMarketRebalanceEpochKey(asOfDate);
+  const epochKey = getTotalMarketRebalanceEpochKey(asOfDate, rebalances);
 
   const cached = historicalTotalMarketCache.get(epochKey);
   if (cached) {
@@ -365,7 +389,7 @@ export async function getTotalMarketConstituents(asOfDate?: Date): Promise<Set<s
   const constituentSet = new Set(currentSymbols.map((s) => s.toUpperCase()));
 
   // Unwind each rebalance that took effect after asOfDate (sorted descending)
-  for (const r of totalMarketRebalances) {
+  for (const r of rebalances) {
     if (asOfDateStr < r.effectiveDate) {
       // Rebalance happened after asOfDate:
       // Remove stocks that were included in this rebalance
@@ -395,6 +419,124 @@ export async function getIndexConstituents(indexName: string, asOfDate?: Date): 
   }
   const result = await getIndexConstituentData(indexName);
   return result.symbols;
+}
+
+export interface TotalMarketSyncResult {
+  status: 'up_to_date' | 'rebalanced' | 'initialized';
+  totalConstituents: number;
+  newRebalance?: TotalMarketRebalance;
+  message: string;
+}
+
+/**
+ * Automatically synchronize Nifty Total Market constituents with the official CSV.
+ * Detects semi-annual reconstitutions or interim replacements, extracts exclusions/inclusions,
+ * records the new rebalance epoch into AppConfig in Turso, and clears caches.
+ */
+export async function syncTotalMarketConstituents(): Promise<TotalMarketSyncResult> {
+  // 1. Force fresh fetch of live CSV from niftyindices.com
+  const freshSymbols = await refreshIndexConstituents('NIFTY Total Market');
+  if (freshSymbols.length === 0) {
+    throw new Error('Failed to fetch NIFTY Total Market constituents from niftyindices.com');
+  }
+
+  const freshSet = new Set(freshSymbols.map((s) => s.toUpperCase()));
+
+  // 2. Load stored state from AppConfig
+  const storedConfig = await prisma.appConfig.findUnique({
+    where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
+  });
+
+  if (!storedConfig?.value) {
+    // Seed initial state in database
+    await prisma.appConfig.upsert({
+      where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
+      create: {
+        key: 'TOTAL_MARKET_CURRENT_SYMBOLS',
+        value: JSON.stringify(Array.from(freshSet).sort()),
+      },
+      update: {
+        value: JSON.stringify(Array.from(freshSet).sort()),
+      },
+    });
+
+    await prisma.appConfig.upsert({
+      where: { key: 'TOTAL_MARKET_REBALANCES' },
+      create: {
+        key: 'TOTAL_MARKET_REBALANCES',
+        value: JSON.stringify(totalMarketRebalancesData),
+      },
+      update: {
+        value: JSON.stringify(totalMarketRebalancesData),
+      },
+    });
+
+    return {
+      status: 'initialized',
+      totalConstituents: freshSymbols.length,
+      message: `Initialized Nifty Total Market with ${freshSymbols.length} constituents`,
+    };
+  }
+
+  const storedSymbolsArray: string[] = JSON.parse(storedConfig.value);
+  const storedSet = new Set(storedSymbolsArray.map((s) => s.toUpperCase()));
+
+  // 3. Detect any changes
+  const included = Array.from(freshSet).filter((s) => !storedSet.has(s)).sort();
+  const excluded = Array.from(storedSet).filter((s) => !freshSet.has(s)).sort();
+
+  if (included.length === 0 && excluded.length === 0) {
+    return {
+      status: 'up_to_date',
+      totalConstituents: freshSymbols.length,
+      message: `Nifty Total Market is up to date (${freshSymbols.length} constituents, 0 changes)`,
+    };
+  }
+
+  // 4. Rebalance detected!
+  const todayYmd = todayISTYmd();
+  const newRebalance: TotalMarketRebalance = {
+    effectiveDate: todayYmd,
+    circularDate: todayYmd,
+    url: 'https://www.niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv',
+    excluded,
+    included,
+  };
+
+  const existingRebalances = await loadTotalMarketRebalances();
+  const updatedRebalances = [newRebalance, ...existingRebalances.filter((r) => r.effectiveDate !== todayYmd)];
+  updatedRebalances.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+
+  await prisma.appConfig.upsert({
+    where: { key: 'TOTAL_MARKET_REBALANCES' },
+    create: {
+      key: 'TOTAL_MARKET_REBALANCES',
+      value: JSON.stringify(updatedRebalances),
+    },
+    update: {
+      value: JSON.stringify(updatedRebalances),
+    },
+  });
+
+  await prisma.appConfig.upsert({
+    where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
+    create: {
+      key: 'TOTAL_MARKET_CURRENT_SYMBOLS',
+      value: JSON.stringify(Array.from(freshSet).sort()),
+    },
+    update: {
+      value: JSON.stringify(Array.from(freshSet).sort()),
+    },
+  });
+
+  historicalTotalMarketCache.clear();
+
+  return {
+    status: 'rebalanced',
+    totalConstituents: freshSymbols.length,
+    newRebalance,
+    message: `Rebalance detected! Added ${included.length} stocks, removed ${excluded.length} stocks.`,
+  };
 }
 
 

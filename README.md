@@ -312,7 +312,7 @@ The app uses external cron jobs to automate daily tasks. Use [cron-job.org](http
 | 5 | Monthly Snapshot | `/api/portfolio/snapshot?type=month` | `0 0 1 * *` | 5:30 AM 1st of month | Monthly state with full performance stats |
 | 6 | Corp Actions | `/api/cron/corporate-actions` | `30 23 * * *` | 5:00 AM Daily | Syncs splits and bonuses from NSE |
 | 7 | Sector Refresh | `/api/cron/sector-refresh` | `0 6 1 * *` | 11:30 AM 1st of month | Updates stock-to-sector mappings |
-| 8 | AMFI Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Checks for new market cap classifications |
+| 8 | Market Cap & Index Sync | `/api/cron/amfi-sync` | `30 0 * * 0` | 6:00 AM Sunday | Checks for new AMFI classifications and Nifty Total Market reconstitutions |
 | 9 | Momentum Screener | `/api/cron/momentum-screener` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | Scores and ranks all stocks |
 | 10 | Daily Email Report | `/api/cron/daily-report` | `0 11 * * 1-5` | 4:30 PM Mon–Fri | *(Optional)* Sends portfolio + screener summary email via Resend. Requires `RESEND_API_KEY` and `REPORT_EMAIL_TO`. |
 

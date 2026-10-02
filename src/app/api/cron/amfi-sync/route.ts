@@ -21,12 +21,14 @@ import {
     getAvailableAMFIPeriods,
     AMFIPeriod
 } from '@/lib/amfi';
+import { syncTotalMarketConstituents } from '@/lib/index-constituents';
+import { recalculatePortfolioHistory } from '@/lib/finance';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { apiLogger } from '@/lib/logger';
 import { istDateParts } from '@/lib/tz';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // List of periods to try in order (most recent first). Anchored to the IST
 // calendar so the H1/H2 boundary aligns with India.
@@ -57,77 +59,80 @@ export async function GET(request: NextRequest) {
     apiLogger.info('Starting weekly sync check...');
     
     try {
-        // Check what periods we already have
+        // --- 1. AMFI Sync Check ---
         const availablePeriods = await getAvailableAMFIPeriods();
         const currentPeriod = getCurrentAMFIPeriod();
         const hasCurrentData = await hasAMFIData(currentPeriod);
         
-        apiLogger.info(`Current expected period: ${currentPeriod.year}_${currentPeriod.halfYear}`);
-        apiLogger.info(`Has current data: ${hasCurrentData}`);
-        apiLogger.info(`Available periods: ${availablePeriods.join(', ') || 'none'}`);
+        apiLogger.info(`Current expected AMFI period: ${currentPeriod.year}_${currentPeriod.halfYear}`);
+        apiLogger.info(`Has current AMFI data: ${hasCurrentData}`);
+        apiLogger.info(`Available AMFI periods: ${availablePeriods.join(', ') || 'none'}`);
         
-        // If we already have current period data, skip sync
-        if (hasCurrentData) {
-            apiLogger.info('Data is up to date, skipping sync');
-            return NextResponse.json({
-                success: true,
-                action: 'skipped',
-                reason: 'Data already up to date',
+        let amfiResult: any = { action: 'skipped', reason: 'Data already up to date' };
+
+        if (!hasCurrentData) {
+            const periodsToTry = getPeriodsToTry();
+            let syncResult = null;
+            let lastError = null;
+
+            for (const period of periodsToTry) {
+                const periodStr = `${period.year}_${period.halfYear}`;
+                if (availablePeriods.includes(periodStr)) continue;
+
+                apiLogger.info(`Attempting to sync AMFI period: ${periodStr}`);
+                try {
+                    syncResult = await fullAMFISync(period);
+                    apiLogger.info(`Successfully synced ${syncResult.total} classifications for ${periodStr}`);
+                    break;
+                } catch (error) {
+                    lastError = error;
+                    apiLogger.warn(`Failed to sync AMFI period ${periodStr}: ${(error as Error).message}`);
+                }
+            }
+
+            if (syncResult) {
+                amfiResult = { action: 'synced', ...syncResult };
+            } else {
+                amfiResult = {
+                    action: 'no_new_data',
+                    reason: lastError ? `Failed to find new AMFI data: ${(lastError as Error).message}` : 'All available periods already synced',
+                };
+            }
+        }
+
+        // --- 2. Nifty Total Market Index Sync Check ---
+        apiLogger.info('Checking Nifty Total Market constituents sync...');
+        const totalMarketResult = await syncTotalMarketConstituents();
+        apiLogger.info(`Total Market sync status: ${totalMarketResult.status} — ${totalMarketResult.message}`);
+
+        // If either AMFI or Total Market rebalanced, trigger a full recalculation
+        let recomputed = false;
+        if (totalMarketResult.status === 'rebalanced' || amfiResult.action === 'synced') {
+            apiLogger.info('Rebalance or new classification detected. Triggering portfolio recalculation...');
+            try {
+                await recalculatePortfolioHistory();
+                recomputed = true;
+            } catch (recalcErr) {
+                apiLogger.error('Automatic recalculation failed:', recalcErr);
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            amfi: {
+                ...amfiResult,
                 currentPeriod: `${currentPeriod.year}_${currentPeriod.halfYear}`,
                 availablePeriods,
-                durationMs: Date.now() - startTime
-            });
-        }
-        
-        // Try to sync from latest available period
-        const periodsToTry = getPeriodsToTry();
-        let syncResult = null;
-        let lastError = null;
-        
-        for (const period of periodsToTry) {
-            const periodStr = `${period.year}_${period.halfYear}`;
-            
-            // Skip if we already have this period
-            if (availablePeriods.includes(periodStr)) {
-                apiLogger.info(`Already have period ${periodStr}, skipping`);
-                continue;
-            }
-            
-            apiLogger.info(`Attempting to sync period: ${periodStr}`);
-            
-            try {
-                syncResult = await fullAMFISync(period);
-                apiLogger.info(`Successfully synced ${syncResult.total} classifications for ${periodStr}`);
-                break; // Success, stop trying
-            } catch (error) {
-                lastError = error;
-                apiLogger.warn(`Failed to sync ${periodStr}: ${(error as Error).message}`);
-                // Continue to try next period
-            }
-        }
-        
-        if (syncResult) {
-            return NextResponse.json({
-                success: true,
-                action: 'synced',
-                ...syncResult,
-                durationMs: Date.now() - startTime
-            });
-        } else {
-            // No sync happened (either all failed or all periods already exist)
-            return NextResponse.json({
-                success: true,
-                action: 'no_new_data',
-                reason: lastError ? `Failed to find new AMFI data: ${(lastError as Error).message}` : 'All available periods already synced',
-                availablePeriods: await getAvailableAMFIPeriods(),
-                durationMs: Date.now() - startTime
-            });
-        }
+            },
+            totalMarket: totalMarketResult,
+            recomputed,
+            durationMs: Date.now() - startTime,
+        });
     } catch (error) {
-        apiLogger.error('Error:', error);
+        apiLogger.error('Weekly sync check failed:', error);
         return NextResponse.json({
             success: false,
-            error: 'AMFI sync failed',
+            error: 'Weekly sync check failed',
             details: (error as Error).message,
             durationMs: Date.now() - startTime
         }, { status: 500 });
