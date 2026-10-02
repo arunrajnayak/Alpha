@@ -126,9 +126,9 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center w-full">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start w-full">
       {/* Donut Chart (Left Side) */}
-      <div className="w-full lg:col-span-5 h-[360px] relative">
+      <div className="w-full lg:col-span-6 h-[380px] lg:h-[400px] relative">
         <ResponsivePie
           data={pieData}
           margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
@@ -189,7 +189,7 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
       </div>
 
       {/* Table (Right Side) */}
-      <div className="w-full lg:col-span-7 flex flex-col h-[360px] rounded-xl border border-white/5 bg-slate-950/40 overflow-hidden shadow-inner">
+      <div className="w-full lg:col-span-6 flex flex-col h-[380px] lg:h-[400px] rounded-xl border border-white/5 bg-slate-950/40 overflow-hidden shadow-inner">
         <div className="overflow-y-auto flex-1 custom-scrollbar">
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-md border-b border-white/10 text-gray-400 text-[11px] uppercase tracking-wider select-none">
@@ -211,7 +211,7 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
                 <th
                   scope="col"
                   onClick={() => handleSort('count')}
-                  className="py-3 px-3 font-semibold text-center cursor-pointer hover:text-white transition-colors w-24"
+                  className="py-3 px-3 font-semibold text-center cursor-pointer hover:text-white transition-colors w-20"
                 >
                   <div className="flex items-center justify-center gap-1.5">
                     <span>Stocks</span>
@@ -225,7 +225,7 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
                 <th
                   scope="col"
                   onClick={() => handleSort('allocation')}
-                  className="py-3 px-3.5 font-semibold text-right cursor-pointer hover:text-white transition-colors w-36"
+                  className="py-3 px-3.5 font-semibold text-right cursor-pointer hover:text-white transition-colors w-44 sm:w-56"
                 >
                   <div className="flex items-center justify-end gap-1.5">
                     <span>Weight</span>
@@ -260,11 +260,11 @@ export default function SectorAllocationChart({ allocations, privacyMode }: Sect
                       </span>
                     </td>
                     <td className="py-2.5 px-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2.5">
+                      <div className="flex items-center justify-end gap-3">
                         <span className="text-white font-semibold font-mono">
                           {a.allocation.toFixed(1)}%
                         </span>
-                        <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden shrink-0 hidden sm:block">
+                        <div className="w-20 sm:w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden shrink-0 hidden sm:block">
                           <div
                             className="h-full rounded-full transition-all duration-300"
                             style={{

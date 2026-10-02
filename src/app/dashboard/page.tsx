@@ -296,16 +296,11 @@ export default function DashboardPage() {
         className="w-full h-auto flex-none"
       >
           <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 flex items-center justify-center">
-                            <FontAwesomeIcon icon={faChartPie} className="text-violet-400 text-lg" />
-                        </div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sector Allocation</span>
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 flex items-center justify-center">
+                        <FontAwesomeIcon icon={faChartPie} className="text-violet-400 text-lg" />
                     </div>
-                    <span className="text-xs text-gray-400 font-medium">
-                      {sectorAllocations.length} {sectorAllocations.length === 1 ? 'Sector' : 'Sectors'}
-                    </span>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sector Allocation</span>
                 </div>
                 <div className="flex-1 min-h-[360px]">
                     <ChartErrorBoundary componentName="Sector Allocation">
