@@ -88,8 +88,9 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
   })();
 
   // Calculate min drawdown for Y-axis domain
-  const minDrawdown = Math.min(...chartData.map(d => d.drawdownPercent));
-  const yDomainMin = Math.floor(minDrawdown - 2);
+  const rawMinDrawdown = chartData.length > 0 ? Math.min(...chartData.map(d => d.drawdownPercent)) : 0;
+  const minDrawdown = isFinite(rawMinDrawdown) ? rawMinDrawdown : 0;
+  const yDomainMin = Math.min(-1, Math.floor(minDrawdown - 2));
 
   const handleDateRangeChange = (_event: React.MouseEvent<HTMLElement>, newRange: DateRange | null) => {
     if (newRange !== null) {
@@ -142,46 +143,52 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
       </div>
 
       <div className="flex-1 w-full min-h-0">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-          <defs>
-            <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
-              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-          <XAxis 
-            dataKey="dateStr" 
-            stroke="#6b7280" 
-            tickFormatter={(value) => format(parseISO(value), "MMM ''yy")}
-            ticks={monthTicks}
-            tick={{ fill: '#9ca3af', fontSize: 10 }}
-            tickLine={{ stroke: '#4b5563' }}
-            axisLine={{ stroke: '#374151' }}
-            minTickGap={30}
-          />
-          <YAxis 
-            stroke="#6b7280"
-            tick={{ fill: '#9ca3af', fontSize: 10 }}
-            tickLine={{ stroke: '#4b5563' }}
-            axisLine={{ stroke: '#374151' }}
-            tickFormatter={(value) => `${value.toFixed(0)}%`}
-            domain={[yDomainMin, 0]}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Area
-            type="monotone"
-            dataKey="drawdownPercent"
-            name="Drawdown"
-            stroke="#ef4444"
-            strokeWidth={2}
-            fill="url(#drawdownGradient)"
-            dot={false}
-            activeDot={{ r: 5, fill: '#ef4444', strokeWidth: 2, stroke: '#fff' }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+        {chartData.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-gray-500">
+            No drawdown data recorded for the selected period
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+            <defs>
+              <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+            <XAxis 
+              dataKey="dateStr" 
+              stroke="#6b7280" 
+              tickFormatter={(value) => format(parseISO(value), "MMM ''yy")}
+              ticks={monthTicks}
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
+              tickLine={{ stroke: '#4b5563' }}
+              axisLine={{ stroke: '#374151' }}
+              minTickGap={30}
+            />
+            <YAxis 
+              stroke="#6b7280"
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
+              tickLine={{ stroke: '#4b5563' }}
+              axisLine={{ stroke: '#374151' }}
+              tickFormatter={(value) => `${value.toFixed(0)}%`}
+              domain={[yDomainMin, 0]}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Area
+              type="monotone"
+              dataKey="drawdownPercent"
+              name="Drawdown"
+              stroke="#ef4444"
+              strokeWidth={2}
+              fill="url(#drawdownGradient)"
+              dot={false}
+              activeDot={{ r: 5, fill: '#ef4444', strokeWidth: 2, stroke: '#fff' }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

@@ -72,13 +72,23 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
         startDate = subYears(now, 1);
         break;
       case 'CUSTOM':
-        if (customStart) {
-            startDate = startOfDay(customStart);
+        if (customStart && customEnd) {
+          const s = startOfDay(customStart);
+          const e = endOfDay(customEnd);
+          if (s <= e) {
+            startDate = s;
+            endDate = e;
+          } else {
+            startDate = startOfDay(customEnd);
+            endDate = endOfDay(customStart);
+          }
+        } else if (customStart) {
+          startDate = startOfDay(customStart);
+        } else if (customEnd) {
+          endDate = endOfDay(customEnd);
+          startDate = subYears(endDate, 1);
         } else {
-            return data; // Fallback to all data if custom start undefined
-        }
-        if (customEnd) {
-            endDate = endOfDay(customEnd);
+          return data; // Fallback to all data if custom start undefined
         }
         break;
       case 'ALL':
@@ -105,7 +115,7 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
 
     return rawFiltered.map(d => ({
         ...d,
-        portfolioNAV: basePortfolio ? (d.portfolioNAV / basePortfolio) * 100 : 100,
+        portfolioNAV: (basePortfolio && basePortfolio > 0) ? (d.portfolioNAV / basePortfolio) * 100 : 100,
         niftyNAV: d.niftyNAV && firstNifty ? (d.niftyNAV / firstNifty) * 100 : (d.niftyNAV === null ? null : 100),
         nifty500Momentum50NAV: d.nifty500Momentum50NAV && firstMomentum ? (d.nifty500Momentum50NAV / firstMomentum) * 100 : (d.nifty500Momentum50NAV === null ? null : 100),
         niftyMidcap100NAV: d.niftyMidcap100NAV && firstMidcap ? (d.niftyMidcap100NAV / firstMidcap) * 100 : (d.niftyMidcap100NAV === null ? null : 100),
@@ -291,8 +301,13 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
       </div>
     </div>
       <div className="h-[300px] md:h-[500px] w-full mt-4">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-        <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
+        {chartData.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-gray-500">
+            No portfolio performance data recorded for the selected period
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
           <defs>
             <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -473,6 +488,7 @@ export default function EquityCurve({ data }: { data: DataPoint[] }) {
           />
         </ComposedChart>
       </ResponsiveContainer>
+      )}
       </div>
       
       {/* Custom Legend */}

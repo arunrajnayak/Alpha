@@ -27,9 +27,9 @@ export async function getStockCandles(
 
     if (interval === '5minute') {
         // Upstox max range for 5-minute historical is ~30 days
-        const min5mFromDate = new Date(toDate);
-        min5mFromDate.setDate(min5mFromDate.getDate() - 30);
-        const min5mFromDateStr = min5mFromDate.toISOString().split('T')[0];
+        const min5mFromDate = new Date(toDate + 'T00:00:00Z');
+        min5mFromDate.setUTCDate(min5mFromDate.getUTCDate() - 30);
+        const min5mFromDateStr = min5mFromDate.toISOString().slice(0, 10);
         const safe5mFromDate = fromDate < min5mFromDateStr ? min5mFromDateStr : fromDate;
 
         // Fetch historical 5m candles and today's intraday 5m candles
@@ -62,15 +62,15 @@ export async function getStockCandles(
     // For daily timeframe, fetch an extra 365 calendar days before fromDate so 200 DMA is available from day 1
     let fetchFromDate = fromDate;
     if (interval === 'day') {
-        const extDateObj = new Date(fromDate);
-        extDateObj.setDate(extDateObj.getDate() - 365);
-        fetchFromDate = extDateObj.toISOString().split('T')[0];
+        const extDateObj = new Date(fromDate + 'T00:00:00Z');
+        extDateObj.setUTCDate(extDateObj.getUTCDate() - 365);
+        fetchFromDate = extDateObj.toISOString().slice(0, 10);
     }
 
     // Upstox max date range for historical candle API is 10 years
-    const minFromDateObj = new Date(toDate);
-    minFromDateObj.setFullYear(minFromDateObj.getFullYear() - 10);
-    const minFromDateStr = minFromDateObj.toISOString().split('T')[0];
+    const minFromDateObj = new Date(toDate + 'T00:00:00Z');
+    minFromDateObj.setUTCFullYear(minFromDateObj.getUTCFullYear() - 10);
+    const minFromDateStr = minFromDateObj.toISOString().slice(0, 10);
     const safeFromDate = fetchFromDate < minFromDateStr ? minFromDateStr : fetchFromDate;
 
     const [historicalRes, ohlcMap] = await Promise.all([

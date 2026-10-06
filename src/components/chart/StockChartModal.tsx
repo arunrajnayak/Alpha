@@ -16,6 +16,9 @@ import {
   MIN_BAR_SPACING,
   MAX_BAR_SPACING,
   getDefaultPeriodForInterval,
+  isPeriodValidForInterval,
+  getMondayOfWeek,
+  getFirstOfMonth,
   loadChartPreferences,
   saveChartPreferences,
   sanitizeCandles,
@@ -71,9 +74,11 @@ function StockChartModalContent({
   const [interval, setInterval] = useState<ChartInterval>(initialPrefs.interval);
   const [period, setPeriod] = useState<ChartPeriod | null>(() => {
     const saved = initialPrefs.periodByInterval?.[initialPrefs.interval];
-    if (saved !== undefined) return saved;
+    if (saved !== undefined && isPeriodValidForInterval(initialPrefs.interval, saved)) return saved;
     if (initialPrefs.barSpacingByInterval?.[initialPrefs.interval]) return null;
-    return initialPrefs.period ?? getDefaultPeriodForInterval(initialPrefs.interval);
+    return isPeriodValidForInterval(initialPrefs.interval, initialPrefs.period ?? null)
+      ? initialPrefs.period!
+      : getDefaultPeriodForInterval(initialPrefs.interval);
   });
   const [visibleIndicators, setVisibleIndicators] = useState<VisibleIndicators>(initialPrefs.visibleIndicators);
   const [isLogScale, setIsLogScale] = useState<boolean>(() => initialPrefs.isLogScale ?? false);
@@ -253,6 +258,48 @@ function StockChartModalContent({
       }
     }
 
+    if (iv === 'week') {
+      const todayYmd = todayISTYmd(now);
+      const currentWeekMonday = getMondayOfWeek(todayYmd);
+      const lastTimeStr = String(last.time).slice(0, 10);
+
+      if (currentWeekMonday > lastTimeStr) {
+        // Current week's candle not yet in historical data — synthesize new weekly bar
+        const prev = liveBarRef.current;
+        let open = ltp, high = ltp, low = ltp, volume = 0;
+        if (prev && String(prev.time).slice(0, 10) === currentWeekMonday) {
+          open = prev.open;
+          high = Math.max(prev.high, ltp);
+          low = Math.min(prev.low, ltp);
+          volume = prev.volume;
+        }
+        const tick: LiveTick = { time: currentWeekMonday, open, high, low, close: ltp, volume };
+        liveBarRef.current = tick;
+        return tick;
+      }
+    }
+
+    if (iv === 'month') {
+      const todayYmd = todayISTYmd(now);
+      const currentMonthFirst = getFirstOfMonth(todayYmd);
+      const lastTimeStr = String(last.time).slice(0, 10);
+
+      if (currentMonthFirst > lastTimeStr) {
+        // Current month's candle not yet in historical data — synthesize new monthly bar
+        const prev = liveBarRef.current;
+        let open = ltp, high = ltp, low = ltp, volume = 0;
+        if (prev && String(prev.time).slice(0, 10) === currentMonthFirst) {
+          open = prev.open;
+          high = Math.max(prev.high, ltp);
+          low = Math.min(prev.low, ltp);
+          volume = prev.volume;
+        }
+        const tick: LiveTick = { time: currentMonthFirst, open, high, low, close: ltp, volume };
+        liveBarRef.current = tick;
+        return tick;
+      }
+    }
+
     // Daily (same-day bar present in history), week, or month:
     // Accumulate high/low from liveBarRef if it's for the same bar, else seed from historical or todayOHLC.
     const prev = liveBarRef.current;
@@ -377,8 +424,9 @@ function StockChartModalContent({
     const prefs = loadChartPreferences();
     const savedPeriod = prefs.periodByInterval?.[newInterval];
     const hasManualZoom = Boolean(prefs.barSpacingByInterval?.[newInterval]);
-    const nextPeriod = savedPeriod !== undefined
-      ? savedPeriod
+    const isValidSaved = isPeriodValidForInterval(newInterval, savedPeriod ?? null);
+    const nextPeriod = isValidSaved
+      ? savedPeriod!
       : (hasManualZoom ? null : getDefaultPeriodForInterval(newInterval));
     setPeriod(nextPeriod);
     saveChartPreferences({ interval: newInterval });
@@ -465,8 +513,8 @@ function StockChartModalContent({
     hasMoreOlderRef.current = true;
     loadingOlderRef.current = false;
     try {
-      const toDateObj = new Date();
-      const toDate = toDateObj.toISOString().split('T')[0];
+      const toDate = todayISTYmd();
+      const toDateObj = new Date(toDate + 'T00:00:00Z');
       let fromDate: string;
 
       if (interval === '5minute') {
@@ -560,8 +608,8 @@ function StockChartModalContent({
   const silentFetchCandles = useCallback(async () => {
     if (!symbol) return;
     try {
-      const toDateObj = new Date();
-      const toDate = toDateObj.toISOString().split('T')[0];
+      const toDate = todayISTYmd();
+      const toDateObj = new Date(toDate + 'T00:00:00Z');
       let fromDate: string;
 
       if (interval === '5minute') {

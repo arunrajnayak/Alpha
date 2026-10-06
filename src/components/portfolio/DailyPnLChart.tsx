@@ -222,8 +222,13 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
         </div>
     </div>
       <div className="h-[300px] md:h-[400px] w-full mt-4">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-        <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
+        {chartData.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-gray-500">
+            No trading gains or losses recorded in the selected period
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
           <XAxis 
             dataKey="dateStr" 
@@ -265,6 +270,7 @@ export default function DailyPnLChart({ data }: { data: DataPoint[] }) {
           </Bar>
         </ComposedChart>
       </ResponsiveContainer>
+      )}
       </div>
     </div>
   );

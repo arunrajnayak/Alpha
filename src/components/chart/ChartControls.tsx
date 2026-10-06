@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ToggleButtonGroup, ToggleButton } from '@mui/material';
-import { ChartInterval, ChartPeriod, CandleBarStats, formatVolume } from '@/lib/chart-types';
+import { ChartInterval, ChartPeriod, CandleBarStats, formatVolume, VALID_PERIODS_BY_INTERVAL } from '@/lib/chart-types';
 
 interface Props {
   interval: ChartInterval;
@@ -147,25 +147,9 @@ export default function ChartControls({
             aria-label="chart period"
             sx={toggleGroupStyle}
           >
-            {(isIntraday
-              ? [
-                  { value: '1D' as const, label: '1D' },
-                  { value: '2D' as const, label: '2D' },
-                  { value: '5D' as const, label: '5D' },
-                  { value: '1M' as const, label: '1M' },
-                ]
-              : [
-                  { value: '1M' as const, label: '1M' },
-                  { value: '3M' as const, label: '3M' },
-                  { value: '6M' as const, label: '6M' },
-                  { value: '1Y' as const, label: '1Y' },
-                  { value: '2Y' as const, label: '2Y' },
-                  { value: '5Y' as const, label: '5Y' },
-                  { value: 'MAX' as const, label: 'MAX' },
-                ]
-            ).map(p => (
-              <ToggleButton key={p.value} value={p.value} aria-label={p.label}>
-                {p.label}
+            {(VALID_PERIODS_BY_INTERVAL[interval] || VALID_PERIODS_BY_INTERVAL.day).map(p => (
+              <ToggleButton key={p} value={p} aria-label={p}>
+                {p}
               </ToggleButton>
             ))}
           </ToggleButtonGroup>

@@ -32,8 +32,12 @@ import {
   calculateVWAP,
   loadChartPreferences,
   sanitizeCandles,
+  getMondayOfWeek,
+  getFirstOfMonth,
+  candleTimeToEpochSeconds,
 } from '@/lib/chart-types';
 import { todayISTYmd } from '@/lib/tz';
+import { subMonths } from 'date-fns';
 
 export interface VisibleIndicators {
   dma10?: boolean;
@@ -81,6 +85,12 @@ export function getTargetLogicalRange(
   if (!candles || candles.length === 0 || !period) return null;
   const lastIdx = candles.length - 1;
   const rightMargin = Math.max(2, Math.round(rightOffset));
+
+  // Edge case: single candle dataset (e.g. fresh IPO day 1)
+  if (candles.length === 1) {
+    return { from: -2, to: lastIdx + rightMargin };
+  }
+
   if (period === 'MAX') {
     return { from: 0, to: lastIdx + rightMargin };
   }
@@ -89,50 +99,45 @@ export function getTargetLogicalRange(
     if (period === '1M') {
       return { from: 0, to: lastIdx + rightMargin };
     }
-    if (period === '5D') {
-      return { from: Math.max(0, lastIdx - 375), to: lastIdx + rightMargin };
-    }
-    if (period === '2D') {
-      return { from: Math.max(0, lastIdx - 150), to: lastIdx + rightMargin };
-    }
 
-    // Default or '1D': frame the current trading day in IST
-    const lastTime = candles[lastIdx].time;
-    const lastISTDate = typeof lastTime === 'string'
-      ? lastTime.slice(0, 10)
-      : todayISTYmd(new Date(Number(lastTime) * 1000));
+    // Session-aware framing for 1D, 2D, 5D: scan distinct trading days in reverse
+    const targetSessions = period === '2D' ? 2 : period === '5D' ? 5 : 1;
+    const seenDates = new Set<string>();
+    let sessionStartIdx = lastIdx;
 
-    let todayStartIdx = lastIdx;
     for (let i = lastIdx; i >= 0; i--) {
       const cTime = candles[i].time;
       const cDate = typeof cTime === 'string'
         ? cTime.slice(0, 10)
         : todayISTYmd(new Date(Number(cTime) * 1000));
-      if (cDate === lastISTDate) {
-        todayStartIdx = i;
-      } else {
+      seenDates.add(cDate);
+      if (seenDates.size > targetSessions) {
+        sessionStartIdx = i + 1;
         break;
+      }
+      if (i === 0) {
+        sessionStartIdx = 0;
       }
     }
 
-    // Ensure at least 25 bars are visible so morning sessions are well-proportioned
-    const todayBars = lastIdx - todayStartIdx + 1;
-    const minBars = 25;
-    const fromIdx = todayBars < minBars ? Math.max(0, lastIdx - minBars) : todayStartIdx;
+    // Ensure adequate bars are visible so morning sessions are well-proportioned
+    const visibleBars = lastIdx - sessionStartIdx + 1;
+    const minBars = period === '1D' ? 25 : 10;
+    const fromIdx = visibleBars < minBars ? Math.max(0, lastIdx - minBars) : sessionStartIdx;
 
-    return { from: fromIdx, to: lastIdx + rightMargin };
+    return { from: Math.min(fromIdx, lastIdx), to: lastIdx + rightMargin };
   }
 
   // Daily / Weekly / Monthly
   const lastCandleTime = candles[lastIdx].time;
   const lastDate = typeof lastCandleTime === 'string'
-    ? new Date(lastCandleTime)
+    ? new Date(lastCandleTime + 'T00:00:00Z')
     : new Date(Number(lastCandleTime) * 1000);
 
-  const targetDate = new Date(lastDate);
   const months = periodToMonths(period);
-  targetDate.setMonth(targetDate.getMonth() - months);
-  const targetDateStr = targetDate.toISOString().split('T')[0];
+  // Safe date subtraction avoiding JS Date rollover bugs on 29th/30th/31st of months
+  const targetDate = subMonths(lastDate, months);
+  const targetDateStr = targetDate.toISOString().slice(0, 10);
 
   let fromIdx = 0;
   for (let i = lastIdx; i >= 0; i--) {
@@ -147,7 +152,7 @@ export function getTargetLogicalRange(
     fromIdx = Math.max(0, lastIdx - 5);
   }
 
-  return { from: fromIdx, to: lastIdx + rightMargin };
+  return { from: Math.min(fromIdx, lastIdx), to: lastIdx + rightMargin };
 }
 
 /** A single live-tick bar to update the chart imperatively via series.update() */
@@ -675,7 +680,7 @@ export default function TradingViewChart({
       !isIntervalChange &&
       prevLength > 0 &&
       newLength > prevLength &&
-      cleanCandles[newLength - 1]?.time === prevCandles[prevLength - 1]?.time;
+      candleTimeToEpochSeconds(cleanCandles[0].time) < candleTimeToEpochSeconds(prevCandles[0].time);
     const prependedCount = newLength - prevLength;
 
     const prevRange = isPrepend && chartRef.current
@@ -702,7 +707,7 @@ export default function TradingViewChart({
     }));
     volumeSeriesRef.current.setData(volumeData);
 
-    // Indicators: DMAs on Daily, VWAP on 5minute
+    // Indicators: DMAs on Daily, WMAs on Weekly, VWAP on 5minute
     const indValues: IndicatorValues = {};
 
     if (interval === 'day') {
@@ -725,6 +730,23 @@ export default function TradingViewChart({
       dma200SeriesRef.current?.setData(visibleIndicators.dma200 !== false ? dma200Data.map(d => ({ time: d.time as Time, value: d.value })) : []);
 
       vwapSeriesRef.current?.setData([]);
+    } else if (interval === 'week') {
+      // 10W (~50 DMA), 20W (~100 DMA), 50W (~250 DMA) moving averages
+      const wma10Data = calculateSMA(cleanCandles, 10);
+      const wma20Data = calculateSMA(cleanCandles, 20);
+      const wma50Data = calculateSMA(cleanCandles, 50);
+
+      indValues.dma10 = wma10Data[wma10Data.length - 1]?.value;
+      indValues.dma20 = wma20Data[wma20Data.length - 1]?.value;
+      indValues.dma50 = wma50Data[wma50Data.length - 1]?.value;
+
+      dma10SeriesRef.current?.setData(visibleIndicators.dma10 !== false ? wma10Data.map(d => ({ time: d.time as Time, value: d.value })) : []);
+      dma20SeriesRef.current?.setData(visibleIndicators.dma20 !== false ? wma20Data.map(d => ({ time: d.time as Time, value: d.value })) : []);
+      dma50SeriesRef.current?.setData(visibleIndicators.dma50 !== false ? wma50Data.map(d => ({ time: d.time as Time, value: d.value })) : []);
+      dma100SeriesRef.current?.setData([]);
+      dma200SeriesRef.current?.setData([]);
+
+      vwapSeriesRef.current?.setData([]);
     } else if (interval === '5minute') {
       const vwapData = calculateVWAP(cleanCandles);
       indValues.vwap = vwapData[vwapData.length - 1]?.value;
@@ -737,7 +759,7 @@ export default function TradingViewChart({
       dma100SeriesRef.current?.setData([]);
       dma200SeriesRef.current?.setData([]);
     } else {
-      // Week or Month
+      // Month
       dma10SeriesRef.current?.setData([]);
       dma20SeriesRef.current?.setData([]);
       dma50SeriesRef.current?.setData([]);
@@ -808,7 +830,7 @@ export default function TradingViewChart({
         markersPluginRef.current.setMarkers(intradayMarkers);
       } else {
         // Daily / Weekly / Monthly
-        // Ensure only one BUY and/or SELL marker per date
+        // Map trade date to candle timestamp depending on interval
         const candleDates = new Set(cleanCandles.map(c => String(c.time).slice(0, 10)));
         const seenBuy = new Set<string>();
         const seenSell = new Set<string>();
@@ -822,21 +844,28 @@ export default function TradingViewChart({
         }[] = [];
 
         for (const t of trades) {
-          const dateStr = String(t.time).slice(0, 10);
-          if (candleDates.has(dateStr)) {
-            if (t.type === 'BUY' && !seenBuy.has(dateStr)) {
-              seenBuy.add(dateStr);
+          const rawDateStr = String(t.time).slice(0, 10);
+          let targetDateStr = rawDateStr;
+          if (interval === 'week') {
+            targetDateStr = getMondayOfWeek(rawDateStr);
+          } else if (interval === 'month') {
+            targetDateStr = getFirstOfMonth(rawDateStr);
+          }
+
+          if (candleDates.has(targetDateStr)) {
+            if (t.type === 'BUY' && !seenBuy.has(targetDateStr)) {
+              seenBuy.add(targetDateStr);
               markers.push({
-                time: t.time as Time,
+                time: targetDateStr as Time,
                 position: 'belowBar',
                 color: '#10b981',
                 shape: 'arrowUp',
                 text: 'B',
               });
-            } else if (t.type === 'SELL' && !seenSell.has(dateStr)) {
-              seenSell.add(dateStr);
+            } else if (t.type === 'SELL' && !seenSell.has(targetDateStr)) {
+              seenSell.add(targetDateStr);
               markers.push({
-                time: t.time as Time,
+                time: targetDateStr as Time,
                 position: 'aboveBar',
                 color: '#ef4444',
                 shape: 'arrowDown',

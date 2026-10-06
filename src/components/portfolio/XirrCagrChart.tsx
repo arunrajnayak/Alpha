@@ -165,7 +165,12 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
 
       {/* Chart */}
       <div className="h-[300px] md:h-[450px] w-full mt-4">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        {chartData.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-xs text-gray-500">
+            No XIRR / CAGR data recorded for the selected period
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <ComposedChart data={chartData} margin={{ top: 10, right: 5, left: -10, bottom: 10 }}>
             <defs>
               <linearGradient id="xirrGradient" x1="0" y1="0" x2="0" y2="1">
@@ -230,6 +235,7 @@ export default function XirrCagrChart({ data }: { data: DataPoint[] }) {
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        )}
       </div>
 
       {/* Custom Legend at Bottom (matching Equity Curve style) */}

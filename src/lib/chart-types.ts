@@ -217,6 +217,19 @@ export function toTradingViewSymbol(symbol: string): string {
 export const MIN_BAR_SPACING = 1;
 export const MAX_BAR_SPACING = 25;
 
+export const VALID_PERIODS_BY_INTERVAL: Record<ChartInterval, ChartPeriod[]> = {
+  '5minute': ['1D', '2D', '5D', '1M'],
+  day: ['1M', '3M', '6M', '1Y', '2Y', '5Y', 'MAX'],
+  week: ['6M', '1Y', '2Y', '5Y', 'MAX'],
+  month: ['1Y', '2Y', '5Y', 'MAX'],
+};
+
+/** Check if a period is appropriate for a given interval */
+export function isPeriodValidForInterval(interval: ChartInterval, period: ChartPeriod | null): boolean {
+  if (!period) return false;
+  return VALID_PERIODS_BY_INTERVAL[interval]?.includes(period) ?? false;
+}
+
 /** Get standard initial period for an interval if none is saved */
 export function getDefaultPeriodForInterval(interval: ChartInterval): ChartPeriod {
   switch (interval) {
@@ -229,6 +242,26 @@ export function getDefaultPeriodForInterval(interval: ChartInterval): ChartPerio
     case 'month':
       return 'MAX';
   }
+}
+
+/**
+ * Returns the YYYY-MM-DD string for the Monday of the week containing the given date string.
+ * Uses UTC arithmetic on YYYY-MM-DD to be completely timezone-immune.
+ */
+export function getMondayOfWeek(dateStr: string): string {
+  const clean = dateStr.slice(0, 10);
+  const d = new Date(clean + 'T00:00:00Z');
+  const day = d.getUTCDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+  const diff = day === 0 ? 6 : day - 1;
+  d.setUTCDate(d.getUTCDate() - diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Returns the YYYY-MM-01 string for the 1st of the month for the given date string.
+ */
+export function getFirstOfMonth(dateStr: string): string {
+  return dateStr.slice(0, 7) + '-01';
 }
 
 /**
@@ -339,14 +372,51 @@ export function candleTimeToEpochSeconds(time: string | number): number {
 }
 
 /**
- * Deduplicates and sorts candle data strictly ascending by time.
- * Lightweight Charts strictly requires that every bar has time > prevBar.time.
+ * Validates, repairs, deduplicates, and sorts candle data strictly ascending by time.
+ * Lightweight Charts strictly requires that:
+ * 1. Every bar has time > prevBar.time
+ * 2. OHLC values are valid finite numbers
+ * 3. Low <= Open, Close <= High
+ * 4. Prices are strictly positive for logarithmic scale rendering
  */
 export function sanitizeCandles(candles: CandleData[]): CandleData[] {
   if (!candles || candles.length === 0) return [];
 
+  // Filter out corrupt candles and validate numbers
+  const valid: CandleData[] = [];
+  for (const c of candles) {
+    if (!c) continue;
+    const epoch = candleTimeToEpochSeconds(c.time);
+    if (!epoch || epoch <= 0) continue;
+
+    const open = Number(c.open);
+    const high = Number(c.high);
+    const low = Number(c.low);
+    const close = Number(c.close);
+
+    // Check that prices are finite and strictly positive (protects log-scale & Lightweight Charts)
+    if (!isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) continue;
+    if (open <= 0 || high <= 0 || low <= 0 || close <= 0) continue;
+
+    // Repair inverted / inconsistent OHLC from upstream anomalies
+    const trueHigh = Math.max(high, open, close);
+    const trueLow = Math.min(low, open, close);
+    const vol = (typeof c.volume === 'number' && isFinite(c.volume) && c.volume >= 0) ? c.volume : 0;
+
+    valid.push({
+      time: c.time,
+      open,
+      high: trueHigh,
+      low: trueLow,
+      close,
+      volume: vol,
+    });
+  }
+
+  if (valid.length === 0) return [];
+
   // Sort ascending by epoch seconds
-  const sorted = [...candles].sort((a, b) => {
+  const sorted = valid.sort((a, b) => {
     return candleTimeToEpochSeconds(a.time) - candleTimeToEpochSeconds(b.time);
   });
 
