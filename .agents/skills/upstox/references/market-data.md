@@ -30,18 +30,13 @@ ohlc = mq.get_market_quote_ohlc(interval="1d", instrument_key="NSE_EQ|INE002A010
 greeks = mq.get_market_quote_option_greek(instrument_key="NSE_FO|43885")
 ```
 
-### Full market quote (OHLC + depth) — v2 `MarketQuoteApi`
+### Full market quote (OHLC + depth + CAS + circuit) — v3 `GET /v3/market-quote/quotes`
 
-The full quote with market depth is on the v2 class (`api_version` required):
+V3 provides full market quote snapshots with OHLC, 5-level depth, circuit limits, 52W range, Pre-Open IEP, and live Closing Auction Session (CAS) for up to 500 instruments:
 
 ```python
-mq_v2 = upstox_client.MarketQuoteApi(client)
-full = mq_v2.get_full_market_quote(symbol="NSE_EQ|INE002A01018", api_version="2.0")
-q = list(full.data.values())[0]
-print("OHLC:", q.ohlc.open, q.ohlc.high, q.ohlc.low, q.ohlc.close)
-print("LTP:", q.last_price, "Volume:", q.volume, "OI:", q.oi)
-print("Top bid:", q.depth.buy[0].price, "x", q.depth.buy[0].quantity)
-print("Top ask:", q.depth.sell[0].price, "x", q.depth.sell[0].quantity)
+# REST endpoint: GET https://api.upstox.com/v3/market-quote/quotes?instrument_key=NSE_EQ|INE002A01018
+# Upstox SDK / REST client returns .ohlc, .depth, .last_price, .volume, .lower_circuit_limit, .upper_circuit_limit, .cas_eligible
 ```
 
 ---

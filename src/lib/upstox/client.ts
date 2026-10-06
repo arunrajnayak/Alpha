@@ -28,7 +28,7 @@ const upstoxLogger = logger.scope('Upstox');
 // ============================================================================
 
 const BASE_URL_V3 = 'https://api.upstox.com/v3';
-const BATCH_SIZE = 500; // Upstox limit for LTP requests
+const BATCH_SIZE = 200; // Safe batch size (keeps URI ~4.6KB, avoiding HTTP 414 on reverse proxies/CDNs)
 
 // ============================================================================
 // Utility Functions
@@ -257,6 +257,8 @@ export async function getLiveQuotes(
               last_price: value.last_price,
               instrument_token: value.instrument_token || mappedKey,
               previous_close: value.cp ?? 0,
+              volume: value.volume,
+              ltq: value.ltq,
               timestamp: value.ltt ? parseInt(value.ltt, 10) : undefined,
             });
           }
@@ -297,7 +299,8 @@ export async function getLTP(instrumentKeys: string[]): Promise<Map<string, numb
  * Uses V3 endpoint for comprehensive data (OHLC, volume, circuit limits, CAS & Pre-Open IEP)
  */
 export async function getFullQuotes(
-  instrumentKeys: string[]
+  instrumentKeys: string[],
+  retryOnAuth = true
 ): Promise<Map<string, UpstoxFullQuote>> {
   if (instrumentKeys.length === 0) return new Map();
 
@@ -305,47 +308,62 @@ export async function getFullQuotes(
   const requestKeyLookup = buildKeyLookup(instrumentKeys);
   const result = new Map<string, UpstoxFullQuote>();
 
-  // Upstox V3 supports up to 500 instrument keys in a single request
   const batches = chunkArray(instrumentKeys, BATCH_SIZE);
+  let shouldRetry401 = false;
 
-  for (const batch of batches) {
-    const url = `${BASE_URL_V3}/market-quote/quotes?instrument_key=${batch
-      .map((k) => encodeURIComponent(k))
-      .join(',')}`;
+  await Promise.all(
+    batches.map(async (batch) => {
+      const url = `${BASE_URL_V3}/market-quote/quotes?instrument_key=${batch
+        .map((k) => encodeURIComponent(k))
+        .join(',')}`;
 
-    const response = await fetch(url, {
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
+      try {
+        const response = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new UpstoxError(
-        `Full quote V3 fetch failed: ${response.status} - ${errorText}`,
-        response.status
-      );
-    }
+        if (!response.ok) {
+          if (response.status === 401 && retryOnAuth) {
+            shouldRetry401 = true;
+            return;
+          }
 
-    const json = await response.json();
+          const errorText = await response.text();
+          upstoxLogger.error(`Batch full quote fetch failed: ${response.status} - ${errorText}`);
+          return;
+        }
 
-    if (json.data) {
-      for (const [responseKey, value] of Object.entries(json.data)) {
-        const val = value as UpstoxFullQuote;
-        const normalizedKey = responseKey.replace(/:/g, '|');
-        const mappedKey =
-          (val.instrument_token && requestKeyLookup.get(val.instrument_token)) ||
-          requestKeyLookup.get(responseKey) ||
-          requestKeyLookup.get(normalizedKey) ||
-          val.instrument_token ||
-          normalizedKey;
+        const json = await response.json();
 
-        result.set(mappedKey, val);
+        if (json.data) {
+          for (const [responseKey, value] of Object.entries(json.data)) {
+            const val = value as UpstoxFullQuote;
+            const normalizedKey = responseKey.replace(/:/g, '|');
+            const mappedKey =
+              (val.instrument_token && requestKeyLookup.get(val.instrument_token)) ||
+              requestKeyLookup.get(responseKey) ||
+              requestKeyLookup.get(normalizedKey) ||
+              val.instrument_token ||
+              normalizedKey;
+
+            result.set(mappedKey, val);
+          }
+        }
+      } catch (error) {
+        upstoxLogger.error('Batch full quote fetch error:', error);
       }
-    }
+    })
+  );
+
+  if (shouldRetry401 && retryOnAuth) {
+    upstoxLogger.info('Got 401 in getFullQuotes, clearing cache and retrying with fresh token...');
+    clearTokenCache();
+    return getFullQuotes(instrumentKeys, false);
   }
 
   return result;
@@ -360,11 +378,13 @@ export async function getFullQuotes(
  *   over the incomplete live intraday candle. When false (default, after close), use ONLY
  *   live_ohlc so a missing live_ohlc omits the instrument from the result rather than
  *   silently returning T-1's price under today's date.
+ * @param retryOnAuth - Auto-refresh token and retry on 401
  */
 export async function getOHLC(
   instrumentKeys: string[],
   interval: OHLCInterval = '1d',
   preferPrevOhlc = false,
+  retryOnAuth = true,
 ): Promise<Map<string, OHLC>> {
   if (instrumentKeys.length === 0) return new Map();
 
@@ -373,6 +393,7 @@ export async function getOHLC(
   const result = new Map<string, OHLC>();
 
   const batches = chunkArray(instrumentKeys, BATCH_SIZE);
+  let shouldRetry401 = false;
 
   await Promise.all(
     batches.map(async (batch) => {
@@ -391,6 +412,11 @@ export async function getOHLC(
         });
 
         if (!response.ok) {
+          if (response.status === 401 && retryOnAuth) {
+            shouldRetry401 = true;
+            return;
+          }
+
           const errorText = await response.text();
           upstoxLogger.error(`Batch OHLC fetch failed: ${response.status} - ${errorText}`);
           return;
@@ -410,13 +436,15 @@ export async function getOHLC(
               ? (data.prev_ohlc || data.live_ohlc)
               : data.live_ohlc;
             if (ohlc) {
-              const ohlcObj = {
+              const ohlcObj: OHLC = {
                 open: ohlc.open,
                 high: ohlc.high,
                 low: ohlc.low,
                 close: ohlc.close,
                 volume: ohlc.volume,
                 ts: ohlc.ts,
+                last_price: data.last_price,
+                prev_close: data.prev_ohlc?.close,
               };
 
               const normalizedKey = responseKey.replace(/:/g, '|');
@@ -441,6 +469,12 @@ export async function getOHLC(
       }
     })
   );
+
+  if (shouldRetry401 && retryOnAuth) {
+    upstoxLogger.info('Got 401 in getOHLC, clearing cache and retrying with fresh token...');
+    clearTokenCache();
+    return getOHLC(instrumentKeys, interval, preferPrevOhlc, false);
+  }
 
   return result;
 }

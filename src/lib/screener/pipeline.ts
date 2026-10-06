@@ -255,22 +255,18 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   if (Date.now() - start < 90_000) {
     try {
       const allKeys = scoreableInsts.map(i => i.instrumentKey);
-      const chunks = chunkArray(allKeys, 500);
-      for (let i = 0; i < chunks.length; i++) {
-        if (i > 0) await new Promise(r => setTimeout(r, 250));
-        const quotes = await getFullQuotes(chunks[i]);
-        for (const [, quote] of quotes) {
-          if (quote.lower_circuit_limit > 0) {
-            const bandWidth = (quote.upper_circuit_limit - quote.lower_circuit_limit) / quote.lower_circuit_limit;
-            const symbol = keyToSymbol.get(quote.instrument_token);
-            // Post-market Upstox API returns ~6.2% (±3%) bounds for normal liquid stocks.
-            // Real 2% circuit = ~4.1%, Real 5% circuit = ~10.5%, 10% circuit = ~22.2%, 20% = ~50%.
-            // Filter out post-market artifacts (5.5% - 7.5% when !duringMarket) so post-market API bounds
-            // do not misclassify liquid stocks as narrow circuit band.
-            const isPostMarketArtifact = !duringMarket && bandWidth >= 0.055 && bandWidth <= 0.075;
-            if (symbol && !isPostMarketArtifact) {
-              circuitMap.set(symbol, bandWidth);
-            }
+      const quotes = await getFullQuotes(allKeys);
+      for (const [, quote] of quotes) {
+        if (quote.lower_circuit_limit > 0) {
+          const bandWidth = (quote.upper_circuit_limit - quote.lower_circuit_limit) / quote.lower_circuit_limit;
+          const symbol = keyToSymbol.get(quote.instrument_token);
+          // Post-market Upstox API returns ~6.2% (±3%) bounds for normal liquid stocks.
+          // Real 2% circuit = ~4.1%, Real 5% circuit = ~10.5%, 10% circuit = ~22.2%, 20% = ~50%.
+          // Filter out post-market artifacts (5.5% - 7.5% when !duringMarket) so post-market API bounds
+          // do not misclassify liquid stocks as narrow circuit band.
+          const isPostMarketArtifact = !duringMarket && bandWidth >= 0.055 && bandWidth <= 0.075;
+          if (symbol && !isPostMarketArtifact) {
+            circuitMap.set(symbol, bandWidth);
           }
         }
       }

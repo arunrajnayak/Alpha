@@ -128,44 +128,15 @@ export async function fetchMarketOverview(indexName: string): Promise<MarketOver
       return null;
     }
 
-    // 3. Fetch full quotes in batches + index quote in parallel.
-    // Upstox Full Quote GET endpoint passes instrument keys in query param (?instrument_key=...).
-    // While LTP supports up to 500 keys, full quote URLs with >50 encoded ISIN keys (~25 chars each)
-    // risk exceeding standard 8KB / proxy URL length limits. 50 is the optimal safe batch size here.
-    const BATCH_SIZE = 50;
-    const batches: string[][] = [];
-    for (let i = 0; i < instrumentKeys.length; i += BATCH_SIZE) {
-      batches.push(instrumentKeys.slice(i, i + BATCH_SIZE));
-    }
-
-    // Use allSettled so partial batch failures don't kill the entire request
-    // (critical for large indices like Microcap 250 with 10+ batches)
-    const [batchSettled, indexQuoteMap] = await Promise.all([
-      Promise.allSettled(batches.map(batch => getFullQuotes(batch))),
+    // 3. Fetch full quotes + index quote in parallel.
+    // getFullQuotes internally handles safe parallel batching (200 keys per request) with 401 retry.
+    const [fullQuotesMap, indexQuoteMap] = await Promise.all([
+      getFullQuotes(instrumentKeys),
       getLiveQuotes([config.upstoxKey]),
     ]);
 
-    // Merge successful batch results, log failures
-    const fullQuotesMap = new Map<string, any>();
-    let failedBatches = 0;
-    for (let i = 0; i < batchSettled.length; i++) {
-      const result = batchSettled[i];
-      if (result.status === 'fulfilled') {
-        for (const [key, value] of result.value.entries()) {
-          fullQuotesMap.set(key, value);
-        }
-      } else {
-        failedBatches++;
-        marketLogger.error(`Batch ${i + 1}/${batches.length} failed for ${indexName}:`, result.reason);
-      }
-    }
-
-    if (failedBatches > 0) {
-      marketLogger.warn(`${failedBatches}/${batches.length} batches failed for ${indexName}. Got ${fullQuotesMap.size}/${instrumentKeys.length} quotes.`);
-    }
-
     if (fullQuotesMap.size === 0) {
-      marketLogger.error(`All batches failed for ${indexName}`);
+      marketLogger.error(`No quotes returned for ${indexName}`);
       return null;
     }
 

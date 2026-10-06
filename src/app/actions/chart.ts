@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getHistoricalCandles, getIntradayCandles, UpstoxCandle } from '@/lib/upstox-client';
-import { getInstrumentKey, getLiveQuotes, getOHLC } from '@/lib/upstox';
+import { getInstrumentKey, getFullQuotes, getOHLC } from '@/lib/upstox';
 import type { CandleData, TradeMarker, ChartInterval } from '@/lib/chart-types';
 import { todayISTYmd, istDayOfWeek, istTimeParts } from '@/lib/tz';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
@@ -214,30 +214,32 @@ export async function getStockInfo(symbol: string): Promise<{
     let previousClose: number | undefined;
     let todayOHLC: { open: number; high: number; low: number; close: number; volume: number } | undefined;
 
-    // Get live price and today's OHLC from Upstox in parallel
+    // Get live price, previous close, and today's OHLC from Upstox via single full quote call
     if (instrumentKey) {
         try {
-            const [quotes, ohlcData] = await Promise.all([
-                getLiveQuotes([instrumentKey]),
-                getOHLC([instrumentKey], '1d').catch(() => new Map()),
-            ]);
-            const quote = quotes.get(instrumentKey);
+            const fullQuotes = await getFullQuotes([instrumentKey]);
+            const quote = fullQuotes.get(instrumentKey) || fullQuotes.get(instrumentKey.replace(/\|/g, ':'));
             if (quote) {
                 currentPrice = quote.last_price;
-                previousClose = quote.previous_close;
-            }
-            const ohlc = ohlcData.get(instrumentKey);
-            if (ohlc && ohlc.open > 0) {
-                const todayStr = todayISTYmd();
-                const ohlcDate = ohlc.ts ? todayISTYmd(new Date(ohlc.ts)) : null;
-                const now = new Date();
-                const isWeekend = [0, 6].includes(istDayOfWeek(now));
-                const { hour, minute } = istTimeParts(now);
-                const isPreMarket = hour * 60 + minute < 9 * 60 + 15;
-                const isHoliday = await isTradingHoliday(now).catch(() => false);
-                const isTodaySession = ohlcDate ? ohlcDate === todayStr : (!isWeekend && !isPreMarket && !isHoliday);
-                if (isTodaySession) {
-                    todayOHLC = ohlc;
+                previousClose = quote.prev_close_price || quote.ohlc?.close;
+                if (quote.ohlc && quote.ohlc.open > 0) {
+                    const todayStr = todayISTYmd();
+                    const ohlcDate = quote.ohlc.ts ? todayISTYmd(new Date(quote.ohlc.ts)) : null;
+                    const now = new Date();
+                    const isWeekend = [0, 6].includes(istDayOfWeek(now));
+                    const { hour, minute } = istTimeParts(now);
+                    const isPreMarket = hour * 60 + minute < 9 * 60 + 15;
+                    const isHoliday = await isTradingHoliday(now).catch(() => false);
+                    const isTodaySession = ohlcDate ? ohlcDate === todayStr : (!isWeekend && !isPreMarket && !isHoliday);
+                    if (isTodaySession) {
+                        todayOHLC = {
+                            open: quote.ohlc.open,
+                            high: quote.ohlc.high,
+                            low: quote.ohlc.low,
+                            close: quote.ohlc.close,
+                            volume: quote.ohlc.volume ?? quote.volume ?? 0,
+                        };
+                    }
                 }
             }
         } catch {

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db';
 import { addDays, isSameDay, startOfDay, format, differenceInDays, isWeekend } from 'date-fns';
 import { getDataLockDate } from '../config';
-import { getHistoricalCandles, hasValidToken, getLTP, UpstoxCandle } from '../upstox-client';
+import { getHistoricalCandles, hasValidToken, getLiveQuotes, UpstoxCandle } from '../upstox-client';
 import { getInstrumentKey, getInstrumentKeys } from '../instrument-service';
 import { fetchNSEHistory } from '../nse-api';
 import { getMarketStatus } from '../market-holidays-cache';
@@ -103,13 +103,16 @@ async function fetchUpstoxLiveQuotes(
             return result;
         }
 
-        const ltpMap = await getLTP(instrumentKeys);
+        const liveMap = await getLiveQuotes(instrumentKeys);
 
         // Map back to symbols
         for (const [symbol, key] of instrumentKeyMap.entries()) {
-            const price = ltpMap.get(key);
-            if (price !== undefined) {
-                result.set(symbol, { last_price: price });
+            const quote = liveMap.get(key);
+            if (quote !== undefined) {
+                result.set(symbol, {
+                    last_price: quote.last_price,
+                    volume: quote.volume ?? 0,
+                });
             }
         }
     } catch (error) {
@@ -195,7 +198,7 @@ export async function updateStockHistory(
     financeLogger.info(`[UpdateStockHistory] Data source: ${upstoxAvailable ? 'Upstox' : 'Yahoo Finance (fallback)'}`);
 
     // Pre-fetch live quotes for all symbols if we are looking for "Today"
-    let upstoxLiveQuotes: Map<string, { last_price: number }> = new Map();
+    let upstoxLiveQuotes: Map<string, { last_price: number; volume?: number }> = new Map();
 
     if (isEOD && symbols.length > 0 && upstoxAvailable) {
         try {
@@ -358,7 +361,7 @@ export async function updateStockHistory(
                           date: today,
                           close: livePrice,
                           adjClose: livePrice,
-                          volume: 0,
+                          volume: upstoxLive?.volume ?? 0,
                           open: livePrice,
                           high: livePrice,
                           low: livePrice

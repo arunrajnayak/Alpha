@@ -477,44 +477,80 @@ export async function fetchNSEMarketBreadth(forceRefresh = false): Promise<NSEMa
   if (hasToken) {
     try {
       const keys = universe.map((u) => u.instrumentKey);
-      const [quotesMap, ohlcMap] = await Promise.all([
-        getLiveQuotes(keys),
-        getOHLC(keys),
-      ]);
+      // Single-pass fetch: OHLC V3 provides last_price, prev_close, high, low, and volume in 1 call,
+      // cutting batch HTTP requests from 14 down to 7 per refresh cycle.
+      const ohlcMap = await getOHLC(keys, '1d', false);
 
-      if (quotesMap.size > 0) {
+      if (ohlcMap.size > 0) {
         isLive = true;
         for (const item of universe) {
-          const q = quotesMap.get(item.instrumentKey);
-          if (q && q.previous_close > 0 && q.last_price > 0) {
-            const changePercent = ((q.last_price - q.previous_close) / q.previous_close) * 100;
-            const awayFromAth = item.ath > 0 ? Math.max(0, ((item.ath - q.last_price) / item.ath) * 100) : null;
-            let mcap = mcapMap.get(item.symbol);
-            if (mcap === undefined) {
-              if (item.category === 'large') mcap = 100000;
-              else if (item.category === 'mid') mcap = 30000;
-              else if (item.category === 'small') mcap = 10000;
-              else mcap = 0;
+          const ohlc = ohlcMap.get(item.instrumentKey);
+          if (ohlc) {
+            const lastPrice = ohlc.last_price || ohlc.close || 0;
+            const prevClose = ohlc.prev_close || (ohlc.open > 0 ? ohlc.open : lastPrice);
+
+            if (lastPrice > 0 && prevClose > 0) {
+              const changePercent = ((lastPrice - prevClose) / prevClose) * 100;
+              const awayFromAth = item.ath > 0 ? Math.max(0, ((item.ath - lastPrice) / item.ath) * 100) : null;
+              let mcap = mcapMap.get(item.symbol);
+              if (mcap === undefined) {
+                if (item.category === 'large') mcap = 100000;
+                else if (item.category === 'mid') mcap = 30000;
+                else if (item.category === 'small') mcap = 10000;
+                else mcap = 0;
+              }
+
+              const dayHigh = ohlc.high > 0 ? Math.max(ohlc.high, lastPrice) : lastPrice;
+              const dayLow = ohlc.low > 0 ? Math.min(ohlc.low, lastPrice) : lastPrice;
+              const recoveryFromLowPct = dayLow > 0 ? ((lastPrice - dayLow) / dayLow) * 100 : 0;
+              const fallFromHighPct = dayHigh > 0 ? ((lastPrice - dayHigh) / dayHigh) * 100 : 0;
+
+              moves.push({
+                symbol: item.symbol,
+                changePercent,
+                lastPrice,
+                category: item.category,
+                awayFromAth,
+                marketCap: mcap,
+                dayHigh,
+                dayLow,
+                recoveryFromLowPct,
+                fallFromHighPct,
+              });
             }
+          }
+        }
+      } else {
+        // Fallback to LTP V3 if OHLC endpoint returned empty
+        const quotesMap = await getLiveQuotes(keys);
+        if (quotesMap.size > 0) {
+          isLive = true;
+          for (const item of universe) {
+            const q = quotesMap.get(item.instrumentKey);
+            if (q && q.previous_close > 0 && q.last_price > 0) {
+              const changePercent = ((q.last_price - q.previous_close) / q.previous_close) * 100;
+              const awayFromAth = item.ath > 0 ? Math.max(0, ((item.ath - q.last_price) / item.ath) * 100) : null;
+              let mcap = mcapMap.get(item.symbol);
+              if (mcap === undefined) {
+                if (item.category === 'large') mcap = 100000;
+                else if (item.category === 'mid') mcap = 30000;
+                else if (item.category === 'small') mcap = 10000;
+                else mcap = 0;
+              }
 
-            const ohlc = ohlcMap.get(item.instrumentKey);
-            const dayHigh = ohlc?.high && ohlc.high > 0 ? Math.max(ohlc.high, q.last_price) : q.last_price;
-            const dayLow = ohlc?.low && ohlc.low > 0 ? Math.min(ohlc.low, q.last_price) : q.last_price;
-            const recoveryFromLowPct = dayLow > 0 ? ((q.last_price - dayLow) / dayLow) * 100 : 0;
-            const fallFromHighPct = dayHigh > 0 ? ((q.last_price - dayHigh) / dayHigh) * 100 : 0;
-
-            moves.push({
-              symbol: item.symbol,
-              changePercent,
-              lastPrice: q.last_price,
-              category: item.category,
-              awayFromAth,
-              marketCap: mcap,
-              dayHigh,
-              dayLow,
-              recoveryFromLowPct,
-              fallFromHighPct,
-            });
+              moves.push({
+                symbol: item.symbol,
+                changePercent,
+                lastPrice: q.last_price,
+                category: item.category,
+                awayFromAth,
+                marketCap: mcap,
+                dayHigh: q.last_price,
+                dayLow: q.last_price,
+                recoveryFromLowPct: 0,
+                fallFromHighPct: 0,
+              });
+            }
           }
         }
       }

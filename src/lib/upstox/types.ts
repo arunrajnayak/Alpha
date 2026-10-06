@@ -12,6 +12,8 @@ export interface UpstoxLiveQuote {
   last_price: number;
   instrument_token: string;
   previous_close: number;
+  volume?: number;
+  ltq?: number;
   timestamp?: number;
   indicative_equilibrium_price?: number;
   is_pre_open?: boolean;
@@ -69,6 +71,8 @@ export interface OHLC {
   close: number;
   volume?: number;
   ts?: number;
+  last_price?: number;
+  prev_close?: number;
 }
 
 // ============================================================================
@@ -139,6 +143,8 @@ export interface LTPResponseValue {
   instrument_token?: string;
   cp?: number; // previous close
   ltt?: string; // last trade time
+  ltq?: number; // last traded quantity
+  volume?: number; // cumulative day volume
 }
 
 /**
