@@ -291,3 +291,26 @@ export class NoTokenError extends UpstoxError {
     this.name = 'NoTokenError';
   }
 }
+
+// ============================================================================
+// Corporate Actions Types
+// ============================================================================
+
+export interface UpstoxCorporateActionEventDetail {
+  name: string;
+  value: string;
+}
+
+export interface UpstoxCorporateActionEvent {
+  name: 'Split' | 'Bonus' | 'Dividend' | 'Rights' | string;
+  expiry_date: string; // e.g., "06 Oct 2026"
+  amount: number;
+  ratio: string | null; // e.g., "5:10" or "1:1"
+  event_details?: UpstoxCorporateActionEventDetail[];
+}
+
+export interface UpstoxCorporateActionsResponse {
+  status: 'success' | 'error';
+  data: UpstoxCorporateActionEvent[];
+}
+

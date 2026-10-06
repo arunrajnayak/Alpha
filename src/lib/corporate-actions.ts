@@ -1,7 +1,9 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { fetchNSECorporateActions, NSECorporateAction } from '@/lib/nse-api';
+import { fetchNSECorporateActions } from '@/lib/nse-api';
+import { getCorporateActionsByISIN, UpstoxCorporateActionEvent } from '@/lib/upstox-client';
+import { getInstrumentData } from '@/lib/instrument-service';
 import { subDays, addDays, format } from 'date-fns';
 import { triggerRecalculatePortfolio } from '@/app/actions';
 import { parseNSEDateToStr } from '@/lib/format';
@@ -24,8 +26,110 @@ export interface CorporateActionResult {
 // Parsing Logic
 // ============================================================================
 
+function parseCleanFloat(val: string | undefined): number {
+  if (!val) return NaN;
+  const match = val.match(/\d+(?:\.\d+)?/);
+  return match ? parseFloat(match[0]) : NaN;
+}
+
 /**
- * Parse NSE corporate action subject to extract type and ratio
+ * Converts "DD MMM YYYY", "DD Month YYYY", or "YYYY-MM-DD" to standard ISO "YYYY-MM-DD"
+ */
+export function parseDateStrToISO(dateStr: string): string | null {
+  if (!dateStr || dateStr === '-') return null;
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+
+  const match = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if (!match) return null;
+
+  const day = match[1].padStart(2, '0');
+  const monthKey = match[2].toLowerCase().slice(0, 3);
+  const monthMap: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  };
+  const month = monthMap[monthKey];
+  if (!month) return null;
+
+  return `${match[3]}-${month}-${day}`;
+}
+
+/**
+ * Parse an Upstox Corporate Action event to extract action type, ratio multiplier, and ex-date
+ */
+export function parseUpstoxCorporateAction(event: UpstoxCorporateActionEvent): {
+  type: 'SPLIT' | 'BONUS' | null;
+  ratio: number;
+  dateStr: string | null;
+} {
+  const eventName = (event.name || '').toLowerCase();
+
+  // Find ex-date from event_details or fallback to expiry_date
+  let rawDate = event.expiry_date;
+  if (event.event_details) {
+    const exDateDetail = event.event_details.find(d =>
+      /ex\s+(split|bonus|dividend)\s+date/i.test(d.name)
+    );
+    if (exDateDetail?.value) rawDate = exDateDetail.value;
+  }
+  const dateStr = parseDateStrToISO(rawDate);
+
+  if (eventName === 'split') {
+    // 1. Check event_details for Old face value & New face value
+    if (event.event_details) {
+      const oldFvDetail = event.event_details.find(d => /old\s+face\s+value/i.test(d.name));
+      const newFvDetail = event.event_details.find(d => /new\s+face\s+value/i.test(d.name));
+      if (oldFvDetail && newFvDetail) {
+        const oldVal = parseCleanFloat(oldFvDetail.value);
+        const newVal = parseCleanFloat(newFvDetail.value);
+        if (oldVal > 0 && newVal > 0 && oldVal > newVal) {
+          return { type: 'SPLIT', ratio: oldVal / newVal, dateStr };
+        }
+      }
+    }
+
+    // 2. Fallback to event.ratio (e.g. '5:10' or '1:2')
+    if (event.ratio) {
+      const ratioMatch = event.ratio.match(/(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)/);
+      if (ratioMatch) {
+        const num1 = parseFloat(ratioMatch[1]);
+        const num2 = parseFloat(ratioMatch[2]);
+        if (num1 > 0 && num2 > 0) {
+          const max = Math.max(num1, num2);
+          const min = Math.min(num1, num2);
+          if (max > min) {
+            return { type: 'SPLIT', ratio: max / min, dateStr };
+          }
+        }
+      }
+    }
+    return { type: null, ratio: 1, dateStr };
+  }
+
+  if (eventName === 'bonus') {
+    if (event.ratio) {
+      // Bonus X:Y means X additional shares for every Y held -> multiplier = (X / Y) + 1
+      const ratioMatch = event.ratio.match(/(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)/);
+      if (ratioMatch) {
+        const newShares = parseFloat(ratioMatch[1]);
+        const existingShares = parseFloat(ratioMatch[2]);
+        if (newShares > 0 && existingShares > 0) {
+          const ratio = (newShares / existingShares) + 1;
+          if (ratio > 1) {
+            return { type: 'BONUS', ratio, dateStr };
+          }
+        }
+      }
+    }
+    return { type: null, ratio: 1, dateStr };
+  }
+
+  return { type: null, ratio: 1, dateStr };
+}
+
+/**
+ * Parse NSE corporate action subject to extract type and ratio (legacy fallback)
  * 
  * Examples:
  * - "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share" → SPLIT, ratio 5
@@ -34,6 +138,16 @@ export interface CorporateActionResult {
  */
 function parseSplitBonusRatio(subject: string): { type: 'SPLIT' | 'BONUS' | null; ratio: number } {
   const subjectLower = subject.toLowerCase();
+
+  // Ignore non-equity bonus issues like NCRPS (Non-Convertible Redeemable Preference Shares), debentures, warrants, etc.
+  if (
+    subjectLower.includes('ncrps') ||
+    subjectLower.includes('preference') ||
+    subjectLower.includes('debenture') ||
+    subjectLower.includes('warrant')
+  ) {
+    return { type: null, ratio: 1 };
+  }
   
   // Pattern for Face Value Split: "From Rs X/- ... To Rs Y/-"
   const splitMatch = subjectLower.match(/face value split.*from rs\.?\s*(\d+(?:\.\d+)?)\s*\/?-?\s*(?:per share)?\s*to rs\.?\s*(\d+(?:\.\d+)?)/i);
@@ -74,7 +188,6 @@ function parseSplitBonusRatio(subject: string): { type: 'SPLIT' | 'BONUS' | null
   return { type: null, ratio: 1 };
 }
 
-
 // ============================================================================
 // Corporate Action Management
 // ============================================================================
@@ -94,16 +207,19 @@ export async function addCorporateAction(
   ratio: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const actionDate = new Date(date);
-    actionDate.setUTCHours(0, 0, 0, 0);
+    const cleanDateStr = date.slice(0, 10);
+    const actionDate = new Date(cleanDateStr + 'T00:00:00.000Z');
     const normalizedSymbol = symbol.toUpperCase();
     
-    // Check for existing action
+    // Check for existing action within +/- 12 hours (handles UTC vs IST midnight)
     const existing = await prisma.transaction.findFirst({
       where: {
         symbol: normalizedSymbol,
-        date: actionDate,
-        type
+        type,
+        date: {
+          gte: new Date(actionDate.getTime() - 12 * 3600 * 1000),
+          lte: new Date(actionDate.getTime() + 12 * 3600 * 1000),
+        }
       }
     });
     
@@ -136,18 +252,18 @@ export async function addCorporateAction(
 }
 
 // ============================================================================
-// NSE Corporate Actions Processing
+// Corporate Actions Processing (Upstox primary + NSE fallback)
 // ============================================================================
 
 /**
- * Process corporate actions from NSE API
- * Fetches corporate actions for portfolio symbols and records new splits/bonuses
+ * Process corporate actions for portfolio symbols.
+ * Uses Upstox Fundamentals API as primary source by ISIN, falling back to NSE API if needed.
  * 
  * @param fromDate - Optional start date (defaults to 30 days ago)
  * @param toDate - Optional end date (defaults to 30 days from now)
  * @returns Result with count of actions added
  */
-export async function processNSECorporateActions(
+export async function processCorporateActions(
   fromDate?: Date,
   toDate?: Date
 ): Promise<CorporateActionResult> {
@@ -156,7 +272,9 @@ export async function processNSECorporateActions(
   // Default date range: last 30 days to next 30 days
   const startDate = fromDate || subDays(new Date(), 30);
   const endDate = toDate || addDays(new Date(), 30);
-  
+  const startDateStr = format(startDate, 'yyyy-MM-dd');
+  const endDateStr = format(endDate, 'yyyy-MM-dd');
+
   try {
     // 1. Get all unique symbols from portfolio
     const portfolioSymbols = await prisma.transaction.findMany({
@@ -167,9 +285,9 @@ export async function processNSECorporateActions(
       distinct: ['symbol']
     });
     
-    const symbols = new Set(portfolioSymbols.map(s => s.symbol.toUpperCase()));
+    const symbols = Array.from(new Set(portfolioSymbols.map(s => s.symbol.toUpperCase()))).sort();
     
-    if (symbols.size === 0) {
+    if (symbols.length === 0) {
       return {
         success: true,
         message: 'No portfolio symbols to check',
@@ -177,63 +295,91 @@ export async function processNSECorporateActions(
       };
     }
     
-    corpActionsLogger.info(`Checking ${symbols.size} portfolio symbols`);
-    details.push(`Portfolio symbols: ${symbols.size}`);
-    details.push(`Date range: ${format(startDate, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')}`);
+    corpActionsLogger.info(`Checking corporate actions for ${symbols.length} portfolio symbols from ${startDateStr} to ${endDateStr}`);
+    details.push(`Portfolio symbols: ${symbols.length}`);
+    details.push(`Date range: ${startDateStr} to ${endDateStr}`);
     
-    const nseActions = await fetchNSECorporateActions(startDate, endDate);
-    
-    if (!nseActions) {
-      return {
-        success: false,
-        message: 'Failed to fetch corporate actions from NSE',
-        actionsAdded: 0
-      };
-    }
-    
-    corpActionsLogger.info(`Fetched ${nseActions.length} actions from NSE`);
-    details.push(`NSE actions fetched: ${nseActions.length}`);
-    
-    // 3. Filter and process relevant actions
     let actionsAdded = 0;
-    const relevantActions: NSECorporateAction[] = [];
-    
-    for (const action of nseActions) {
-      // Only process EQ series and portfolio symbols
-      if (action.series !== 'EQ') continue;
-      if (!symbols.has(action.symbol.toUpperCase())) continue;
-      
-      const { type, ratio } = parseSplitBonusRatio(action.subject);
-      
-      // Skip non-split/bonus actions or invalid ratios
-      if (!type || ratio <= 1) continue;
-      
-      const dateStr = parseNSEDateToStr(action.exDate);
-      if (!dateStr) continue;
-      
-      relevantActions.push(action);
-      
-      const result = await addCorporateAction(action.symbol, dateStr, type, ratio);
-      
-      if (result.success) {
-        actionsAdded++;
-        details.push(`Added: ${action.symbol} ${type} ${ratio}:1 on ${dateStr}`);
-        corpActionsLogger.info(`Added ${type} for ${action.symbol}: ${action.subject}`);
-      } else if (result.error !== 'Corporate action already exists for this date') {
-        details.push(`Failed: ${action.symbol} - ${result.error}`);
+    const handledSymbols = new Set<string>();
+
+    // 2. Primary check: Upstox Fundamentals Corporate Actions API per symbol ISIN
+    for (const symbol of symbols) {
+      try {
+        const instData = await getInstrumentData(symbol);
+        if (!instData?.isin) {
+          corpActionsLogger.debug(`No ISIN found for ${symbol}, will check fallback`);
+          continue;
+        }
+
+        const events = await getCorporateActionsByISIN(instData.isin);
+        if (!events || events.length === 0) continue;
+
+        for (const event of events) {
+          const { type, ratio, dateStr } = parseUpstoxCorporateAction(event);
+          if (!type || ratio <= 1 || !dateStr) continue;
+
+          // Check if action date falls within requested window
+          if (dateStr < startDateStr || dateStr > endDateStr) continue;
+
+          const result = await addCorporateAction(symbol, dateStr, type, ratio);
+          handledSymbols.add(symbol);
+
+          if (result.success) {
+            actionsAdded++;
+            details.push(`[Upstox] Added: ${symbol} ${type} ${ratio}:1 on ${dateStr}`);
+            corpActionsLogger.info(`[Upstox] Added ${type} for ${symbol} on ${dateStr} (ratio: ${ratio}:1)`);
+          } else if (result.error !== 'Corporate action already exists for this date') {
+            details.push(`[Upstox] Failed: ${symbol} - ${result.error}`);
+          }
+        }
+      } catch (err) {
+        corpActionsLogger.warn(`Upstox corp action check failed for ${symbol}:`, err);
       }
     }
-    
-    corpActionsLogger.info(`Found ${relevantActions.length} relevant actions, added ${actionsAdded} new`);
-    details.push(`Relevant actions: ${relevantActions.length}, New: ${actionsAdded}`);
-    
+
+    // 3. Secondary fallback: Check NSE Corporate Actions for any symbols not resolved by Upstox
+    const symbolsNeedingFallback = symbols.filter(s => !handledSymbols.has(s));
+    if (symbolsNeedingFallback.length > 0) {
+      try {
+        const nseActions = await fetchNSECorporateActions(startDate, endDate);
+        if (nseActions && nseActions.length > 0) {
+          const fallbackSet = new Set(symbolsNeedingFallback);
+
+          for (const action of nseActions) {
+            const sym = action.symbol.toUpperCase();
+            if (!fallbackSet.has(sym)) continue;
+
+            const { type, ratio } = parseSplitBonusRatio(action.subject);
+            if (!type || ratio <= 1) continue;
+
+            const dateStr = parseNSEDateToStr(action.exDate);
+            if (!dateStr || dateStr < startDateStr || dateStr > endDateStr) continue;
+
+            const result = await addCorporateAction(sym, dateStr, type, ratio);
+            if (result.success) {
+              actionsAdded++;
+              details.push(`[NSE] Added: ${sym} ${type} ${ratio}:1 on ${dateStr}`);
+              corpActionsLogger.info(`[NSE] Added ${type} for ${sym}: ${action.subject}`);
+            } else if (result.error !== 'Corporate action already exists for this date') {
+              details.push(`[NSE] Failed: ${sym} - ${result.error}`);
+            }
+          }
+        }
+      } catch (nseErr) {
+        corpActionsLogger.warn('NSE fallback corporate actions fetch failed:', nseErr);
+      }
+    }
+
+    corpActionsLogger.info(`Corporate actions sync complete. Added ${actionsAdded} new actions.`);
+    details.push(`Total new actions added: ${actionsAdded}`);
+
     // 4. Trigger portfolio recalculation if any actions were added
     if (actionsAdded > 0) {
       corpActionsLogger.info('Triggering portfolio recalculation...');
       await triggerRecalculatePortfolio();
       details.push('Portfolio recalculation triggered');
     }
-    
+
     return {
       success: true,
       message: actionsAdded > 0 
@@ -242,9 +388,9 @@ export async function processNSECorporateActions(
       actionsAdded,
       details
     };
-    
+
   } catch (error) {
-    corpActionsLogger.error('Error:', error);
+    corpActionsLogger.error('Error in processCorporateActions:', error);
     return {
       success: false,
       message: `Error processing corporate actions: ${(error as Error).message}`,
@@ -253,3 +399,6 @@ export async function processNSECorporateActions(
     };
   }
 }
+
+// Backward compatibility alias for existing cron route / callers
+export const processNSECorporateActions = processCorporateActions;

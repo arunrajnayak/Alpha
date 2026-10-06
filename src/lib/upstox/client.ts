@@ -17,6 +17,8 @@ import {
   UpstoxError,
   LTPResponseValue,
   OHLCResponseValue,
+  UpstoxCorporateActionEvent,
+  UpstoxCorporateActionsResponse,
 } from './types';
 
 const upstoxLogger = logger.scope('Upstox');
@@ -519,3 +521,43 @@ export async function getIndexQuotes(): Promise<
     return [];
   }
 }
+
+// ============================================================================
+// Corporate Actions (Fundamentals API)
+// ============================================================================
+
+/**
+ * Fetch corporate actions by ISIN using Upstox Fundamentals API.
+ * Returns array of events (Split, Bonus, Dividend, Rights, etc.)
+ * Endpoint: GET /v2/fundamentals/{isin}/corporate-actions
+ */
+export async function getCorporateActionsByISIN(
+  isin: string
+): Promise<UpstoxCorporateActionEvent[]> {
+  const token = await getAccessToken();
+  const url = `https://api.upstox.com/v2/fundamentals/${isin}/corporate-actions`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!res.ok) {
+      if (res.status === 404) return [];
+      const txt = await res.text();
+      upstoxLogger.warn(`Corporate actions fetch failed for ISIN ${isin} (${res.status}): ${txt.slice(0, 100)}`);
+      return [];
+    }
+
+    const json: UpstoxCorporateActionsResponse = await res.json();
+    return json.data || [];
+  } catch (error) {
+    upstoxLogger.error(`Error fetching corporate actions for ISIN ${isin}:`, error);
+    return [];
+  }
+}
+

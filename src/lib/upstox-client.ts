@@ -19,6 +19,7 @@ import {
     getOHLC,
     getIndexQuotes,
     INDEX_KEYS,
+    getCorporateActionsByISIN,
 } from './upstox/client';
 
 // ============================================================================
@@ -34,6 +35,8 @@ export type {
     UpstoxExchangeStatus,
     CASEligibleStatus,
     CASStatus,
+    UpstoxCorporateActionEvent,
+    UpstoxCorporateActionsResponse,
 } from './upstox/types';
 
 export interface UpstoxLTP {
@@ -68,6 +71,7 @@ export {
     getOHLC,
     getIndexQuotes,
     INDEX_KEYS,
+    getCorporateActionsByISIN,
 };
 
 // ============================================================================

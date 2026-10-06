@@ -716,13 +716,19 @@ export async function deleteCorporateAction(id: number): Promise<void> {
         where: { id }
     });
     
+    await recalculatePortfolioHistory(action.date);
     revalidateApp();
 }
 
+export async function syncCorporateActions(): Promise<{ success: boolean; message: string; actionsAdded: number }> {
+    const { processCorporateActions } = await import('@/lib/corporate-actions');
+    const result = await processCorporateActions();
+    revalidateApp();
+    return result;
+}
+
 export async function refreshCorporateActionsFromYahoo(): Promise<{ success: boolean; message: string }> {
-    // DEPRECATED: Yahoo corporate actions are no longer fetched.
-    // Corporate actions are now managed manually via Settings > Corporate Actions.
-    return { success: false, message: 'Yahoo corporate actions are deprecated. Please manage corporate actions manually via Settings > Corporate Actions.' };
+    return syncCorporateActions();
 }
 
 // Record symbol changes from import and persist mapping

@@ -10,9 +10,10 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import SyncIcon from '@mui/icons-material/Sync';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faBuilding } from '@fortawesome/free-solid-svg-icons';
-import { deleteCorporateAction, addCorporateAction } from '@/app/actions';
+import { deleteCorporateAction, addCorporateAction, syncCorporateActions } from '@/app/actions';
 
 export interface CorporateActionDisplay {
     id: number;
@@ -97,6 +98,28 @@ export default function CorporateActionsCard({ initialActions }: CorporateAction
         setDeleteConfirm({ open: true, id });
     };
 
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    const handleSync = async () => {
+        try {
+            setIsSyncing(true);
+            const res = await syncCorporateActions();
+            setSnackbar({
+                open: true,
+                message: res.message,
+                severity: res.success ? 'success' : 'error'
+            });
+            if (res.actionsAdded > 0) {
+                setTimeout(() => window.location.reload(), 1200);
+            }
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setSnackbar({ open: true, message: 'Sync failed: ' + errorMessage, severity: 'error' });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     const handleConfirmDelete = async () => {
         if (deleteConfirm.id === null) return;
         
@@ -127,7 +150,31 @@ export default function CorporateActionsCard({ initialActions }: CorporateAction
                             </span>
                             Corporate Actions
                         </h2>
-                        <span className="text-xs text-gray-500">{actions.length} actions</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500">{actions.length} actions</span>
+                            <IconButton
+                                onClick={handleSync}
+                                disabled={isSyncing}
+                                size="small"
+                                title="Sync Corporate Actions from Upstox"
+                                sx={{
+                                    color: isSyncing ? '#38bdf8' : '#94a3b8',
+                                    '&:hover': { color: '#38bdf8' },
+                                    p: 0.5,
+                                }}
+                            >
+                                <SyncIcon
+                                    sx={{
+                                        fontSize: 16,
+                                        animation: isSyncing ? 'spin 1s linear infinite' : 'none',
+                                        '@keyframes spin': {
+                                            '0%': { transform: 'rotate(0deg)' },
+                                            '100%': { transform: 'rotate(360deg)' },
+                                        },
+                                    }}
+                                />
+                            </IconButton>
+                        </div>
                     </div>
                     
                     <p className="text-xs text-gray-500">
