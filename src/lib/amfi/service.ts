@@ -206,32 +206,66 @@ export async function getCategoriesBatch(
     normalizedSymbols.add(normalized);
   }
 
-  // Get symbol mappings (batched to avoid SQLite expression tree limit)
-  const normalizedArray = Array.from(normalizedSymbols);
-  const mappingChunks = chunkArray(normalizedArray);
-  const mappingsArrays = await Promise.all(
-    mappingChunks.map(chunk =>
-      prisma.symbolMapping.findMany({
-        where: {
-          OR: [
-            { oldSymbol: { in: chunk } },
-            { newSymbol: { in: chunk } },
-          ],
-        },
-      })
-    )
-  );
-  const mappings = mappingsArrays.flat();
+  let mappings: Array<{ oldSymbol: string; newSymbol: string }>;
+  let classifications: Array<{ symbol: string; category: string }>;
 
-  // Build expanded lookup set (includes mapped symbols)
-  const expandedSymbols = new Set(normalizedSymbols);
+  if (normalizedSymbols.size > 500) {
+    // For large bulk requests (e.g. screener pipeline with 3,500+ symbols), fetching all
+    // mappings (5 rows) and all classifications for the period (~5k rows) in 2 queries is ~15x faster
+    // than firing 140+ individual chunk queries over Turso HTTP.
+    [mappings, classifications] = await Promise.all([
+      prisma.symbolMapping.findMany({ select: { oldSymbol: true, newSymbol: true } }),
+      prisma.aMFIClassification.findMany({
+        where: { period: status.applicablePeriod },
+        select: { symbol: true, category: true },
+      }),
+    ]);
+  } else {
+    // Get symbol mappings (batched to avoid SQLite expression tree limit)
+    const normalizedArray = Array.from(normalizedSymbols);
+    const mappingChunks = chunkArray(normalizedArray);
+    const mappingsArrays = await Promise.all(
+      mappingChunks.map(chunk =>
+        prisma.symbolMapping.findMany({
+          where: {
+            OR: [
+              { oldSymbol: { in: chunk } },
+              { newSymbol: { in: chunk } },
+            ],
+          },
+        })
+      )
+    );
+    mappings = mappingsArrays.flat();
+
+    // Build expanded lookup set (includes mapped symbols)
+    const expandedSymbols = new Set(normalizedSymbols);
+    for (const m of mappings) {
+      expandedSymbols.add(m.oldSymbol.toUpperCase());
+      expandedSymbols.add(m.newSymbol.toUpperCase());
+    }
+
+    // Fetch classifications (batched to avoid SQLite expression tree limit)
+    const expandedArray = Array.from(expandedSymbols);
+    const classChunks = chunkArray(expandedArray);
+    const classificationsArrays = await Promise.all(
+      classChunks.map(chunk =>
+        prisma.aMFIClassification.findMany({
+          where: {
+            period: status.applicablePeriod,
+            symbol: { in: chunk },
+          },
+        })
+      )
+    );
+    classifications = classificationsArrays.flat();
+  }
+
+  // Build symbol mapping lookup
   const symbolToMapped = new Map<string, string[]>();
-
   for (const m of mappings) {
     const old = m.oldSymbol.toUpperCase();
     const newS = m.newSymbol.toUpperCase();
-    expandedSymbols.add(old);
-    expandedSymbols.add(newS);
 
     if (normalizedSymbols.has(old)) {
       if (!symbolToMapped.has(old)) symbolToMapped.set(old, []);
@@ -242,21 +276,6 @@ export async function getCategoriesBatch(
       symbolToMapped.get(newS)!.push(old);
     }
   }
-
-  // Fetch classifications (batched to avoid SQLite expression tree limit)
-  const expandedArray = Array.from(expandedSymbols);
-  const classChunks = chunkArray(expandedArray);
-  const classificationsArrays = await Promise.all(
-    classChunks.map(chunk =>
-      prisma.aMFIClassification.findMany({
-        where: {
-          period: status.applicablePeriod,
-          symbol: { in: chunk },
-        },
-      })
-    )
-  );
-  const classifications = classificationsArrays.flat();
 
   // Build AMFI lookup map
   const amfiMap = new Map<string, AMFICategory>();

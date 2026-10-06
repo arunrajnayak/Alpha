@@ -21,6 +21,7 @@ import { updateATHFromPrices, loadATHMap } from './ath';
 import { detectAndAdjustDemergers } from './demerger';
 import { scoreStock, PARAMS, isETFWhitelisted, computeBetaFromCloses } from './scoring';
 import { resolveLastTradingDay, isMarketHours, daysAgo } from './dates';
+import { withConcurrency } from './utils';
 import { logger } from '@/lib/logger';
 import { updateJob } from '@/lib/jobs';
 
@@ -327,35 +328,29 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   await progress(50, 'Loading prices...');
 
   // ── Step 7: Load prices (only for scoreable stocks) ────────────────────────
-  const priceFromDate = daysAgo(500, today);
+  const priceFromDate = daysAgo(400, today);
   type Candle = { date: string; close: number; high: number; volume: number };
 
-  // Only load prices for scoreable stocks — cuts query size ~50%
-  let allPrices: Array<{ symbol: string; date: string; close: number; high: number; volume: number }> = [];
+  // Chunk symbol list (150 symbols per chunk) so SQLite uses the composite index
+  // (symbol, date) directly, avoiding a massive 800k+ row temp B-Tree sort and connection timeouts.
+  const symbolChunks = chunkArray(scoreableSymbols, 150);
+  const allPrices: Array<{ symbol: string; date: string; close: number; high: number; volume: number }> = [];
 
-  if (scoreableInsts.length < tradeableFiltered.length * 0.8) {
-    // Chunk symbol list for the IN clause (to avoid SQLite's 999 prepared statement parameter limit)
-    const symbolChunks = chunkArray(scoreableSymbols, 500);
-    const results = await Promise.all(
-      symbolChunks.map(chunk =>
-        prisma.screenerPrice.findMany({
-          where: {
-            date: { gte: priceFromDate, lte: today },
-            symbol: { in: chunk },
-          },
-          orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
-          select: { symbol: true, date: true, close: true, high: true, volume: true },
-        })
-      )
-    );
-    allPrices = results.flat();
-  } else {
-    allPrices = await prisma.screenerPrice.findMany({
-      where: { date: { gte: priceFromDate, lte: today } },
-      orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
-      select: { symbol: true, date: true, close: true, high: true, volume: true },
-    });
-  }
+  await withConcurrency(
+    symbolChunks,
+    async (chunk) => {
+      const rows = await prisma.screenerPrice.findMany({
+        where: {
+          date: { gte: priceFromDate, lte: today },
+          symbol: { in: chunk },
+        },
+        orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
+        select: { symbol: true, date: true, close: true, high: true, volume: true },
+      });
+      allPrices.push(...rows);
+    },
+    4,
+  );
   const pricesBySymbol = new Map<string, Candle[]>();
   for (const p of allPrices) {
     let arr = pricesBySymbol.get(p.symbol);
