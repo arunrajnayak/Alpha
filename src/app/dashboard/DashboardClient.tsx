@@ -1,0 +1,591 @@
+'use client';
+
+import { useDashboardData } from '@/hooks/useQueries';
+import { useMemo } from 'react';
+import { useLiveData } from '@/context/LiveDataContext';
+import { 
+  faRocket,
+  faArrowTrendDown,
+  faChartPie,
+} from '@fortawesome/free-solid-svg-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { MainChartCards, PnLSummaryCard, MetricsComboCard } from '@/components/portfolio/SummaryCards';
+import { WinLossCard, AvgHoldingCard, AvgGainLossCard } from '@/components/portfolio/PortfolioStatsCards';
+import MarketCapCard from '@/components/portfolio/MarketCapCard';
+import ReturnsCard from '@/components/portfolio/ReturnsCard';
+import { APP_CONFIG } from '@/lib/client-config';
+import { ChartErrorBoundary } from '@/components/ui/ErrorBoundary';
+import dynamic from 'next/dynamic';
+import InViewChart from '@/components/ui/InViewChart';
+
+import SectorAllocationWrapper from '@/components/portfolio/SectorAllocationWrapper';
+import MarketCapAreaChart from '@/components/portfolio/MarketCapAreaChartWrapper';
+import SectorHistoryChart from '@/components/portfolio/SectorHistoryChartWrapper';
+import DashboardLoading from './loading';
+import { motion, type Variants } from 'framer-motion';
+import type { fetchDashboardData } from '@/app/actions/queries';
+
+type DashboardData = Awaited<ReturnType<typeof fetchDashboardData>>;
+
+const sectionVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: 'easeOut',
+    },
+  },
+};
+
+const viewportConfig = {
+  once: true,
+  amount: 0.1,
+  margin: '0px 0px -40px 0px',
+};
+
+// Heavy chart components — lazy loaded and mounted in-view to prevent blocking page load
+const DrawdownChart = dynamic(() => import('@/components/portfolio/DrawdownChart'), {
+  loading: () => <div className="h-full min-h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const EquityCurve = dynamic(() => import('@/components/portfolio/EquityCurve'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const DailyPnLChart = dynamic(() => import('@/components/portfolio/DailyPnLChart'), {
+  loading: () => <div className="h-[300px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const RollingReturnsChart = dynamic(() => import('@/components/portfolio/RollingReturnsChart'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const PerformanceHeatmap = dynamic(() => import('@/components/portfolio/CalendarHeatmap'), {
+  loading: () => <div className="h-[280px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const MonthlyReturnsHeatmap = dynamic(() => import('@/components/portfolio/MonthlyReturnsHeatmap'), {
+  loading: () => <div className="h-[280px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const ExitsScatterChart = dynamic(() => import('@/components/exits/ExitsScatterChart'), {
+  loading: () => <div className="h-[500px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const InvestedVsCurrentChart = dynamic(() => import('@/components/portfolio/InvestedVsCurrentChart'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const XirrCagrChart = dynamic(() => import('@/components/portfolio/XirrCagrChart'), {
+  loading: () => <div className="h-[380px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const PortfolioWaterfall = dynamic(() => import('@/components/portfolio/PortfolioWaterfall'), {
+  loading: () => <div className="h-[380px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const RollingRiskChart = dynamic(() => import('@/components/portfolio/RollingRiskChart'), {
+  loading: () => <div className="h-[380px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+const TradeReturnHistogram = dynamic(() => import('@/components/exits/TradeReturnHistogram'), {
+  loading: () => <div className="h-[360px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
+
+interface DashboardClientProps {
+  initialData?: DashboardData | null;
+}
+
+export default function DashboardClient({ initialData = null }: DashboardClientProps) {
+  const { data, isLoading, isFetching } = useDashboardData(
+    initialData ? { initialData } : undefined
+  );
+  const { privacyMode } = useLiveData();
+
+  const drawdownData = useMemo(
+    () => (data?.dashboardHistory || []).map(d => ({ date: d.date, drawdown: d.drawdown })),
+    [data?.dashboardHistory]
+  );
+
+  if (isLoading && !data) {
+    return <DashboardLoading />;
+  }
+
+  if (!data) {
+    return <div className="text-center py-8 text-gray-400">Failed to load dashboard data</div>;
+  }
+
+  const {
+    portfolioStats,
+    dashboardStats,
+    chartData,
+    dashboardHistory,
+    weeklySnapshots,
+    monthlySnapshots,
+    exits,
+    sectorAllocations,
+    totalCurrentValue,
+    totalInvested,
+    costBasis,
+    totalRealizedPnL,
+    totalUnrealizedPnL,
+    totalCharges,
+    totalTax,
+    totalDividends,
+    xirrValue,
+    cagrValue,
+    niftyCagr,
+    nifty500M50Cagr,
+    niftyMidcapCagr,
+    niftySmallcapCagr,
+    isWeekPositive,
+    holdings,
+  } = data;
+
+  return (
+    <div className="flex flex-col gap-4 md:gap-8 pb-8 md:pb-0">
+      {/* Background refresh indicator */}
+      {isFetching && !isLoading && (
+        <div className="fixed top-4 right-4 z-50 bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-xs flex items-center gap-2">
+          <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+          Refreshing...
+        </div>
+      )}
+      
+      {/* Header Greeting — initial={false} ensures immediate LCP paint */}
+      <motion.div
+        variants={sectionVariants}
+        initial={false}
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="flex items-center gap-3"
+      >
+        <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">
+          <span className="gradient-text">Hello, {APP_CONFIG.USER_NAME}</span>
+        </h1>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            isWeekPositive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+        }`}>
+            <FontAwesomeIcon icon={isWeekPositive ? faRocket : faArrowTrendDown} className="text-sm" />
+        </div>
+      </motion.div>
+
+      {/* Row 1: Big Cards (Value, NAV, DD) — rendered immediately */}
+      <motion.div
+        variants={sectionVariants}
+        initial={false}
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="flex-none h-auto md:h-[240px]"
+      >
+        <MainChartCards
+           totalCurrentValue={totalCurrentValue}
+           totalInvested={totalInvested}
+           costBasis={costBasis}
+           currentNAV={dashboardStats.currentNAV}
+           currentDD={dashboardStats.currentDD}
+           dashboardHistory={dashboardHistory}
+           privacyMode={privacyMode}
+        />
+      </motion.div>
+
+      {/* Rows 2+3 combined: 5-col × 2-row grid */}
+      <motion.div
+        variants={sectionVariants}
+        initial={false}
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="grid grid-cols-1 md:grid-cols-5 md:grid-rows-2 gap-4 md:gap-6 flex-none h-auto md:h-[390px]"
+      >
+
+        {/* Card 1 — P/L Summary: col-span-2, row-span-2 */}
+        <div className="md:col-span-2 md:row-span-2 h-full min-h-[240px] md:min-h-0">
+          <PnLSummaryCard
+            realizedPnL={totalRealizedPnL}
+            unrealizedPnL={totalUnrealizedPnL}
+            totalCharges={totalCharges}
+            totalTax={totalTax}
+            dividends={totalDividends}
+            privacyMode={privacyMode}
+          />
+        </div>
+
+        {/* Card 2 — Metrics Combo (XIRR+CAGR+Alpha): col-span-2, row-span-2 */}
+        <div className="md:col-span-2 md:row-span-2 h-full min-h-[280px] md:min-h-0">
+          <MetricsComboCard
+            xirrValue={xirrValue}
+            cagrValue={cagrValue}
+            totalCharges={totalCharges}
+            totalTax={totalTax}
+            totalInvested={totalInvested}
+            totalDividends={totalDividends}
+            niftyCagr={niftyCagr}
+            nifty500M50Cagr={nifty500M50Cagr}
+            niftyMidcapCagr={niftyMidcapCagr}
+            niftySmallcapCagr={niftySmallcapCagr}
+            privacyMode={privacyMode}
+          />
+        </div>
+
+        {/* Card 3 — Avg Holding: col 5, row 1 */}
+        <div className="md:col-span-1 md:row-span-1 h-full min-h-[150px] md:min-h-0">
+          <AvgHoldingCard avgHoldingPeriod={portfolioStats.avgHoldingPeriod} />
+        </div>
+
+        {/* Card 4 — Win/Loss: col 5, row 2 */}
+        <div className="md:col-span-1 md:row-span-1 h-full min-h-[150px] md:min-h-0">
+          <WinLossCard winPercent={portfolioStats.winPercent} lossPercent={portfolioStats.lossPercent} />
+        </div>
+      </motion.div>
+
+      {/* Row 3: Market Cap, Returns, Avg Gain/Loss */}
+      <motion.div
+        variants={sectionVariants}
+        initial={false}
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="grid grid-cols-1 md:grid-cols-8 gap-4 md:gap-8 flex-none h-auto md:h-[200px]"
+      >
+          {/* Market Cap - 3 Cols */}
+          <div className="col-span-1 md:col-span-3 h-full">
+              <MarketCapCard 
+                  largeCapPercent={portfolioStats.largeCapPercent}
+                  midCapPercent={portfolioStats.midCapPercent}
+                  smallCapPercent={portfolioStats.smallCapPercent}
+                  microCapPercent={portfolioStats.microCapPercent}
+                  nanoCapPercent={portfolioStats.nanoCapPercent}
+              />
+          </div>
+
+          {/* Returns - 3 Cols */}
+          <div className="col-span-1 md:col-span-3 h-full">
+              <ReturnsCard
+                  weekReturn={dashboardStats.weekReturn}
+                  monthReturn={dashboardStats.monthReturn}
+                  yearReturn={dashboardStats.yearReturn}
+                  oneYearReturn={dashboardStats.oneYearReturn}
+                  privacyMode={privacyMode}
+              />
+          </div>
+
+          {/* Avg Gain/Loss - 2 Cols */}
+          <div className="col-span-1 md:col-span-2 h-full">
+              <AvgGainLossCard 
+                  avgWinnerGain={portfolioStats.avgWinnerGain} 
+                  avgLoserLoss={portfolioStats.avgLoserLoss} 
+              />
+          </div>
+      </motion.div>
+
+      {/* Row 4: Equity Curve */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Equity Curve">
+                       <InViewChart minHeight={400}>
+                         <EquityCurve data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5: Sector Allocation */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 flex items-center justify-center">
+                        <FontAwesomeIcon icon={faChartPie} className="text-violet-400 text-lg" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sector Allocation</span>
+                </div>
+                <div className="flex-1 min-h-[360px]">
+                    <ChartErrorBoundary componentName="Sector Allocation">
+                      <InViewChart minHeight={360}>
+                        <SectorAllocationWrapper allocations={sectorAllocations} privacyMode={privacyMode} />
+                      </InViewChart>
+                    </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 6: Drawdown Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-[420px] md:h-[500px] bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1 min-h-0">
+                     <ChartErrorBoundary componentName="Drawdown Chart">
+                       <InViewChart minHeight={400}>
+                         <DrawdownChart data={drawdownData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5.1: XIRR & CAGR Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="XIRR & CAGR Chart">
+                       <InViewChart minHeight={380}>
+                         <XirrCagrChart data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5.5: Invested vs Current Value Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Invested vs Current Chart">
+                       <InViewChart minHeight={400}>
+                         <InvestedVsCurrentChart data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5.6: Daily Gain/Loss Bar Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Daily P&L Chart">
+                       <InViewChart minHeight={300}>
+                         <DailyPnLChart data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5.7: Rolling Returns Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Rolling Returns Chart">
+                       <InViewChart minHeight={400}>
+                         <RollingReturnsChart data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 5.75: Rolling Sharpe & Sortino */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Rolling Sharpe & Sortino">
+                       <InViewChart minHeight={380}>
+                         <RollingRiskChart data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 6: Market Cap History */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center">
+                        <FontAwesomeIcon icon={faChartPie} className="text-indigo-400 text-lg" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Market Cap History</span>
+                </div>
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Market Cap History">
+                       <InViewChart minHeight={350}>
+                         <MarketCapAreaChart data={weeklySnapshots} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 7: Sector History */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Sector History">
+                       <InViewChart minHeight={350}>
+                         <SectorHistoryChart data={weeklySnapshots} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 8: Performance Heatmap */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Performance Heatmap">
+                       <InViewChart minHeight={280}>
+                         <PerformanceHeatmap data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 8.5: Monthly Returns */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Monthly Returns Heatmap">
+                       <InViewChart minHeight={280}>
+                         <MonthlyReturnsHeatmap data={chartData} monthlySnapshots={monthlySnapshots} chartData={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 9: Holding Period vs Returns */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1 min-h-[500px]">
+                     <ChartErrorBoundary componentName="Holding Period vs Returns Chart">
+                       <InViewChart minHeight={500}>
+                         <ExitsScatterChart exits={exits} holdings={holdings} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 10: Trade Return Distribution */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Trade Return Distribution">
+                       <InViewChart minHeight={360}>
+                         <TradeReturnHistogram exits={exits} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 11: Portfolio Compounding Waterfall */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Portfolio Compounding Waterfall">
+                       <InViewChart minHeight={380}>
+                         <PortfolioWaterfall
+                           startingCapital={chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0}
+                           netDeposits={Math.max(0, totalInvested - (chartData.length > 0 ? (chartData[0].investedCapital ?? 0) : 0))}
+                           realizedGains={totalRealizedPnL}
+                           dividends={totalDividends ?? 0}
+                           unrealizedGains={totalUnrealizedPnL}
+                           charges={totalCharges}
+                           tax={totalTax}
+                           currentEquity={totalCurrentValue}
+                           privacyMode={privacyMode}
+                         />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+    </div>
+  );
+}

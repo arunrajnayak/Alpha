@@ -26,7 +26,7 @@ interface LiveDataContextType {
   loading: boolean;
   lastRefreshed: Date | null;
   refresh: () => Promise<void>;
-  initialize: () => void;
+  initialize: (options?: { bootstrapData?: LiveDashboardData | null; tokenValid?: boolean }) => void;
   hasAnimatedInitial: boolean;
   setHasAnimatedInitial: (val: boolean) => void;
   showDynamicTitle: boolean;
@@ -83,6 +83,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const errorShownRef = useRef(false); // Prevent duplicate error toasts
   const [initialized, setInitialized] = useState(false);
   const initializedRef = useRef(false);
+  const [hasTokenOverride, setHasTokenOverride] = useState<boolean | null>(null);
 
   // Batched update refs - accumulate updates and apply every UPDATE_INTERVAL_MS
   const pendingUpdatesRef = useRef<Map<string, PriceUpdate>>(new Map());
@@ -97,25 +98,57 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   // Shared subscribers for other components (like MarketOverview)
   const priceSubscribersRef = useRef<Set<(updates: PriceUpdate[]) => void>>(new Set());
 
+  // Track if we're in market hours based on actual server-side market status
+  // This is updated from the live data response to support special sessions (like Sunday budget)
+  const [isMarketHours, setIsMarketHours] = useState(() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        weekday: 'short',
+        hour12: false,
+      }).formatToParts(new Date());
+      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+      const wd = parts.find(p => p.type === 'weekday')?.value;
+      const isWeekday = wd !== 'Sat' && wd !== 'Sun';
+      return isWeekday && hour >= 9 && hour < 16;
+    } catch {
+      const now = new Date();
+      const hour = now.getHours();
+      const day = now.getDay();
+      return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
+    }
+  });
+
   const clearConnectionError = useCallback(() => {
     setConnectionError(null);
     errorShownRef.current = false;
   }, []);
 
   // Lazy initialize method - pages call this when they need live data
-  const initialize = useCallback(() => {
+  const initialize = useCallback((options?: { bootstrapData?: LiveDashboardData | null; tokenValid?: boolean }) => {
+    if (options?.tokenValid !== undefined) {
+      setHasTokenOverride(options.tokenValid);
+    }
+    if (options?.bootstrapData) {
+      setData(options.bootstrapData);
+      setLoading(false);
+      setIsMarketHours(options.bootstrapData.marketStatus === 'OPEN' || options.bootstrapData.marketStatus === 'PRE_OPEN');
+    }
     if (initializedRef.current) return;
     initializedRef.current = true;
     setInitialized(true);
-    // Load P/L history from server on first init
-    getIntradayPnLHistory()
-      .then(history => {
-        if (history.length > 0) {
-          setPnlHistory(history);
-          liveLogger.info(`Loaded ${history.length} P/L history points from server`);
-        }
-      })
-      .catch(err => liveLogger.error('Failed to load P/L history:', err));
+    // Only load P/L history if this is a portfolio initialization (not just token-only for market overview)
+    if (!options || options.bootstrapData !== undefined || options.tokenValid === undefined) {
+      getIntradayPnLHistory()
+        .then(history => {
+          if (history.length > 0) {
+            setPnlHistory(history);
+            liveLogger.info(`Loaded ${history.length} P/L history points from server`);
+          }
+        })
+        .catch(err => liveLogger.error('Failed to load P/L history:', err));
+    }
   }, []);
 
   const setShowDynamicTitle = useCallback((val: boolean) => {
@@ -194,27 +227,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   }, [data?.dayGain, data?.dayGainPercent]);
 
 
-  // Track if we're in market hours based on actual server-side market status
-  // This is updated from the live data response to support special sessions (like Sunday budget)
-  const [isMarketHours, setIsMarketHours] = useState(() => {
-    try {
-      const parts = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Kolkata',
-        hour: '2-digit',
-        weekday: 'short',
-        hour12: false,
-      }).formatToParts(new Date());
-      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-      const wd = parts.find(p => p.type === 'weekday')?.value;
-      const isWeekday = wd !== 'Sat' && wd !== 'Sun';
-      return isWeekday && hour >= 9 && hour < 16;
-    } catch {
-      const now = new Date();
-      const hour = now.getHours();
-      const day = now.getDay();
-      return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
-    }
-  });
+
 
   // Apply batched updates to data
   const applyBatchedUpdates = useCallback(() => {
@@ -527,8 +540,9 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [isVisible, setIsVisible] = useState(true);
 
   // Use Upstox stream hook for direct WebSocket connection
+  const hasToken = hasTokenOverride !== null ? hasTokenOverride : !!data?.tokenStatus?.hasToken;
   const { status: streamStatus, subscribeToInstruments } = useUpstoxStream({
-    enabled: isVisible && streamingEnabled && isMarketHours && !!data?.tokenStatus?.hasToken,
+    enabled: isVisible && streamingEnabled && isMarketHours && hasToken,
     onPriceUpdate: handlePriceUpdate,
     onStatusChange: handleStreamStatusChange,
     onError: handleStreamError,
@@ -600,8 +614,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     // Only start fetching/polling after a page calls initialize()
     if (!initialized) return;
 
-    // Initial fetch (always needed to get full data including indices, sectors, etc.)
-    refresh();
+    // Skip portfolio fetch/polling if in market-only mode (tokenValid override without portfolio data)
+    if (hasTokenOverride !== null && !data) return;
+
+    // Initial fetch only if not already provided via SSR bootstrapData
+    if (!data) {
+      refresh();
+    }
 
     // Polling logic - only poll when NOT streaming
     // When streaming is active, we only do a full refresh every 5 minutes for indices/sector data

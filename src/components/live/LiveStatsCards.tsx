@@ -36,7 +36,7 @@ const LiveStatsCards = memo(function LiveStatsCards({
         <motion.div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
             variants={containerVariants}
-            initial="hidden"
+            initial={false}
             whileInView="visible"
             viewport={{ once: true, amount: 0.1, margin: "0px 0px -40px 0px" }}
             animate={downloading ? "visible" : undefined}

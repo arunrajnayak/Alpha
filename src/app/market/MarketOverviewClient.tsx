@@ -98,7 +98,9 @@ export default function MarketOverviewClient({
   
   // Shared WebSocket stream from LiveDataContext
   const { streamStatus, subscribeToPrices, subscribeToInstruments, initialize, data: liveContextData } = useLiveData();
-  useEffect(() => { initialize(); }, [initialize]);
+  useEffect(() => {
+    initialize({ tokenValid: initialTokenStatus?.hasToken });
+  }, [initialize, initialTokenStatus?.hasToken]);
 
   // Market status: real-time session resolver combining time checks with API state
   const resolveMarketStatus = useCallback((): 'OPEN' | 'PRE_OPEN' | 'CLOSED' => {
@@ -946,12 +948,12 @@ export default function MarketOverviewClient({
     <Container
       className={`flex flex-col gap-3 sm:gap-4 md:gap-6 ${embedded ? '' : 'pb-24 md:pb-8'}`}
       variants={containerVariants}
-      initial={embedded ? false : "hidden"}
+      initial={false}
       animate="visible"
     >
       {/* Header — standalone only */}
       {!embedded && (
-      <motion.div variants={itemVariants} className="flex items-center justify-between">
+      <motion.div variants={itemVariants} initial={false} className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl md:text-3xl font-bold whitespace-nowrap">

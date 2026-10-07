@@ -48,6 +48,7 @@ export default function MobileBottomNav() {
             <NextLink
               key={tab.path}
               href={tab.path}
+              prefetch={false}
               onClick={() => handleTabClick(tab.path)}
               className={`flex flex-col items-center justify-center relative py-1 transition-colors duration-150 ${
                 isActive

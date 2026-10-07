@@ -354,9 +354,12 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     }
   }, []);
 
-  // Prefetch rank histories for the initial pre-filtered rows (background, non-blocking)
+  // Prefetch rank histories for the initial pre-filtered rows (deferred, non-blocking)
   useEffect(() => {
-    prefetchRankHistories(initialData.rows, 'filtered');
+    const timer = setTimeout(() => {
+      prefetchRankHistories(initialData.rows, 'filtered');
+    }, 1500);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  // only on mount — initialData is stable
 
@@ -534,7 +537,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
 
   return (
-    <motion.div className="flex flex-col gap-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex flex-col gap-4" initial={false} animate={{ opacity: 1 }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl md:text-3xl font-bold">

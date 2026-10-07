@@ -59,7 +59,7 @@ const LiveHeader = memo(function LiveHeader({
         <motion.div
             className="space-y-6"
             variants={itemVariants}
-            initial="hidden"
+            initial={false}
             whileInView="visible"
             viewport={{ once: true, amount: 0.1, margin: "0px 0px -40px 0px" }}
             animate={downloading ? "visible" : undefined}

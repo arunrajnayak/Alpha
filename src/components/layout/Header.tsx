@@ -202,6 +202,7 @@ export default function Header() {
                       key={item.path}
                       ref={(el) => { itemsRef.current[index] = el; }}
                       href={item.path}
+                      prefetch={false}
                       className={`relative z-10 px-3 md:px-4 py-3.5 rounded-xl text-base font-medium transition-colors duration-300 flex items-center gap-1.5 ${
                         isActive
                           ? 'text-blue-100 shadow-sm'
@@ -299,6 +300,7 @@ export default function Header() {
                         <NextLink
                             key={item.path}
                             href={item.path}
+                            prefetch={false}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 ${
                                 isActive 
                                 ? 'bg-blue-600/20 text-blue-100 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]' 

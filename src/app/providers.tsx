@@ -4,8 +4,6 @@ import { Suspense } from 'react';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { RecomputeProvider } from '@/context/RecomputeContext';
 import { ImportProvider } from '@/context/ImportContext';
 import { LiveDataProvider } from '@/context/LiveDataContext';
@@ -21,7 +19,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <MotionConfig isValidProp={isPropValid}>
         <AppRouterCacheProvider>
         <ThemeProvider theme={theme}>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
               <RecomputeProvider>
                 <LiveDataProvider>
                   <ImportProvider>
@@ -34,7 +31,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
                   </ImportProvider>
                 </LiveDataProvider>
               </RecomputeProvider>
-          </LocalizationProvider>
         </ThemeProvider>
       </AppRouterCacheProvider>
       </MotionConfig>

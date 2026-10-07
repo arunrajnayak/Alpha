@@ -9,6 +9,8 @@ import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { validateSymbols } from '@/app/actions';
 import CircularProgress from '@mui/material/CircularProgress';
 import InputAdornment from '@mui/material/InputAdornment';
@@ -145,6 +147,7 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
             </DialogTitle>
             <form onSubmit={handleSubmit}>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, py: 4 }}>
+                    <LocalizationProvider dateAdapter={AdapterDateFns}>
                     <DatePicker
                         label="Date"
                         format="dd/MM/yyyy"
@@ -170,6 +173,7 @@ export default function TradeDialog({ isOpen, onClose, onSubmit, initialData }: 
                             }
                         }}
                     />
+                    </LocalizationProvider>
 
                     <TextField
                         label="Symbol"

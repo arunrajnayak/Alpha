@@ -57,6 +57,7 @@ comparison_data.json
 discrepancies.csv
 full_comparison_output.txt
 nse_cache.json
+Trace-*.json.gz
 
 # Database backups (may contain sensitive data)
 backups/*.json
