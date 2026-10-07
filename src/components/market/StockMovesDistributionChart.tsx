@@ -78,18 +78,17 @@ export default function StockMovesDistributionChart({
   loading = false,
   isMobile: isMobileProp,
 }: StockMovesDistributionChartProps) {
-  const [isMobile, setIsMobile] = useState(isMobileProp ?? false);
+  const [internalIsMobile, setInternalIsMobile] = useState(false);
 
   useEffect(() => {
-    if (isMobileProp !== undefined) {
-      setIsMobile(isMobileProp);
-      return;
-    }
-    const check = () => setIsMobile(window.innerWidth < 768);
+    if (isMobileProp !== undefined) return;
+    const check = () => setInternalIsMobile(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, [isMobileProp]);
+
+  const isMobile = isMobileProp !== undefined ? isMobileProp : internalIsMobile;
   const chartData = useMemo(() => {
     return distribution.map((b) => ({
       label: b.label,

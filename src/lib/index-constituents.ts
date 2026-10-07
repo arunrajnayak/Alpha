@@ -11,6 +11,7 @@ import os from 'os';
 import { parse } from 'csv-parse/sync';
 import { getInstrumentKeys } from './instrument-service';
 import totalMarketRebalancesData from './data/total-market-rebalances.json';
+import bundledConstituentsData from './data/index-constituents.json';
 import { prisma } from '@/lib/db';
 import { todayISTYmd } from '@/lib/tz';
 
@@ -25,6 +26,13 @@ export interface TotalMarketRebalance {
 const totalMarketRebalances: TotalMarketRebalance[] = (
   totalMarketRebalancesData as TotalMarketRebalance[]
 ).slice().sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+
+export interface BundledConstituentEntry {
+  symbols: string[];
+  weights: Record<string, number>;
+}
+
+const bundledConstituents = bundledConstituentsData as Record<string, BundledConstituentEntry>;
 
 
 // ============================================================================
@@ -41,181 +49,185 @@ export type IndexCategory = 'broad' | 'momentum' | 'sectoral';
 
 export const INDEX_CONFIG: Record<string, { csvUrl?: string; upstoxKey: string; shortName: string; category: IndexCategory }> = {
   'NIFTY 50': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty50list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_nifty50list.csv',
     upstoxKey: 'NSE_INDEX|Nifty 50',
     shortName: 'Nifty 50',
     category: 'broad',
   },
   'NIFTY Next 50': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftynext50list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftynext50list.csv',
     upstoxKey: 'NSE_INDEX|Nifty Next 50',
     shortName: 'Next 50',
     category: 'broad',
   },
   'NIFTY Midcap 100': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap100list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftymidcap100list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MIDCAP 100',
     shortName: 'Midcap 100',
     category: 'broad',
   },
   'NIFTY Midcap 150': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap150list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftymidcap150list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MID SELECT',
     shortName: 'Midcap 150',
     category: 'broad',
   },
   'NIFTY Smallcap 250': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftysmallcap250list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftysmallcap250list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY SMLCAP 250',
     shortName: 'Smallcap 250',
     category: 'broad',
   },
   'NIFTY Microcap 250': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymicrocap250_list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftymicrocap250_list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY MICROCAP250',
     shortName: 'Microcap 250',
     category: 'broad',
   },
   'NIFTY 500': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_nifty500list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY 500',
     shortName: 'Nifty 500',
     category: 'broad',
   },
   'NIFTY Total Market': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftytotalmarket_list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftytotalmarket_list.csv',
     upstoxKey: 'NSE_INDEX|NIFTY TOTAL MKT',
     shortName: 'Total Market',
     category: 'broad',
   },
   'NIFTY 200 Momentum 30': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty200momentum30_list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_nifty200Momentum30_list.csv',
     upstoxKey: 'NSE_INDEX|Nifty200Momentm30',
     shortName: 'Mom 200/30',
     category: 'momentum',
   },
   'NIFTY Midcap150 Momentum 50': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymidcap150momentum50_list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftymidcap150momentum50_list.csv',
     upstoxKey: 'NSE_INDEX|NiftyM150Momntm50',
     shortName: 'MidMom 50',
     category: 'momentum',
   },
   'NIFTY500 Momentum 50': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_nifty500momentum50_list.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_nifty500Momentum50_list.csv',
     upstoxKey: 'NSE_INDEX|Nifty500Momentm50',
     shortName: 'Mom 500/50',
     category: 'momentum',
   },
   // Sectoral Indices
   'NIFTY Bank': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftybanklist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftybanklist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Bank',
     shortName: 'Bank',
     category: 'sectoral',
   },
   'NIFTY Financial Services': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyfinancelist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyfinancelist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Fin Service',
     shortName: 'Financial',
     category: 'sectoral',
   },
   'NIFTY Private Bank': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyprivatebanklist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_nifty_privatebanklist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Pvt Bank',
     shortName: 'Pvt Bank',
     category: 'sectoral',
   },
   'NIFTY PSU Bank': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftypsubanklist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftypsubanklist.csv',
     upstoxKey: 'NSE_INDEX|Nifty PSU Bank',
     shortName: 'PSU Bank',
     category: 'sectoral',
   },
   'NIFTY IT': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyitlist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyitlist.csv',
     upstoxKey: 'NSE_INDEX|Nifty IT',
     shortName: 'IT',
     category: 'sectoral',
   },
   'NIFTY Auto': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyautolist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyautolist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Auto',
     shortName: 'Auto',
     category: 'sectoral',
   },
   'NIFTY FMCG': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyfmcglist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyfmcglist.csv',
     upstoxKey: 'NSE_INDEX|Nifty FMCG',
     shortName: 'FMCG',
     category: 'sectoral',
   },
   'NIFTY Pharma': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftypharmalist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftypharmalist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Pharma',
     shortName: 'Pharma',
     category: 'sectoral',
   },
   'NIFTY Healthcare': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyhealthcarelist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyhealthcarelist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Healthcare',
     shortName: 'Healthcare',
     category: 'sectoral',
   },
   'NIFTY Metal': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymetallist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftymetallist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Metal',
     shortName: 'Metal',
     category: 'sectoral',
   },
   'NIFTY Energy': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyenergylist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyenergylist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Energy',
     shortName: 'Energy',
     category: 'sectoral',
   },
   'NIFTY Oil & Gas': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyoilgaslist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyoilgaslist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Oil and Gas',
     shortName: 'Oil & Gas',
     category: 'sectoral',
   },
   'NIFTY Realty': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyrealtylist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyrealtylist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Realty',
     shortName: 'Realty',
     category: 'sectoral',
   },
   'NIFTY Media': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftymedialist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftymedialist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Media',
     shortName: 'Media',
     category: 'sectoral',
   },
   'NIFTY Telecom': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftytelecomlist.csv',
     upstoxKey: 'NSE_INDEX|NIFTY TELECOM',
     shortName: 'Telecom',
     category: 'sectoral',
   },
   'NIFTY Consumer Durables': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyconsdurableslist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyconsumerdurableslist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Cons Durable',
     shortName: 'Cons Durables',
     category: 'sectoral',
   },
   'NIFTY Infrastructure': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftyinfrastructurelist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftyinfralist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Infra',
     shortName: 'Infra',
     category: 'sectoral',
   },
   'NIFTY Commodities': {
-    csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftycommoditieslist.csv',
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftycommoditieslist.csv',
     upstoxKey: 'NSE_INDEX|Nifty Commodities',
     shortName: 'Commodities',
     category: 'sectoral',
   },
-  'NIFTY CPSE': { upstoxKey: 'NSE_INDEX|Nifty CPSE', shortName: 'CPSE', category: 'sectoral', csvUrl: 'https://www.niftyindices.com/IndexConstituent/ind_niftycpselist.csv' },
+  'NIFTY CPSE': {
+    csvUrl: 'https://archives.nseindia.com/content/indices/ind_niftycpselist.csv',
+    upstoxKey: 'NSE_INDEX|Nifty CPSE',
+    shortName: 'CPSE',
+    category: 'sectoral',
+  },
   'NIFTY Railways PSU': { upstoxKey: 'NSE_INDEX|Nifty RailwaysPSU', shortName: 'Railways PSU', category: 'sectoral' },
   'NIFTY Chemicals': { upstoxKey: 'NSE_INDEX|Nifty Chemicals', shortName: 'Chemicals', category: 'sectoral' },
   'NIFTY Capital Mkt': { upstoxKey: 'NSE_INDEX|Nifty Capital Mkt', shortName: 'Capital Mkt', category: 'sectoral' },
@@ -304,6 +316,7 @@ async function fetchCSV(url: string): Promise<string | null> {
     const response = await fetch(url, {
       headers: FETCH_HEADERS,
       redirect: 'follow',
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
@@ -584,7 +597,25 @@ export async function getIndexConstituentData(indexName: string): Promise<{ symb
     return { symbols: memCached.symbols, weights: memCached.weights };
   }
 
-  // 2. Check disk cache
+  // 2. For NIFTY Total Market, check AppConfig in database first
+  if (indexName === 'NIFTY Total Market') {
+    try {
+      const configRow = await prisma.appConfig.findUnique({
+        where: { key: 'TOTAL_MARKET_CURRENT_SYMBOLS' },
+      });
+      if (configRow?.value) {
+        const parsed = JSON.parse(configRow.value);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          memoryCache.set(indexName, { symbols: parsed, weights: {}, timestamp: Date.now() });
+          return { symbols: parsed, weights: {} };
+        }
+      }
+    } catch {
+      // Fall through to bundled / cache
+    }
+  }
+
+  // 3. Check disk cache
   const cacheFile = getCacheFilePath(indexName);
   try {
     const stat = await fs.stat(cacheFile);
@@ -601,31 +632,46 @@ export async function getIndexConstituentData(indexName: string): Promise<{ symb
     // Cache miss
   }
 
-  // 3. Fetch from niftyindices.com
-  if (!config.csvUrl) return { symbols: [], weights: {} };
-  
-  console.log(`[IndexConstituents] Fetching constituents for ${indexName} from ${config.csvUrl}`);
-  const csvContent = await fetchCSV(config.csvUrl);
-  
-  if (csvContent) {
-    const { symbols, weights } = parseCSV(csvContent);
-    if (symbols.length > 0) {
-      // Save to disk cache
-      try {
-        await fs.mkdir(CACHE_DIR, { recursive: true });
-        await fs.writeFile(cacheFile, JSON.stringify({ symbols, weights, fetchedAt: new Date().toISOString() }));
-      } catch (err) {
-        console.error('[IndexConstituents] Failed to write cache:', err);
-      }
-      
-      // Save to memory cache
-      memoryCache.set(indexName, { symbols, weights, timestamp: Date.now() });
-      console.log(`[IndexConstituents] Fetched ${symbols.length} constituents for ${indexName} (${Object.keys(weights).length} with weights)`);
-      return { symbols, weights };
+  // 4. Check bundled static fallback
+  const bundled = bundledConstituents[indexName];
+  if (bundled && bundled.symbols && bundled.symbols.length > 0) {
+    memoryCache.set(indexName, { symbols: bundled.symbols, weights: bundled.weights || {}, timestamp: Date.now() });
+    // If no remote URL configured, return bundled immediately
+    if (!config.csvUrl) {
+      return { symbols: bundled.symbols, weights: bundled.weights || {} };
     }
   }
 
-  // 4. Try stale disk cache as last resort
+  // 5. Fetch from remote CSV (with timeout)
+  if (config.csvUrl) {
+    try {
+      console.log(`[IndexConstituents] Fetching constituents for ${indexName} from ${config.csvUrl}`);
+      const csvContent = await fetchCSV(config.csvUrl);
+      if (csvContent) {
+        const { symbols, weights } = parseCSV(csvContent);
+        if (symbols.length > 0) {
+          try {
+            await fs.mkdir(CACHE_DIR, { recursive: true });
+            await fs.writeFile(cacheFile, JSON.stringify({ symbols, weights, fetchedAt: new Date().toISOString() }));
+          } catch {
+            // Ignore disk cache write errors
+          }
+          memoryCache.set(indexName, { symbols, weights, timestamp: Date.now() });
+          console.log(`[IndexConstituents] Fetched ${symbols.length} constituents for ${indexName} (${Object.keys(weights).length} with weights)`);
+          return { symbols, weights };
+        }
+      }
+    } catch (err) {
+      console.warn(`[IndexConstituents] Remote fetch failed for ${indexName}, using bundled fallback:`, err);
+    }
+  }
+
+  // 6. Return bundled data if available
+  if (bundled && bundled.symbols && bundled.symbols.length > 0) {
+    return { symbols: bundled.symbols, weights: bundled.weights || {} };
+  }
+
+  // 7. Try stale disk cache as last resort
   try {
     const data = JSON.parse(await fs.readFile(cacheFile, 'utf-8'));
     if (data.symbols && data.symbols.length > 0) {

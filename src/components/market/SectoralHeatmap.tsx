@@ -16,15 +16,17 @@ interface IndexSummary {
 interface SectoralHeatmapProps {
   indices: IndexSummary[];
   isMobile: boolean;
+  onSelectIndex?: (indexName: string) => void;
 }
 
-export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeatmapProps) {
+export default memo(function SectoralHeatmap({ indices, isMobile, onSelectIndex }: SectoralHeatmapProps) {
   // Filter for sectoral indices that actually have data
   const sectoralIndices = useMemo(() => {
     return indices
       .filter((c) => c.category === 'sectoral' && c.value > 0)
-      // Remove NIFTY prefix for cleaner labels
+      // Keep full index name so clicking can select the index
       .map((c) => ({
+        fullName: c.name,
         name: c.shortName || c.name.replace(/^NIFTY\s+/i, ''),
         value: 1, // Equal weight for all sectors
         changePercent: c.changePercent,
@@ -44,8 +46,11 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
 
   return (
     <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-1 flex flex-col" style={{ height: isMobile ? '350px' : '400px' }}>
-      <div className="px-3.5 pt-3.5 sm:px-5 sm:pt-5 pb-2 shrink-0">
+      <div className="px-3.5 pt-3.5 sm:px-5 sm:pt-5 pb-2 shrink-0 flex items-center justify-between">
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Sectoral Heatmap</h3>
+        {onSelectIndex && (
+          <span className="text-[11px] text-gray-500 hidden sm:inline">Click any sector to view its constituents</span>
+        )}
       </div>
       <div className="flex-1 w-full min-h-0" style={{ color: '#000' }}>
         <ResponsiveTreeMap
@@ -77,7 +82,8 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
           }}
           nodeOpacity={1}
           nodeComponent={({ node }) => {
-            const percent = (node.data as { changePercent?: number }).changePercent;
+            const nodeData = node.data as { changePercent?: number; fullName?: string; name?: string };
+            const percent = nodeData.changePercent;
             if (percent === undefined) return null;
             
             // Determine text color based on background brightness
@@ -86,6 +92,7 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
             if (percent < 0 && percent > -5) textColor = '#0f172a'; // Dark text for < 5% loss
             const showSymbol = node.width > 35 && node.height > 30;
             const showPercent = node.width > 45 && node.height > 45;
+            const targetName = nodeData.fullName || `NIFTY ${node.id}`;
             
             return (
               <motion.g 
@@ -98,18 +105,22 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
                   stiffness: 300, 
                   delay: (node.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 20) / 100 
                 }}
-                style={{ cursor: 'default' }}
+                style={{ cursor: onSelectIndex ? 'pointer' : 'default' }}
                 onMouseEnter={node.onMouseEnter} 
                 onMouseMove={node.onMouseMove} 
                 onMouseLeave={node.onMouseLeave} 
-                onClick={node.onClick}
+                onClick={() => {
+                  if (onSelectIndex && targetName) {
+                    onSelectIndex(targetName);
+                  }
+                }}
               >
                 <rect width={node.width} height={node.height} fill={node.color} stroke="#0f172a" strokeWidth={3} rx={4} ry={4} />
                 {showSymbol && (
                   <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle" style={{ pointerEvents: 'none' }}>
-                    <tspan x={node.width / 2} dy={showPercent ? "-0.7em" : "0.3em"} fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="700" fill={textColor} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{node.id}</tspan>
+                    <tspan x={node.width / 2} dy={showPercent ? "-0.7em" : "0.3em"} fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="700" fill={textColor}>{node.id}</tspan>
                     {showPercent && typeof percent === 'number' && (
-                      <tspan x={node.width / 2} dy="1.5em" fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8} style={{ filter: textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.5))' : 'none' }}>{percent > 0 ? '+' : ''}{percent.toFixed(2)}%</tspan>
+                      <tspan x={node.width / 2} dy="1.5em" fontSize={Math.min(node.width / 5, isMobile ? 8 : 11)} fontWeight="600" fill={textColor} fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8}>{percent > 0 ? '+' : ''}{percent.toFixed(2)}%</tspan>
                     )}
                   </text>
                 )}
@@ -119,7 +130,7 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
           enableLabel={false}
           theme={{ tooltip: { container: { background: 'transparent', color: '#fff', padding: 0, borderRadius: '8px', boxShadow: 'none' } } }}
           tooltip={({ node }) => {
-            const d = node.data as any as { name: string; changePercent?: number; lastPrice?: number };
+            const d = node.data as any as { name: string; fullName?: string; changePercent?: number; lastPrice?: number };
             const p = d.changePercent;
             
             if (p === undefined || d.lastPrice === undefined) return null;
@@ -128,7 +139,7 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
             return (
               <div className="backdrop-blur-md bg-slate-900/90 border border-white/10 p-3 rounded-xl shadow-2xl min-w-[160px]">
                  <div className="flex items-center gap-4 mb-2">
-                    <span className="font-bold text-white text-sm tracking-wide">{d.name}</span>
+                    <span className="font-bold text-white text-sm tracking-wide">{d.fullName || d.name}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-slate-700/50 text-gray-400">Sector</span>
                  </div>
                  
@@ -144,6 +155,12 @@ export default memo(function SectoralHeatmap({ indices, isMobile }: SectoralHeat
                         <span className="text-gray-200 font-mono">{d.lastPrice.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                     </div>
                  </div>
+
+                 {onSelectIndex && (
+                   <div className="mt-2 pt-1.5 border-t border-white/5 text-[10px] text-blue-400 font-medium">
+                     Click to view constituents &rarr;
+                   </div>
+                 )}
               </div>
             );
           }}

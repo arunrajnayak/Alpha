@@ -206,20 +206,37 @@ function MobilePill({
 // ============================================================================
 
 export default memo(function IndexSidebar({ indices, selectedIndex, onSelectIndex, isMobile }: IndexSidebarProps) {
-  // Filter to only the 3 sidebar indices (NIFTY 50, NIFTY500 Momentum 50, NIFTY Total Market)
+  // Filter to sidebar indices + currently selected index if not in default list
   const sidebarIndices = useMemo(() => {
-    return SIDEBAR_INDICES
+    const list = SIDEBAR_INDICES
       .map(name => indices.find(i => i.name === name))
       .filter((i): i is IndexSummary => !!i);
-  }, [indices]);
+
+    if (selectedIndex && !SIDEBAR_INDICES.includes(selectedIndex)) {
+      const activeIdx = indices.find(i => i.name === selectedIndex);
+      if (activeIdx) {
+        list.push(activeIdx);
+      } else {
+        list.push({
+          name: selectedIndex,
+          shortName: selectedIndex.replace(/^NIFTY\s+/i, ''),
+          category: 'sectoral',
+          value: 0,
+          change: 0,
+          changePercent: 0,
+        });
+      }
+    }
+    return list;
+  }, [indices, selectedIndex]);
 
   if (sidebarIndices.length === 0) return null;
 
-  // Mobile: 3 equal-width cards in a responsive grid
+  // Mobile: responsive grid (3 cols default, 2x2 or 4 cols when custom index selected)
   if (isMobile) {
     return (
       <div className="w-full">
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${sidebarIndices.length > 3 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
           {sidebarIndices.map((idx, i) => (
             <MobilePill
               key={idx.name}

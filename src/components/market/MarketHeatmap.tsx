@@ -174,8 +174,6 @@ export default memo(function MarketHeatmap({
             if (percent > 0 && percent < 5) textColor = '#0f172a';
             if (percent < 0 && percent > -5) textColor = '#0f172a';
 
-            const shadow = textColor === '#ffffff' ? 'drop-shadow(0px 1px 2px rgba(0,0,0,0.6))' : 'none';
-
             const CHAR_RATIO = 0.6;
             const minFont = isMobile ? 4 : 5;
             const maxSize = isMobile ? 11 : 16;
@@ -243,7 +241,7 @@ export default memo(function MarketHeatmap({
                       fontSize={fontSize}
                       fontWeight="700"
                       fill={textColor}
-                      style={{ pointerEvents: 'none', filter: shadow }}
+                      style={{ pointerEvents: 'none' }}
                     >
                       {displaySymbol}
                     </text>
@@ -256,8 +254,8 @@ export default memo(function MarketHeatmap({
                         fontSize={percentFontSize}
                         fontWeight="600"
                         fill={textColor}
-                        fillOpacity={textColor === '#ffffff' ? 0.9 : 0.8}
-                        style={{ pointerEvents: 'none', filter: shadow }}
+                        fillOpacity={textColor === '#ffffff' ? 0.95 : 0.85}
+                        style={{ pointerEvents: 'none' }}
                       >
                         {percent > 0 ? '+' : ''}{percent.toFixed(1)}%
                       </text>

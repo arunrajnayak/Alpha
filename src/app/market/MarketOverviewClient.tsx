@@ -317,12 +317,17 @@ export default function MarketOverviewClient({
   }, []);
 
 
+  // Request counter to cancel stale in-flight requests on rapid index switching
+  const activeRequestIdRef = useRef<number>(0);
+
   // Fetch data for selected index (REST)
   const loadData = useCallback(async (indexName: string, showLoading = true) => {
+    const requestId = ++activeRequestIdRef.current;
     try {
       if (showLoading) setLoading(true);
       setLoadError(null);
       const result = await fetchMarketOverview(indexName);
+      if (requestId !== activeRequestIdRef.current) return; // Discard stale response
       if (result) {
         // Success — clear any previous error
         setLoadError(null);
@@ -332,16 +337,18 @@ export default function MarketOverviewClient({
           setTokenStatus(result.tokenStatus);
         }
       } else {
-        // fetchMarketOverview returned null — likely constituent CSV failed to load
-        // or all Upstox API batches failed. Show error but keep old data visible.
+        // fetchMarketOverview returned null
         marketLogger.warn(`fetchMarketOverview returned null for ${indexName}`);
         setLoadError(`Could not load data for ${indexName}. Constituent list may be unavailable.`);
       }
     } catch (err) {
+      if (requestId !== activeRequestIdRef.current) return;
       marketLogger.error(`Failed to load market data for ${indexName}:`, err);
       setLoadError(`Failed to load ${indexName} data. Please retry.`);
     } finally {
-      if (showLoading) setLoading(false);
+      if (requestId === activeRequestIdRef.current && showLoading) {
+        setLoading(false);
+      }
     }
   }, [updateTimestamp]);
 
@@ -929,7 +936,9 @@ export default function MarketOverviewClient({
         <div className="bg-amber-500/10 text-amber-400 p-6 rounded-2xl border border-amber-500/20 max-w-md">
           <h3 className="font-semibold text-lg mb-2">No Data Available</h3>
           <p className="text-sm opacity-90">
-            {tokenStatus?.message || 'Could not load market data. Please check your Upstox token and try again.'}
+            {tokenStatus && !tokenStatus.hasToken
+              ? (tokenStatus.message || 'No valid Upstox token found. Please check your Upstox settings.')
+              : (loadError || `Could not load constituents and market data for ${selectedIndex}. Please retry.`)}
           </p>
           <button
             onClick={() => loadData(selectedIndex)}
@@ -1107,6 +1116,7 @@ export default function MarketOverviewClient({
           <SectoralHeatmap
             indices={indexSummaries}
             isMobile={isMobile}
+            onSelectIndex={handleSelectIndex}
           />
         </motion.div>
       )}
