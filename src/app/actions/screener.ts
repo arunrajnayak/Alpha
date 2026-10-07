@@ -3,7 +3,7 @@
 import { revalidateTag, unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { computePortfolioState } from '@/lib/finance/recalculation';
-import { computeReturns, sharpeRatio, PARAMS, computeBetaFromCloses } from '@/lib/screener/scoring';
+import { computeReturns, sharpeRatio, PARAMS, computeBetaFromCloses, scoreStock } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
 import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 import { getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
@@ -326,46 +326,55 @@ export async function getScreenerData(
       for (const sym of unrankedSyms) {
         const candles = pricesBySymbol.get(sym) || [];
         const closes = candles.map(c => c.close);
+        const highs = candles.map(c => c.high);
+        const volumes = candles.map(c => c.volume);
         const price = closes.length > 0 ? closes[closes.length - 1] : 0;
         const storedAth = athMap.get(sym);
-        const ath = storedAth || price;
-        const athProximity = ath > 0 ? price / ath : 0;
-        const dma = (n: number) => closes.length >= n ? closes.slice(-n).reduce((a, b) => a + b, 0) / n : null;
-        const [d10, d20, d50, d100, d200] = [dma(10), dma(20), dma(50), dma(100), dma(200)];
         const amfi = amfiMap.get(sym);
         const lastScore = lastScoreMap.get(sym);
-
-        // Compute Sharpe-based score without hard entry filters (stock is already held)
-        let compositeScore = 0, avgSharpe = 0;
-        if (closes.length >= 270) {
-          const dateIdx = closes.length - 1;
-          const effectiveIdx = dateIdx - 21;
-          const c12 = closes.slice(Math.max(0, dateIdx - 251), dateIdx + 1);
-          const c6  = closes.slice(Math.max(0, dateIdx - 125), dateIdx + 1);
-          const c3  = closes.slice(Math.max(0, effectiveIdx - 62), effectiveIdx + 1);
-          const s12 = sharpeRatio(computeReturns(c12));
-          const s6  = sharpeRatio(computeReturns(c6));
-          const s3  = sharpeRatio(computeReturns(c3));
-          if (Number.isFinite(s12) && Number.isFinite(s6) && Number.isFinite(s3)) {
-            avgSharpe = (s12 + s6 + s3) / 3;
-            compositeScore = PARAMS.sharpeWeight * avgSharpe;
-          }
-        }
-
         const marketCapCr = mcapMap.get(sym) ?? lastScore?.marketCapCr ?? 0;
         const marketCapCategory = amfi?.category ?? lastScore?.marketCapCategory ?? null;
 
-        // Compute median daily turnover in Crores
-        const volLookback = PARAMS.volumeLookbackDays;
-        const volWindow: number[] = [];
-        for (let i = Math.max(0, candles.length - volLookback); i < candles.length; i++) {
-          volWindow.push(candles[i].close * candles[i].volume);
+        // Compute Beta relative to NIFTY 50 (1-year lookback)
+        let beta: number | null = null;
+        if (niftyMap.size > 0 && candles.length >= 21) {
+          const alignedStock: number[] = [];
+          const alignedBench: number[] = [];
+          for (const c of candles) {
+            const benchClose = niftyMap.get(c.date);
+            if (benchClose != null) {
+              alignedStock.push(c.close);
+              alignedBench.push(benchClose);
+            }
+          }
+          if (alignedStock.length >= 21) {
+            beta = computeBetaFromCloses(alignedStock.slice(-252), alignedBench.slice(-252));
+          }
         }
-        const sortedVol = [...volWindow].sort((a, b) => a - b);
-        const mid = Math.floor(sortedVol.length / 2);
-        const medianTurnover = sortedVol.length === 0 ? 0 :
-          (sortedVol.length % 2 !== 0 ? sortedVol[mid] : (sortedVol[mid - 1] + sortedVol[mid]) / 2);
-        const medianTurnoverCr = medianTurnover / 1e7;
+
+        // Compute Sharpe-based score without hard entry filters (stock is already held)
+        const scored = scoreStock(closes, highs, volumes, sym, storedAth, { skipFilters: true, beta });
+
+        const compositeScore = scored?.compositeScore ?? 0;
+        const avgSharpe = scored?.avgSharpe ?? 0;
+        const ath = scored?.ath ?? (storedAth || price);
+        const athProximity = scored?.athProximity ?? (ath > 0 ? price / ath : 0);
+        const dma200 = scored?.dma200 ?? null;
+        const aboveDma200Pct = scored?.aboveDma200Pct ?? 0;
+        const medianTurnoverCr = scored?.medianTurnoverCr ?? 0;
+        const dmaSwatches = scored ? {
+          above10: scored.aboveDma10,
+          above20: scored.aboveDma20,
+          above50: scored.aboveDma50,
+          above100: scored.aboveDma100,
+          above200: scored.aboveDma200Pct >= 0,
+        } : {
+          above10: false,
+          above20: false,
+          above50: false,
+          above100: false,
+          above200: false,
+        };
 
         // Determine specific exclusion reason
         const instData = instrumentMap.get(sym);
@@ -384,7 +393,7 @@ export async function getScreenerData(
           // If in active all ranking but not filtered, determine which filter failed
           if (activeAllSymbols.has(sym)) {
             const failedFilters: string[] = [];
-            if (d200 === null || price < d200) {
+            if (dma200 === null || price < dma200) {
               failedFilters.push('Below 200 DMA');
             }
             if (price < PARAMS.minPrice) {
@@ -415,23 +424,6 @@ export async function getScreenerData(
           drawdownSinceEntry = -((1 - (price / entryPeak)) * 100);
         }
 
-        // Compute Beta relative to NIFTY 50 (1-year lookback)
-        let beta: number | null = null;
-        if (niftyMap.size > 0 && candles.length >= 21) {
-          const alignedStock: number[] = [];
-          const alignedBench: number[] = [];
-          for (const c of candles) {
-            const benchClose = niftyMap.get(c.date);
-            if (benchClose != null) {
-              alignedStock.push(c.close);
-              alignedBench.push(benchClose);
-            }
-          }
-          if (alignedStock.length >= 21) {
-            beta = computeBetaFromCloses(alignedStock.slice(-252), alignedBench.slice(-252));
-          }
-        }
-
         allRows.push({
           rank: 9999,
           symbol: sym,
@@ -441,14 +433,8 @@ export async function getScreenerData(
           beta,
           athProximity,
           currentPrice: price,
-          aboveDma200Pct: d200 !== null ? ((price - d200) / d200) * 100 : 0,
-          dmaSwatches: {
-            above10:  d10  !== null && price >= d10,
-            above20:  d20  !== null && price >= d20,
-            above50:  d50  !== null && price >= d50,
-            above100: d100 !== null && price >= d100,
-            above200: d200 !== null && price >= d200,
-          },
+          aboveDma200Pct,
+          dmaSwatches,
           medianTurnoverCr,
           marketCapCr,
           marketCapCategory,

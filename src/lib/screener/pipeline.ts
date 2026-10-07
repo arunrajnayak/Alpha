@@ -29,7 +29,6 @@ const pipelineLogger = logger.scope('ScreenerPipeline');
 
 // Turso batches via HTTP — safe to use larger chunks than SQLite's 999-var limit
 const TURSO_WRITE_CHUNK = 200;
-const TURSO_DELETE_CHUNK = 500;
 
 export interface PipelineResult {
   success: boolean;
@@ -103,7 +102,13 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   for (const [symbol, data] of instrumentMap) {
     instruments.push({ symbol, instrumentKey: data.key, name: data.name });
   }
-  const tradeable = instruments.filter(i => !i.instrumentKey.startsWith('NSE_INDEX|'));
+  const tradeable = instruments.filter(i => {
+    if (i.instrumentKey.startsWith('NSE_INDEX|')) return false;
+    // Exclude ETFs/Mutual Funds (INF ISIN prefix) unless whitelisted (e.g. GOLDBEES, SILVERBEES)
+    const isin = i.instrumentKey.split('|')[1] || '';
+    if (isin.startsWith('INF') && !isETFWhitelisted(i.symbol)) return false;
+    return true;
+  });
 
   // BE (trade-to-trade) stocks are included in the universe (ranked with warning highlight in pre-filtered tab)
   const beSymbols = await getBESymbols();
@@ -198,11 +203,9 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   // Runs after flush (3b) so refetched data gets adjusted,
   // and before ATH update (5) so ATH sees correct prices.
   // Uses NSE API to identify demergers specifically (not splits/bonuses).
-  let demergerAdjusted: string[] = [];
   try {
     const universeSymbols = new Set(tradeable.map(i => i.symbol));
     const demergerResult = await detectAndAdjustDemergers(universeSymbols);
-    demergerAdjusted = demergerResult.adjusted;
     if (demergerResult.adjusted.length > 0) {
       pipelineLogger.info(`Demerger adjusted: ${demergerResult.adjusted.join(', ')}`);
     }
@@ -316,8 +319,8 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
   ]);
 
   const [rankingHistory, allRankingHistory] = await Promise.all([
-    loadRankingHistoryForStats('filtered'),
-    loadRankingHistoryForStats('all'),
+    loadRankingHistoryForStats('filtered', today),
+    loadRankingHistoryForStats('all', today),
   ]);
 
   pipelineLogger.info(`[${elapsed()}] DB loads complete (including ${niftyMap.size} NIFTY benchmark dates)`);
@@ -642,8 +645,10 @@ async function loadPreviousDayRanks(today: string, rankType: string): Promise<Ma
   return map;
 }
 
-async function loadRankingHistoryForStats(rankType?: string): Promise<Map<string, Array<{ date: string; rank: number }>>> {
-  const where = rankType ? { rankType } : {};
+async function loadRankingHistoryForStats(rankType?: string, beforeDate?: string): Promise<Map<string, Array<{ date: string; rank: number }>>> {
+  const where: Record<string, unknown> = {};
+  if (rankType) where.rankType = rankType;
+  if (beforeDate) where.date = { lt: beforeDate };
   const allHistory = await prisma.rankingHistory.findMany({
     where,
     orderBy: { date: 'asc' },
