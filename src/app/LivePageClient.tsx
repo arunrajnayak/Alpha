@@ -122,10 +122,16 @@ export default function LivePageClient({ initialData = null }: LivePageClientPro
         const contentHeight = element.scrollHeight;
         const contentWidth = element.scrollWidth;
 
+        const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 2 : 2;
+        const isNarrowScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+        // Guarantee high-definition resolution: at least 2x on desktop, 3x on mobile
+        const exportPixelRatio = isNarrowScreen
+          ? Math.min(Math.max(dpr, 3), 3)
+          : Math.min(Math.max(dpr, 2), 2.5);
+
         const captureOptions = {
           cacheBust: true,
-          quality: 0.95,
-          pixelRatio: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 2 : 2, 2),
+          pixelRatio: exportPixelRatio,
           height: contentHeight,
           width: contentWidth,
           backgroundColor: '#0f172a',

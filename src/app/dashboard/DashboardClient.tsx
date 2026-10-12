@@ -332,8 +332,8 @@ export default function DashboardClient({ initialData = null }: DashboardClientP
         viewport={viewportConfig}
         className="w-full h-auto flex-none"
       >
-          <div className="h-[420px] md:h-[500px] bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
-                <div className="flex-1 min-h-0">
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
                      <ChartErrorBoundary componentName="Drawdown Chart">
                        <InViewChart minHeight={400}>
                          <DrawdownChart data={drawdownData} />

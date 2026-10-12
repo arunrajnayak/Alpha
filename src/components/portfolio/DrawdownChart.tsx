@@ -142,7 +142,7 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
           </ToggleButtonGroup>
       </div>
 
-      <div className="flex-1 w-full min-h-0">
+      <div className="h-[320px] md:h-[400px] w-full mt-4">
         {chartData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-xs text-gray-500">
             No drawdown data recorded for the selected period
@@ -160,19 +160,28 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
             <XAxis 
               dataKey="dateStr" 
               stroke="#6b7280" 
-              tickFormatter={(value) => format(parseISO(value), "MMM ''yy")}
+              tickFormatter={(value) => {
+                if (!value) return '';
+                try {
+                  return format(parseISO(String(value)), "MMM ''yy");
+                } catch {
+                  return String(value);
+                }
+              }}
               ticks={monthTicks}
               tick={{ fill: '#9ca3af', fontSize: 10 }}
               tickLine={{ stroke: '#4b5563' }}
               axisLine={{ stroke: '#374151' }}
-              minTickGap={30}
             />
             <YAxis 
               stroke="#6b7280"
               tick={{ fill: '#9ca3af', fontSize: 10 }}
               tickLine={{ stroke: '#4b5563' }}
               axisLine={{ stroke: '#374151' }}
-              tickFormatter={(value) => `${value.toFixed(0)}%`}
+              tickFormatter={(value) => {
+                if (value === undefined || value === null || isNaN(Number(value))) return '0%';
+                return `${Number(value).toFixed(0)}%`;
+              }}
               domain={[yDomainMin, 0]}
             />
             <Tooltip content={<CustomTooltip />} />
@@ -198,13 +207,21 @@ export default function DrawdownChart({ data }: { data: DataPoint[] }) {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const drawdown = payload[0]?.value;
+    let formattedDate = String(label || '');
+    try {
+      if (label) {
+        formattedDate = format(parseISO(String(label)), 'MMM dd, yyyy');
+      }
+    } catch {
+      formattedDate = String(label || '');
+    }
     
     return (
       <div className="glass-card p-2 border border-white/10 shadow-xl bg-black/80 backdrop-blur-md">
-        <p className="text-[10px] text-gray-400 mb-1">{format(parseISO(label), 'MMM dd, yyyy')}</p>
+        <p className="text-[10px] text-gray-400 mb-1">{formattedDate}</p>
         <div className="flex justify-between items-center gap-4 text-xs">
           <span className="font-medium text-red-400">Drawdown</span>
-          <span className="font-mono text-red-300">{drawdown?.toFixed(2)}%</span>
+          <span className="font-mono text-red-300">{typeof drawdown === 'number' ? drawdown.toFixed(2) : '0.00'}%</span>
         </div>
       </div>
     );

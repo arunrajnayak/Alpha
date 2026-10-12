@@ -23,14 +23,17 @@ export default function InViewChart({
   className = '',
   fallback,
 }: InViewChartProps) {
-  const [isInView, setIsInView] = useState(() => typeof window === 'undefined' || typeof IntersectionObserver === 'undefined');
+  const [isInView, setIsInView] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isInView) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      const timer = setTimeout(() => setIsInView(true), 0);
+      return () => clearTimeout(timer);
+    }
 
     const element = containerRef.current;
-    if (!element || typeof IntersectionObserver === 'undefined') return;
+    if (!element) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -50,7 +53,7 @@ export default function InViewChart({
     return () => {
       observer.disconnect();
     };
-  }, [isInView]);
+  }, []);
 
   const style: React.CSSProperties = {
     minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight,
