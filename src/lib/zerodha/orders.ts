@@ -21,12 +21,22 @@ import type {
 const orderLogger = logger.scope('ZerodhaOrders');
 
 /**
- * NSE/BSE Equity standard tick size is ₹0.05.
+ * NSE/BSE Equity tick size:
+ * - Securities priced below ₹250 have a ₹0.01 (1 paisa) tick size.
+ * - Securities priced ₹250 and above have a ₹0.05 (5 paise) tick size.
+ */
+export function getTickSize(price: number): number {
+    if (!Number.isFinite(price) || price <= 0) return 0.05;
+    return price < 250 ? 0.01 : 0.05;
+}
+
+/**
  * Round price strictly to the nearest valid tick and fix to 2 decimals.
  */
-export function roundToTick(price: number, tick: number = 0.05): number {
+export function roundToTick(price: number, tick?: number): number {
     if (!Number.isFinite(price) || price <= 0) return 0.05;
-    const rounded = Math.round(price / tick) * tick;
+    const t = tick ?? getTickSize(price);
+    const rounded = Math.round(price / t) * t;
     return Number(rounded.toFixed(2));
 }
 
