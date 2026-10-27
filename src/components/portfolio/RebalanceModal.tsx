@@ -908,8 +908,8 @@ export default function RebalanceModal({
                        </IconButton>
                    </Tooltip>
 
-                   {/* Execute in Zerodha Button */}
-                   <Tooltip title="Execute in Zerodha (CNC Limit)">
+                   {/* Execute Button */}
+                   <Tooltip title="Execute (CNC Limit)">
                        <span>
                            <Button
                                size="small"
@@ -931,7 +931,7 @@ export default function RebalanceModal({
                                    opacity: summary.actions.length === 0 ? 0.5 : 1
                                }}
                            >
-                               Execute in Kite
+                               Execute
                            </Button>
                        </span>
                    </Tooltip>
@@ -967,7 +967,7 @@ export default function RebalanceModal({
                                 '&:hover': { bgcolor: '#1d4ed8' }
                             }}
                         >
-                            Execute in Zerodha
+                            Execute
                         </Button>
                     )}
                </Box>

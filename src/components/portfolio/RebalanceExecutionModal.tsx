@@ -991,7 +991,7 @@ export default function RebalanceExecutionModal({
               '&:hover': { bgcolor: '#1d4ed8' }
             }}
           >
-            {isAllPlaced ? 'All Orders Placed' : isExecuting ? 'Executing...' : 'Execute in Zerodha (Sells First)'}
+            {isAllPlaced ? 'All Orders Placed' : isExecuting ? 'Executing...' : 'Execute (Sells First)'}
           </Button>
         </Box>
       </Box>
