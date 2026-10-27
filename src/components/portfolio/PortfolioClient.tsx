@@ -184,31 +184,31 @@ export default function PortfolioClient({
                 <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
                     {view === 'current' && (
                         <>
-                            {/* Reconcile Demat Button */}
-                            <Button
-                                variant="outlined"
-                                onClick={() => {
-                                    setReconciliationOpen(true);
-                                    if (!reconciliationData) fetchReconciliation();
-                                }}
-                                startIcon={<FontAwesomeIcon icon={faBuildingColumns} />}
-                                sx={{
-                                    borderRadius: '50px',
-                                    height: '40px',
-                                    textTransform: 'none',
-                                    px: 2.5,
-                                    fontSize: '0.85rem',
-                                    borderColor: hasDiscrepancy ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)',
-                                    color: hasDiscrepancy ? '#f87171' : '#fbbf24',
-                                    bgcolor: hasDiscrepancy ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)',
-                                    '&:hover': {
-                                        bgcolor: hasDiscrepancy ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                                        borderColor: hasDiscrepancy ? 'rgba(239, 68, 68, 0.6)' : 'rgba(245, 158, 11, 0.6)',
-                                    }
-                                }}
-                            >
-                                Reconcile Demat
-                                {hasDiscrepancy && (
+                            {/* Reconcile Demat Button - only visible when discrepancies exist */}
+                            {hasDiscrepancy && (
+                                <Button
+                                    variant="outlined"
+                                    onClick={() => {
+                                        setReconciliationOpen(true);
+                                        if (!reconciliationData) fetchReconciliation();
+                                    }}
+                                    startIcon={<FontAwesomeIcon icon={faBuildingColumns} />}
+                                    sx={{
+                                        borderRadius: '50px',
+                                        height: '40px',
+                                        textTransform: 'none',
+                                        px: 2.5,
+                                        fontSize: '0.85rem',
+                                        borderColor: 'rgba(239, 68, 68, 0.4)',
+                                        color: '#f87171',
+                                        bgcolor: 'rgba(239, 68, 68, 0.08)',
+                                        '&:hover': {
+                                            bgcolor: 'rgba(239, 68, 68, 0.15)',
+                                            borderColor: 'rgba(239, 68, 68, 0.6)',
+                                        }
+                                    }}
+                                >
+                                    Reconcile Demat
                                     <Box component="span" sx={{
                                         ml: 1,
                                         px: 1,
@@ -221,8 +221,8 @@ export default function PortfolioClient({
                                     }}>
                                         {totalDiscrepancies}
                                     </Box>
-                                )}
-                            </Button>
+                                </Button>
+                            )}
 
                             {/* Rebalance Button */}
                             <Button
