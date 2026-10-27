@@ -59,3 +59,83 @@ export interface RebalanceInputHolding {
   marketCapCategory?: string;
   sector?: string;
 }
+
+/**
+ * Zerodha Demat Holding shape
+ */
+export interface KiteDematHolding {
+  symbol: string;
+  exchange: string;
+  isin: string;
+  quantity: number;
+  t1Quantity: number;
+  realisedQuantity: number;
+  authorisedQuantity: number;
+  averagePrice: number;
+  lastPrice: number;
+  closePrice: number;
+  pnl: number;
+  pledgedQuantity: number;
+  collateralQuantity: number;
+  collateralType?: string;
+  discrepancy: boolean;
+}
+
+/**
+ * Item in the Demat vs Alpha reconciliation comparison
+ */
+export interface DematReconciliationItem {
+  symbol: string;
+  companyName?: string;
+  alphaQty: number;
+  dematQty: number;
+  deltaQty: number; // dematQty - alphaQty
+  t1Qty: number;
+  pledgedQty: number;
+  alphaAvgPrice: number;
+  dematAvgPrice: number;
+  currentPrice: number;
+  alphaValue: number;
+  dematValue: number;
+  valueDiff: number;
+  status: 'matched' | 'discrepancy' | 'missing_in_alpha' | 'missing_in_demat';
+  potentialReason?: string;
+}
+
+/**
+ * Aggregate summary for Demat reconciliation
+ */
+export interface DematReconciliationSummary {
+  totalDematValue: number;
+  totalAlphaValue: number;
+  netDifferenceValue: number;
+  totalDematStocks: number;
+  totalAlphaStocks: number;
+  matchedCount: number;
+  discrepancyCount: number;
+  missingInAlphaCount: number;
+  missingInDematCount: number;
+  totalT1Shares: number;
+  totalPledgedShares: number;
+  lastSyncedAt: string;
+}
+
+export interface DematReconciliationResult {
+  items: DematReconciliationItem[];
+  summary: DematReconciliationSummary;
+}
+
+/**
+ * Informational broker cash and margin metrics from Zerodha
+ * (Strictly informational: NEVER factored into NAV or XIRR)
+ */
+export interface BrokerCashMetrics {
+  availableCash: number;
+  collateralMargin: number;
+  liveBalance: number;
+  utilisedDebits: number;
+  holdingSales: number;
+  net: number;
+  lastUpdated: string;
+}
+

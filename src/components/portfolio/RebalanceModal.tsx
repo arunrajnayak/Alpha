@@ -63,6 +63,7 @@ interface RebalanceModalProps {
   onClose: () => void;
   currentHoldings: RebalanceInputHolding[];
   totalEquity: number;
+  availableCash?: number;
   onResetToLive?: () => { holdings: RebalanceInputHolding[]; totalEquity: number } | null;
 }
 
@@ -241,6 +242,7 @@ export default function RebalanceModal({
   onClose,
   currentHoldings,
   totalEquity,
+  availableCash,
   onResetToLive,
 }: RebalanceModalProps) {
   // State
@@ -780,54 +782,81 @@ export default function RebalanceModal({
               </Box>
 
               {/* Controls (Integrated Row) */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                   {/* Cashflow Input */}
-                   <Box sx={{ display: 'flex', gap: 0, flex: 1 }}>
-                        <Button
-                            size="small"
-                            onClick={() => handleToggleSign()}
-                            sx={{ 
-                                minWidth: 32,
-                                height: 36,
-                                px: 0,
-                                borderRadius: '6px 0 0 6px',
-                                bgcolor: !isWithdrawal ? 'rgba(34, 197, 94, 0.15)' : 'rgba(248, 113, 113, 0.15)',
-                                color: !isWithdrawal ? '#4ade80' : '#f87171',
-                                border: '1px solid',
-                                borderColor: !isWithdrawal ? 'rgba(34, 197, 94, 0.2)' : 'rgba(248, 113, 113, 0.2)',
-                                '&:hover': { 
-                                    bgcolor: !isWithdrawal ? 'rgba(34, 197, 94, 0.25)' : 'rgba(248, 113, 113, 0.25)' 
-                                }
-                            }}
-                        >
-                            <FontAwesomeIcon icon={!isWithdrawal ? faPlus : faMinus} size="xs" />
-                        </Button>
-                        <TextField
-                            fullWidth
-                            size="small"
-                            placeholder="Cash"
-                            value={localCashflow}
-                            onChange={(e) => setLocalCashflow(e.target.value)}
-                            onBlur={handleCashflowCommit}
-                            onKeyDown={handleCashflowKeyDown}
-                            sx={{
-                                ...hideSpinners,
-                                '& .MuiInputBase-root': { 
-                                    bgcolor: 'rgba(255,255,255,0.03)', 
-                                    color: '#fff', 
-                                    fontSize: '0.9rem',
-                                    borderRadius: '0 6px 6px 0',
-                                    pl: 1,
-                                    height: 36
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
-                            }}
-                            slotProps={{
-                              input: {
-                                  startAdornment: <Typography sx={{ color: '#9ca3af', mr: 0.5, fontSize: '0.8rem' }}>₹</Typography>
-                              }
-                            }}
-                        />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                   {/* Cashflow Input with Broker Cash Quick-Fill */}
+                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 200 }}>
+                        <Box sx={{ display: 'flex', gap: 0, flex: 1 }}>
+                             <Button
+                                 size="small"
+                                 onClick={() => handleToggleSign()}
+                                 sx={{ 
+                                     minWidth: 32,
+                                     height: 36,
+                                     px: 0,
+                                     borderRadius: '6px 0 0 6px',
+                                     bgcolor: !isWithdrawal ? 'rgba(34, 197, 94, 0.15)' : 'rgba(248, 113, 113, 0.15)',
+                                     color: !isWithdrawal ? '#4ade80' : '#f87171',
+                                     border: '1px solid',
+                                     borderColor: !isWithdrawal ? 'rgba(34, 197, 94, 0.2)' : 'rgba(248, 113, 113, 0.2)',
+                                     '&:hover': { 
+                                         bgcolor: !isWithdrawal ? 'rgba(34, 197, 94, 0.25)' : 'rgba(248, 113, 113, 0.25)' 
+                                     }
+                                 }}
+                             >
+                                 <FontAwesomeIcon icon={!isWithdrawal ? faPlus : faMinus} size="xs" />
+                             </Button>
+                             <TextField
+                                 fullWidth
+                                 size="small"
+                                 placeholder="Cash"
+                                 value={localCashflow}
+                                 onChange={(e) => setLocalCashflow(e.target.value)}
+                                 onBlur={handleCashflowCommit}
+                                 onKeyDown={handleCashflowKeyDown}
+                                 sx={{
+                                     ...hideSpinners,
+                                     '& .MuiInputBase-root': { 
+                                         bgcolor: 'rgba(255,255,255,0.03)', 
+                                         color: '#fff', 
+                                         fontSize: '0.9rem',
+                                         borderRadius: '0 6px 6px 0',
+                                         pl: 1,
+                                         height: 36
+                                     },
+                                     '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                                 }}
+                                 slotProps={{
+                                   input: {
+                                       startAdornment: <Typography sx={{ color: '#9ca3af', mr: 0.5, fontSize: '0.8rem' }}>₹</Typography>
+                                   }
+                                 }}
+                             />
+                        </Box>
+                        {availableCash !== undefined && availableCash > 0 && (
+                             <Tooltip title={`Quick-fill with available cash from Zerodha (${formatCurrency(availableCash)})`}>
+                                  <Chip
+                                       size="small"
+                                       label={`Broker: ${formatCurrency(availableCash)}`}
+                                       onClick={() => {
+                                           setIsWithdrawal(false);
+                                           const rounded = Math.floor(availableCash);
+                                           setLocalCashflow(rounded.toString());
+                                           setState(prev => recalculateOnCashflowChange(prev, rounded));
+                                       }}
+                                       sx={{
+                                           height: 28,
+                                           fontSize: '0.65rem',
+                                           cursor: 'pointer',
+                                           bgcolor: 'rgba(34, 197, 94, 0.12)',
+                                           color: '#4ade80',
+                                           border: '1px solid rgba(34, 197, 94, 0.25)',
+                                           fontWeight: 600,
+                                           whiteSpace: 'nowrap',
+                                           '&:hover': { bgcolor: 'rgba(34, 197, 94, 0.22)' }
+                                       }}
+                                  />
+                             </Tooltip>
+                        )}
                    </Box>
 
                    {/* Diff Threshold */}
