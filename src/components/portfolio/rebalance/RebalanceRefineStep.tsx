@@ -312,14 +312,7 @@ export default function RebalanceRefineStep({
               />
             </Box>
 
-            <Box sx={{ 
-              maxHeight: 280, 
-              overflowY: 'auto',
-              overflowX: 'auto',
-              '&::-webkit-scrollbar': { width: 6, height: 6 },
-              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 3 },
-              '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
-            }}>
+            <Box sx={{ overflowX: 'auto' }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
@@ -532,14 +525,7 @@ export default function RebalanceRefineStep({
               />
             </Box>
 
-            <Box sx={{ 
-              maxHeight: 280, 
-              overflowY: 'auto',
-              overflowX: 'auto',
-              '&::-webkit-scrollbar': { width: 6, height: 6 },
-              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 3 },
-              '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
-            }}>
+            <Box sx={{ overflowX: 'auto' }}>
               <Table size="small" stickyHeader>
                 <TableHead>
                   <TableRow>
