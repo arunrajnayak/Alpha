@@ -36,12 +36,14 @@ import {
   faXmark,
   faCopy,
   faFloppyDisk,
-  faBolt
+  faBolt,
+  faArrowUpRightFromSquare
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { searchStocks, getStockPrice, StockSearchResult } from '@/app/actions/stocks';
 import { logger } from '@/lib/logger';
 import RebalanceExecutionModal from './RebalanceExecutionModal';
+import { getRebalancePreflightAction, getKitePublisherBasketAction } from '@/app/actions/zerodha-orders';
 
 const rebalanceLogger = logger.scope('Rebalance');
 import {
@@ -494,6 +496,50 @@ export default function RebalanceModal({
     }
   };
 
+  const [openingBasket, setOpeningBasket] = useState(false);
+
+  const handleOpenKiteBasketDirect = async () => {
+    if (summary.actions.length === 0) return;
+    setOpeningBasket(true);
+    try {
+      const preflightRes = await getRebalancePreflightAction(summary.actions, priceMap);
+      if (!preflightRes.success) {
+        alert(preflightRes.error);
+        return;
+      }
+      const basketRes = await getKitePublisherBasketAction(preflightRes.data.orders);
+      if (!basketRes.success) {
+        alert(basketRes.error);
+        return;
+      }
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = basketRes.data.actionUrl;
+      form.target = '_blank';
+
+      const apiKeyInput = document.createElement('input');
+      apiKeyInput.type = 'hidden';
+      apiKeyInput.name = 'api_key';
+      apiKeyInput.value = basketRes.data.apiKey;
+      form.appendChild(apiKeyInput);
+
+      const dataInput = document.createElement('input');
+      dataInput.type = 'hidden';
+      dataInput.name = 'data';
+      dataInput.value = basketRes.data.dataJson;
+      form.appendChild(dataInput);
+
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to open Kite Basket');
+    } finally {
+      setOpeningBasket(false);
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -908,8 +954,35 @@ export default function RebalanceModal({
                        </IconButton>
                    </Tooltip>
 
-                   {/* Execute Button */}
-                   <Tooltip title="Execute (CNC Limit)">
+                   {/* Kite Basket Button (Opens in Kite Web) */}
+                   <Tooltip title="Open Basket in Zerodha Kite Web">
+                       <span>
+                           <Button
+                               size="small"
+                               variant="outlined"
+                               disabled={summary.actions.length === 0 || openingBasket}
+                               onClick={handleOpenKiteBasketDirect}
+                               startIcon={openingBasket ? <CircularProgress size={12} color="inherit" /> : <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />}
+                               sx={{
+                                   height: 36,
+                                   fontSize: '0.75rem',
+                                   fontWeight: 600,
+                                   textTransform: 'none',
+                                   borderColor: 'rgba(255,255,255,0.15)',
+                                   color: '#d1d5db',
+                                   px: 1.5,
+                                   borderRadius: 1.5,
+                                   '&:hover': { borderColor: 'rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.05)' },
+                                   opacity: summary.actions.length === 0 ? 0.5 : 1
+                               }}
+                           >
+                               Kite Basket
+                           </Button>
+                       </span>
+                   </Tooltip>
+
+                   {/* Execute in Alpha Button */}
+                   <Tooltip title="Execute directly in Alpha (CNC Limit Orders, Sells First, Auto-Retry)">
                        <span>
                            <Button
                                size="small"
@@ -931,7 +1004,7 @@ export default function RebalanceModal({
                                    opacity: summary.actions.length === 0 ? 0.5 : 1
                                }}
                            >
-                               Execute
+                               Execute in Alpha
                            </Button>
                        </span>
                    </Tooltip>
@@ -949,26 +1022,48 @@ export default function RebalanceModal({
                     </Box>
 
                     {summary.actions.length > 0 && (
-                        <Button
-                            size="small"
-                            variant="contained"
-                            onClick={() => setExecutionOpen(true)}
-                            startIcon={<FontAwesomeIcon icon={faBolt} size="xs" />}
-                            sx={{
-                                height: 26,
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                textTransform: 'none',
-                                bgcolor: '#2563eb',
-                                color: '#fff',
-                                px: 1.5,
-                                borderRadius: '4px',
-                                boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
-                                '&:hover': { bgcolor: '#1d4ed8' }
-                            }}
-                        >
-                            Execute
-                        </Button>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={openingBasket}
+                                onClick={handleOpenKiteBasketDirect}
+                                startIcon={openingBasket ? <CircularProgress size={10} color="inherit" /> : <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />}
+                                sx={{
+                                    height: 26,
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    textTransform: 'none',
+                                    borderColor: 'rgba(255,255,255,0.15)',
+                                    color: '#d1d5db',
+                                    px: 1.2,
+                                    borderRadius: '4px',
+                                    '&:hover': { borderColor: 'rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.05)' }
+                                }}
+                            >
+                                Kite Basket
+                            </Button>
+                            <Button
+                                size="small"
+                                variant="contained"
+                                onClick={() => setExecutionOpen(true)}
+                                startIcon={<FontAwesomeIcon icon={faBolt} size="xs" />}
+                                sx={{
+                                    height: 26,
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    bgcolor: '#2563eb',
+                                    color: '#fff',
+                                    px: 1.5,
+                                    borderRadius: '4px',
+                                    boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
+                                    '&:hover': { bgcolor: '#1d4ed8' }
+                                }}
+                            >
+                                Execute in Alpha
+                            </Button>
+                        </Box>
                     )}
                </Box>
 

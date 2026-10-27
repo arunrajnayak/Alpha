@@ -347,7 +347,7 @@ export default function RebalanceExecutionModal({
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700, color: '#f3f4f6' }}>
-                Rebalance Execution (Zerodha Kite)
+                Execute in Alpha (Zerodha API)
               </Typography>
               <Chip
                 size="small"
@@ -393,7 +393,7 @@ export default function RebalanceExecutionModal({
               )}
             </Box>
             <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.75rem' }}>
-              Sequencing: SELL orders placed first to release capital → BUY orders placed second
+              Direct in-app execution · SELL orders placed first to release capital → BUY orders placed second
             </Typography>
           </Box>
         </Box>
@@ -991,7 +991,7 @@ export default function RebalanceExecutionModal({
               '&:hover': { bgcolor: '#1d4ed8' }
             }}
           >
-            {isAllPlaced ? 'All Orders Placed' : isExecuting ? 'Executing...' : 'Execute (Sells First)'}
+            {isAllPlaced ? 'All Orders Placed' : isExecuting ? 'Executing...' : 'Execute in Alpha (Sells First)'}
           </Button>
         </Box>
       </Box>
