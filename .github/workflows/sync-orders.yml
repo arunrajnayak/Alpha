@@ -2,6 +2,8 @@ name: Zerodha Daily Sync
 
 on:
   schedule:
+    # Run at 03:15 UTC (8:45 AM IST) every Monday through Friday (pre-market login & token refresh)
+    - cron: '15 3 * * 1-5'
     # Run at 10:15 UTC (3:45 PM IST) every Monday through Friday (after 3:40 PM closing auction)
     - cron: '15 10 * * 1-5'
   workflow_dispatch: # Allow manual trigger from GitHub UI
