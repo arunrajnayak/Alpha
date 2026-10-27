@@ -178,7 +178,7 @@ export default function RebalanceTrackStep({
 
     const interval = setInterval(() => {
       pollStatus();
-    }, 3500);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [orders, orderStatusMap, pollStatus]);
