@@ -932,82 +932,6 @@ export default function RebalanceModal({
                             startAdornment={<Typography sx={{ color: '#9ca3af', width: 16, textAlign: 'center', fontSize: '0.7rem', fontWeight: 700 }}>&gt;</Typography>}
                         />
                    </Box>
-
-                   {/* Copy Trades Button */}
-                   <Tooltip title={copySuccess ? "Copied!" : "Copy Trades"}>
-                        <IconButton 
-                           onClick={handleCopyTrades} 
-                           disabled={summary.actions.length === 0}
-                           size="small" 
-                           sx={{ 
-                               height: 36,
-                               width: 36,
-                               color: copySuccess ? '#4ade80' : '#a5b4fc', 
-                               p: 0, 
-                               borderRadius: 1.5, 
-                               bgcolor: copySuccess ? 'rgba(74, 222, 128, 0.1)' : 'rgba(99, 102, 241, 0.1)', 
-                               '&:hover': { bgcolor: copySuccess ? 'rgba(74, 222, 128, 0.2)' : 'rgba(99, 102, 241, 0.2)' },
-                               opacity: summary.actions.length === 0 ? 0.5 : 1
-                           }}
-                       >
-                           <FontAwesomeIcon icon={faCopy} size="xs" />
-                       </IconButton>
-                   </Tooltip>
-
-                   {/* Kite Basket Button (Opens in Kite Web) */}
-                   <Tooltip title="Open Basket in Zerodha Kite Web">
-                       <span>
-                           <Button
-                               size="small"
-                               variant="outlined"
-                               disabled={summary.actions.length === 0 || openingBasket}
-                               onClick={handleOpenKiteBasketDirect}
-                               startIcon={openingBasket ? <CircularProgress size={12} color="inherit" /> : <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />}
-                               sx={{
-                                   height: 36,
-                                   fontSize: '0.75rem',
-                                   fontWeight: 600,
-                                   textTransform: 'none',
-                                   borderColor: 'rgba(255,255,255,0.15)',
-                                   color: '#d1d5db',
-                                   px: 1.5,
-                                   borderRadius: 1.5,
-                                   '&:hover': { borderColor: 'rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.05)' },
-                                   opacity: summary.actions.length === 0 ? 0.5 : 1
-                               }}
-                           >
-                               Kite Basket
-                           </Button>
-                       </span>
-                   </Tooltip>
-
-                   {/* Execute Button */}
-                   <Tooltip title="Execute (CNC Limit Orders, Sells First, Auto-Retry)">
-                       <span>
-                           <Button
-                               size="small"
-                               variant="contained"
-                               disabled={summary.actions.length === 0}
-                               onClick={() => setExecutionOpen(true)}
-                               startIcon={<FontAwesomeIcon icon={faBolt} size="xs" />}
-                               sx={{
-                                   height: 36,
-                                   fontSize: '0.75rem',
-                                   fontWeight: 700,
-                                   textTransform: 'none',
-                                   bgcolor: '#2563eb',
-                                   color: '#fff',
-                                   px: 1.5,
-                                   borderRadius: 1.5,
-                                   boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
-                                   '&:hover': { bgcolor: '#1d4ed8' },
-                                   opacity: summary.actions.length === 0 ? 0.5 : 1
-                               }}
-                           >
-                               Execute
-                           </Button>
-                       </span>
-                   </Tooltip>
               </Box>
            </Box>
            
@@ -1023,6 +947,25 @@ export default function RebalanceModal({
 
                     {summary.actions.length > 0 && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {/* Copy Trades */}
+                            <Tooltip title={copySuccess ? "Copied!" : "Copy Trades"}>
+                                <IconButton 
+                                   onClick={handleCopyTrades} 
+                                   size="small" 
+                                   sx={{ 
+                                       height: 26,
+                                       width: 26,
+                                       color: copySuccess ? '#4ade80' : '#9ca3af', 
+                                       p: 0, 
+                                       borderRadius: 1, 
+                                       bgcolor: copySuccess ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255, 255, 255, 0.05)', 
+                                       '&:hover': { bgcolor: copySuccess ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255, 255, 255, 0.1)', color: '#fff' }
+                                   }}
+                               >
+                                   <FontAwesomeIcon icon={faCopy} size="xs" />
+                               </IconButton>
+                            </Tooltip>
+
                             <Button
                                 size="small"
                                 variant="outlined"
