@@ -400,11 +400,11 @@ export default function RebalanceTrackStep({
           <Table size="small">
             <TableHead>
               <TableRow>
-                <StyledHeaderCell>Stock & Side</StyledHeaderCell>
+                <StyledHeaderCell>Stock</StyledHeaderCell>
                 <StyledHeaderCell align="center">Order ID</StyledHeaderCell>
-                <StyledHeaderCell align="right">Filled / Target Qty</StyledHeaderCell>
-                <StyledHeaderCell align="right">Limit Price (₹)</StyledHeaderCell>
-                <StyledHeaderCell align="right">Avg Fill Price</StyledHeaderCell>
+                <StyledHeaderCell align="right">Filled / Target</StyledHeaderCell>
+                <StyledHeaderCell align="right">Limit Price</StyledHeaderCell>
+                <StyledHeaderCell align="right">Avg Price</StyledHeaderCell>
                 <StyledHeaderCell align="center" sx={{ width: 140 }}>Status</StyledHeaderCell>
                 <StyledHeaderCell align="center" sx={{ width: 150 }}>Action</StyledHeaderCell>
               </TableRow>

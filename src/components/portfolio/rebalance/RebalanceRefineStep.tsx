@@ -5,7 +5,6 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
-import Chip from '@mui/material/Chip';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -191,7 +190,7 @@ export default function RebalanceRefineStep({
           gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' }, 
           gap: 1.5 
         }}>
-          {/* 1. Sell Proceeds */}
+          {/* Sell Proceeds */}
           <Box sx={{ 
             p: 2, 
             borderRadius: 2, 
@@ -200,30 +199,30 @@ export default function RebalanceRefineStep({
             opacity: liveTotalSell > 0 ? 1 : 0.6
           }}>
             <Typography variant="caption" sx={{ color: liveTotalSell > 0 ? '#f87171' : '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
-              1. Sell Proceeds
+              Sell Proceeds
             </Typography>
             <Typography sx={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, mt: 0.5 }}>
               +{formatCurrency(liveTotalSell)}
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-              {sellOrders.length} sell orders (step 1)
+              {sellOrders.length} orders
             </Typography>
           </Box>
 
-          {/* 2. Buy Outlay */}
+          {/* Buy Outlay */}
           <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(74, 222, 128, 0.25)' }}>
             <Typography variant="caption" sx={{ color: '#4ade80', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
-              2. Buy Outlay
+              Buy Outlay
             </Typography>
             <Typography sx={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, mt: 0.5 }}>
               -{formatCurrency(liveTotalBuy)}
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-              {buyOrders.length} buy orders (step 2)
+              {buyOrders.length} orders
             </Typography>
           </Box>
 
-          {/* 3. Net Cash Flow */}
+          {/* Net Cash Flow */}
           <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
               Net Cash Impact
@@ -236,16 +235,13 @@ export default function RebalanceRefineStep({
             }}>
               {liveNetCashImpact >= 0 ? '+' : ''}{formatCurrency(liveNetCashImpact)}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-              {liveNetCashImpact >= 0 ? 'Surplus returned to broker' : 'Additional funds required'}
-            </Typography>
           </Box>
 
-          {/* 4. Available Cash */}
+          {/* Available Cash */}
           <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
-                Zerodha Cash Balance
+                Zerodha Cash
               </Typography>
               <Tooltip title="Refresh margins">
                 <IconButton 
@@ -261,12 +257,9 @@ export default function RebalanceRefineStep({
             <Typography sx={{ color: '#60a5fa', fontSize: '1.1rem', fontWeight: 700, mt: 0.5 }}>
               {formatCurrency(availableCash)}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-              Uninvested cash funds
-            </Typography>
           </Box>
 
-          {/* 5. Margin Adequacy */}
+          {/* Margin Adequacy */}
           <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
               Margin Status
@@ -279,12 +272,9 @@ export default function RebalanceRefineStep({
             }}>
               {isMarginSufficient ? 'Sufficient' : `Shortfall: ${formatCurrency(marginShortfall)}`}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-              {isMarginSufficient ? 'Covered by cash & proceeds' : 'Sell execution will cover'}
-            </Typography>
           </Box>
 
-          {/* 6. Estimated Taxes & Fees */}
+          {/* Estimated Taxes & Fees */}
           <Tooltip title={
             <Box sx={{ p: 0.5, fontSize: '0.7rem' }}>
               <div>STT: {formatCurrency(preflight?.charges.stt || 0)}</div>
@@ -302,9 +292,6 @@ export default function RebalanceRefineStep({
               <Typography sx={{ color: '#cbd5e1', fontSize: '1.1rem', fontWeight: 700, mt: 0.5 }}>
                 {formatCurrency(preflight?.charges.totalCharges || 0)}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem' }}>
-                ₹0 Brokerage · Hover for detail
-              </Typography>
             </Box>
           </Tooltip>
         </Box>
@@ -313,12 +300,9 @@ export default function RebalanceRefineStep({
         {sellOrders.length > 0 && (
           <Box sx={{ borderRadius: 2, overflow: 'hidden', border: '1px solid rgba(248, 113, 113, 0.2)', bgcolor: 'rgba(15, 23, 42, 0.4)' }}>
             <Box sx={{ px: 2, py: 1.2, bgcolor: 'rgba(239, 68, 68, 0.08)', borderBottom: '1px solid rgba(248, 113, 113, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Chip label="STEP 2A" size="small" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: 'rgba(239, 68, 68, 0.2)', color: '#f87171' }} />
-                <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#f87171' }}>
-                  Sell Orders (CNC Limit) — Executed First to Release Capital
-                </Typography>
-              </Box>
+              <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#f87171' }}>
+                Sell Orders
+              </Typography>
               <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.75rem' }}>
                 {sellOrders.length} orders · +{formatCurrency(liveTotalSell)}
               </Typography>
@@ -337,10 +321,10 @@ export default function RebalanceRefineStep({
                   <TableRow>
                     <StyledHeaderCell>Stock</StyledHeaderCell>
                     <StyledHeaderCell align="center" sx={{ width: 170 }}>Quantity</StyledHeaderCell>
-                    <StyledHeaderCell align="right">LTP (Market)</StyledHeaderCell>
-                    <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price (₹)</StyledHeaderCell>
+                    <StyledHeaderCell align="right">LTP</StyledHeaderCell>
+                    <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price</StyledHeaderCell>
                     <StyledHeaderCell align="right">Total Value</StyledHeaderCell>
-                    <StyledHeaderCell align="center" sx={{ width: 110 }}>Market Depth</StyledHeaderCell>
+                    <StyledHeaderCell align="center" sx={{ width: 110 }}>Depth</StyledHeaderCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -351,11 +335,7 @@ export default function RebalanceRefineStep({
                       <StyledTableRow key={o.symbol}>
                         {/* Stock */}
                         <StyledCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography sx={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>{o.symbol}</Typography>
-                            <Chip label="CNC" size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }} />
-                            <Chip label="NSE" size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }} />
-                          </Box>
+                          <Typography sx={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>{o.symbol}</Typography>
                         </StyledCell>
 
                         {/* Quantity Stepper */}
@@ -531,12 +511,9 @@ export default function RebalanceRefineStep({
         {buyOrders.length > 0 && (
           <Box sx={{ borderRadius: 2, overflow: 'hidden', border: '1px solid rgba(74, 222, 128, 0.2)', bgcolor: 'rgba(15, 23, 42, 0.4)' }}>
             <Box sx={{ px: 2, py: 1.2, bgcolor: 'rgba(34, 197, 94, 0.08)', borderBottom: '1px solid rgba(74, 222, 128, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Chip label="STEP 2B" size="small" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700, bgcolor: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }} />
-                <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#4ade80' }}>
-                  Buy Orders (CNC Limit) — Funded by Cash & Proceeds
-                </Typography>
-              </Box>
+              <Typography sx={{ fontSize: '0.85rem', fontWeight: 700, color: '#4ade80' }}>
+                Buy Orders
+              </Typography>
               <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.75rem' }}>
                 {buyOrders.length} orders · -{formatCurrency(liveTotalBuy)}
               </Typography>
@@ -555,10 +532,10 @@ export default function RebalanceRefineStep({
                   <TableRow>
                     <StyledHeaderCell>Stock</StyledHeaderCell>
                     <StyledHeaderCell align="center" sx={{ width: 170 }}>Quantity</StyledHeaderCell>
-                    <StyledHeaderCell align="right">LTP (Market)</StyledHeaderCell>
-                    <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price (₹)</StyledHeaderCell>
+                    <StyledHeaderCell align="right">LTP</StyledHeaderCell>
+                    <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price</StyledHeaderCell>
                     <StyledHeaderCell align="right">Total Value</StyledHeaderCell>
-                    <StyledHeaderCell align="center" sx={{ width: 110 }}>Market Depth</StyledHeaderCell>
+                    <StyledHeaderCell align="center" sx={{ width: 110 }}>Depth</StyledHeaderCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -569,11 +546,7 @@ export default function RebalanceRefineStep({
                       <StyledTableRow key={o.symbol}>
                         {/* Stock */}
                         <StyledCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography sx={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>{o.symbol}</Typography>
-                            <Chip label="CNC" size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }} />
-                            <Chip label="NSE" size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }} />
-                          </Box>
+                          <Typography sx={{ fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>{o.symbol}</Typography>
                         </StyledCell>
 
                         {/* Quantity Stepper */}

@@ -12,9 +12,9 @@ interface RebalanceStepperProps {
 }
 
 const STEPS = [
-  { step: 1, title: 'Plan & Fund', subtitle: 'Target Weights & Cash' },
-  { step: 2, title: 'Refine & Execute', subtitle: 'Qty, Limit & Depth' },
-  { step: 3, title: 'Track & Settle', subtitle: 'Live Orders & Fills' },
+  { step: 1, title: 'Plan & Fund' },
+  { step: 2, title: 'Refine & Execute' },
+  { step: 3, title: 'Track & Settle' },
 ] as const;
 
 export default function RebalanceStepper({ 
@@ -61,20 +61,16 @@ export default function RebalanceStepper({
                 {isCompleted ? <FontAwesomeIcon icon={faCheck} size="xs" /> : s.step}
               </Box>
 
-              {/* Title & subtitle */}
-              <Box sx={{ display: { xs: isCurrent ? 'block' : 'none', sm: 'block' } }}>
-                <Typography sx={{ 
-                  fontSize: '0.8rem', 
-                  fontWeight: isCurrent ? 700 : 500, 
-                  color: isCurrent ? '#fff' : isCompleted ? '#cbd5e1' : '#64748b',
-                  lineHeight: 1.2
-                }}>
-                  {s.step}. {s.title}
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem', display: { xs: 'none', md: 'block' } }}>
-                  {s.subtitle}
-                </Typography>
-              </Box>
+              {/* Title */}
+              <Typography sx={{ 
+                display: { xs: isCurrent ? 'block' : 'none', sm: 'block' },
+                fontSize: '0.8rem', 
+                fontWeight: isCurrent ? 700 : 500, 
+                color: isCurrent ? '#fff' : isCompleted ? '#cbd5e1' : '#64748b',
+                lineHeight: 1
+              }}>
+                {s.step}. {s.title}
+              </Typography>
             </Box>
 
             {/* Connecting arrow */}
