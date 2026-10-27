@@ -140,3 +140,67 @@ export interface BrokerCashMetrics {
   lastUpdated: string;
 }
 
+/**
+ * Rebalance Order Item for Zerodha CNC Limit Order Execution
+ */
+export interface RebalanceOrderItem {
+  symbol: string;
+  exchange: 'NSE' | 'BSE';
+  transactionType: 'BUY' | 'SELL';
+  quantity: number;
+  orderType: 'LIMIT';
+  product: 'CNC';
+  price: number; // Limit price (tick rounded to ₹0.05)
+  currentPrice: number;
+  targetWeight?: number;
+  currentQty?: number;
+  targetQty?: number;
+  status?: 'idle' | 'submitting' | 'placed' | 'failed';
+  orderId?: string;
+  error?: string;
+}
+
+export interface RebalanceChargesBreakdown {
+  brokerage: number; // ₹0 on Zerodha for equity delivery
+  stt: number;
+  exchangeTurnover: number;
+  gst: number;
+  sebiCharges: number;
+  stampDuty: number;
+  totalCharges: number;
+}
+
+export interface RebalancePreflightSummary {
+  orders: RebalanceOrderItem[];
+  totalBuyValue: number;
+  totalSellValue: number;
+  netCashImpact: number;
+  requiredMargin: number;
+  availableCash: number;
+  marginShortfall: number;
+  isMarginSufficient: boolean;
+  charges: RebalanceChargesBreakdown;
+  hasActiveSession: boolean;
+}
+
+export interface OrderExecutionResult {
+  symbol: string;
+  transactionType: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  orderId?: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface OrderLiveStatus {
+  orderId: string;
+  symbol?: string;
+  status: 'OPEN' | 'COMPLETE' | 'CANCELLED' | 'REJECTED';
+  filledQuantity: number;
+  pendingQuantity: number;
+  averagePrice: number;
+  statusMessage?: string;
+}
+
+

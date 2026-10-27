@@ -35,11 +35,13 @@ import {
   faMinus,
   faXmark,
   faCopy,
-  faFloppyDisk
+  faFloppyDisk,
+  faBolt
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { searchStocks, getStockPrice, StockSearchResult } from '@/app/actions/stocks';
 import { logger } from '@/lib/logger';
+import RebalanceExecutionModal from './RebalanceExecutionModal';
 
 const rebalanceLogger = logger.scope('Rebalance');
 import {
@@ -257,12 +259,22 @@ export default function RebalanceModal({
   const [addError, setAddError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [executionOpen, setExecutionOpen] = useState(false);
   const [isWithdrawal, setIsWithdrawal] = useState(false);
   const [localCashflow, setLocalCashflow] = useState('');
   const [sortBy, setSortBy] = useState<'symbol' | 'weight' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const savedStateLoaded = useRef(false);
   const holdingsSignature = useMemo(() => buildHoldingsSignature(currentHoldings), [currentHoldings]);
+
+  // Price map for execution
+  const priceMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    state.holdings.forEach(h => {
+      map[h.symbol] = h.price;
+    });
+    return map;
+  }, [state.holdings]);
 
   // Memoized summary
   const summary = useMemo(() => calculateSummary(state), [state]);
@@ -895,16 +907,69 @@ export default function RebalanceModal({
                            <FontAwesomeIcon icon={faCopy} size="xs" />
                        </IconButton>
                    </Tooltip>
+
+                   {/* Execute in Zerodha Button */}
+                   <Tooltip title="Execute in Zerodha (CNC Limit)">
+                       <span>
+                           <Button
+                               size="small"
+                               variant="contained"
+                               disabled={summary.actions.length === 0}
+                               onClick={() => setExecutionOpen(true)}
+                               startIcon={<FontAwesomeIcon icon={faBolt} size="xs" />}
+                               sx={{
+                                   height: 36,
+                                   fontSize: '0.75rem',
+                                   fontWeight: 700,
+                                   textTransform: 'none',
+                                   bgcolor: '#2563eb',
+                                   color: '#fff',
+                                   px: 1.5,
+                                   borderRadius: 1.5,
+                                   boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
+                                   '&:hover': { bgcolor: '#1d4ed8' },
+                                   opacity: summary.actions.length === 0 ? 0.5 : 1
+                               }}
+                           >
+                               Execute in Kite
+                           </Button>
+                       </span>
+                   </Tooltip>
               </Box>
            </Box>
            
            {/* 2. ORDER BOOK (Prominent) */}
            <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: 'rgba(0,0,0,0.2)' }}>
-               <Box sx={{ p: 2, pb: 1, pt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                    <Typography variant="caption" sx={{ color: '#9ca3af', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.75rem' }}>
-                        Proposed Trades
-                    </Typography>
-                    <Chip label={summary.actions.length} size="small" sx={{ height: 18, bgcolor: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc', fontWeight: 700, fontSize: '0.7rem' }} />
+               <Box sx={{ p: 2, pb: 1, pt: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#9ca3af', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                            Proposed Trades
+                        </Typography>
+                        <Chip label={summary.actions.length} size="small" sx={{ height: 18, bgcolor: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc', fontWeight: 700, fontSize: '0.7rem' }} />
+                    </Box>
+
+                    {summary.actions.length > 0 && (
+                        <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => setExecutionOpen(true)}
+                            startIcon={<FontAwesomeIcon icon={faBolt} size="xs" />}
+                            sx={{
+                                height: 26,
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                bgcolor: '#2563eb',
+                                color: '#fff',
+                                px: 1.5,
+                                borderRadius: '4px',
+                                boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
+                                '&:hover': { bgcolor: '#1d4ed8' }
+                            }}
+                        >
+                            Execute in Zerodha
+                        </Button>
+                    )}
                </Box>
 
                {/* Scrollable Area */}
@@ -979,6 +1044,15 @@ export default function RebalanceModal({
 
         </Box>
       </Box>
+
+      {/* Zerodha Rebalance Execution Modal (CNC Limit Only) */}
+      <RebalanceExecutionModal
+        open={executionOpen}
+        onClose={() => setExecutionOpen(false)}
+        actions={summary.actions}
+        priceMap={priceMap}
+        availableCash={availableCash}
+      />
     </Dialog>
   );
 }
