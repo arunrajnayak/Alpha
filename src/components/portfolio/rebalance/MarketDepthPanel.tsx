@@ -7,16 +7,17 @@ import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRotateRight, faArrowTrendUp, faArrowTrendDown } from '@fortawesome/free-solid-svg-icons';
+import { faRotateRight, faArrowTrendUp, faArrowTrendDown, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { getStockMarketDepthAction, StockMarketDepthData } from '@/app/actions/stocks';
 
 interface MarketDepthPanelProps {
   symbol: string;
   onSelectPrice?: (price: number) => void;
+  onClose?: () => void;
 }
 
-export default function MarketDepthPanel({ symbol, onSelectPrice }: MarketDepthPanelProps) {
+export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: MarketDepthPanelProps) {
   const [data, setData] = useState<StockMarketDepthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,17 +77,19 @@ export default function MarketDepthPanel({ symbol, onSelectPrice }: MarketDepthP
   return (
     <Box sx={{ 
       p: 2, 
-      bgcolor: 'rgba(11, 15, 25, 0.85)', 
-      border: '1px solid rgba(255, 255, 255, 0.08)', 
+      bgcolor: '#0f172a', 
+      border: '1px solid rgba(255, 255, 255, 0.12)', 
       borderRadius: 2, 
       display: 'flex', 
       flexDirection: 'column', 
       gap: 1.5,
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)'
+      maxWidth: 480,
+      width: '100%',
+      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6)',
     }}>
       {/* Header bar */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#f3f4f6', letterSpacing: '0.02em' }}>
             5-Level Order Book — {data.symbol}
           </Typography>
@@ -100,18 +103,31 @@ export default function MarketDepthPanel({ symbol, onSelectPrice }: MarketDepthP
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>
-            Click price to fill limit order
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem', display: { xs: 'none', sm: 'inline' } }}>
+            Click price to fill
           </Typography>
-          <IconButton 
-            size="small" 
-            onClick={fetchDepth} 
-            disabled={loading} 
-            sx={{ color: '#9ca3af', p: 0.5, '&:hover': { color: '#fff' } }}
-          >
-            {loading ? <CircularProgress size={12} color="inherit" /> : <FontAwesomeIcon icon={faRotateRight} size="xs" />}
-          </IconButton>
+          <Tooltip title="Refresh depth">
+            <IconButton 
+              size="small" 
+              onClick={fetchDepth} 
+              disabled={loading} 
+              sx={{ color: '#9ca3af', p: 0.5, '&:hover': { color: '#fff' } }}
+            >
+              {loading ? <CircularProgress size={12} color="inherit" /> : <FontAwesomeIcon icon={faRotateRight} size="xs" />}
+            </IconButton>
+          </Tooltip>
+          {onClose && (
+            <Tooltip title="Close">
+              <IconButton
+                size="small"
+                onClick={onClose}
+                sx={{ color: '#9ca3af', p: 0.5, '&:hover': { color: '#f87171' } }}
+              >
+                <FontAwesomeIcon icon={faXmark} size="sm" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
 

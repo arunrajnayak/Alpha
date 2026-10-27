@@ -15,7 +15,7 @@ import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import Collapse from '@mui/material/Collapse';
+import Popover from '@mui/material/Popover';
 import { styled } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -24,8 +24,7 @@ import {
   faPlus, 
   faMinus, 
   faCoins, 
-  faChevronDown, 
-  faChevronUp,
+  faChartSimple,
   faArrowLeft,
   faCheck,
   faTriangleExclamation
@@ -44,6 +43,7 @@ const StyledHeaderCell = styled(TableCell)(() => ({
   textTransform: 'uppercase',
   borderBottom: '1px solid rgba(255,255,255,0.1)',
   padding: '8px 12px',
+  zIndex: 2,
 }));
 
 const StyledCell = styled(TableCell)(() => ({
@@ -80,7 +80,23 @@ export default function RebalanceRefineStep({
   const [preflight, setPreflight] = useState<RebalancePreflightSummary | null>(null);
   const [isLoadingPreflight, setIsLoadingPreflight] = useState(false);
   const [preflightError, setPreflightError] = useState<string | null>(null);
-  const [expandedDepthSymbol, setExpandedDepthSymbol] = useState<string | null>(null);
+  const [depthAnchorEl, setDepthAnchorEl] = useState<HTMLElement | null>(null);
+  const [selectedDepthSymbol, setSelectedDepthSymbol] = useState<string | null>(null);
+
+  const handleOpenDepth = (e: React.MouseEvent<HTMLElement>, symbol: string) => {
+    if (selectedDepthSymbol === symbol && depthAnchorEl) {
+      setDepthAnchorEl(null);
+      setSelectedDepthSymbol(null);
+    } else {
+      setDepthAnchorEl(e.currentTarget);
+      setSelectedDepthSymbol(symbol);
+    }
+  };
+
+  const handleCloseDepth = () => {
+    setDepthAnchorEl(null);
+    setSelectedDepthSymbol(null);
+  };
 
   // Load preflight calculation
   const loadPreflight = useCallback(async (ordersList?: RebalanceOrderItem[]) => {
@@ -362,24 +378,31 @@ export default function RebalanceRefineStep({
               </Typography>
             </Box>
 
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <StyledHeaderCell>Stock</StyledHeaderCell>
-                  <StyledHeaderCell align="center" sx={{ width: 170 }}>Quantity</StyledHeaderCell>
-                  <StyledHeaderCell align="right">LTP (Market)</StyledHeaderCell>
-                  <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price (₹)</StyledHeaderCell>
-                  <StyledHeaderCell align="right">Total Value</StyledHeaderCell>
-                  <StyledHeaderCell align="center" sx={{ width: 100 }}>Market Depth</StyledHeaderCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sellOrders.map((o) => {
-                  const isDepthOpen = expandedDepthSymbol === o.symbol;
+            <Box sx={{ 
+              maxHeight: 280, 
+              overflowY: 'auto',
+              overflowX: 'auto',
+              '&::-webkit-scrollbar': { width: 6, height: 6 },
+              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 3 },
+              '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
+            }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <StyledHeaderCell>Stock</StyledHeaderCell>
+                    <StyledHeaderCell align="center" sx={{ width: 170 }}>Quantity</StyledHeaderCell>
+                    <StyledHeaderCell align="right">LTP (Market)</StyledHeaderCell>
+                    <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price (₹)</StyledHeaderCell>
+                    <StyledHeaderCell align="right">Total Value</StyledHeaderCell>
+                    <StyledHeaderCell align="center" sx={{ width: 110 }}>Market Depth</StyledHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sellOrders.map((o) => {
+                    const isDepthOpen = selectedDepthSymbol === o.symbol && Boolean(depthAnchorEl);
 
-                  return (
-                    <Box component="tbody" key={o.symbol} sx={{ display: 'contents' }}>
-                      <StyledTableRow>
+                    return (
+                      <StyledTableRow key={o.symbol}>
                         {/* Stock */}
                         <StyledCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -391,14 +414,14 @@ export default function RebalanceRefineStep({
 
                         {/* Quantity Stepper */}
                         <StyledCell align="center">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(248, 113, 113, 0.25)', borderRadius: 1.5, p: '2px' }}>
                             <IconButton 
                               size="small" 
                               onClick={() => stepOrderQuantity(o.symbol, -1)}
                               disabled={o.quantity <= 1 || isExecuting}
-                              sx={{ color: '#f87171', p: 0.5, bgcolor: 'rgba(239, 68, 68, 0.08)' }}
+                              sx={{ color: '#f87171', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.15)' } }}
                             >
-                              <FontAwesomeIcon icon={faMinus} size="xs" />
+                              <FontAwesomeIcon icon={faMinus} style={{ fontSize: '0.65rem' }} />
                             </IconButton>
                             <TextField
                               size="small"
@@ -407,17 +430,32 @@ export default function RebalanceRefineStep({
                               onChange={(e) => updateOrderQuantity(o.symbol, parseInt(e.target.value) || 1)}
                               disabled={isExecuting}
                               slotProps={{
-                                htmlInput: { min: 1, style: { textAlign: 'center', padding: '4px 6px', fontSize: '0.8rem', fontFamily: 'monospace', color: '#f87171', fontWeight: 700 } }
+                                htmlInput: { 
+                                  min: 1, 
+                                  style: { 
+                                    textAlign: 'center', 
+                                    padding: '2px 4px', 
+                                    fontSize: '0.8rem', 
+                                    fontFamily: 'monospace', 
+                                    fontWeight: 700, 
+                                    width: 52,
+                                    color: '#f87171' 
+                                  } 
+                                }
                               }}
-                              sx={{ width: 65, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(248, 113, 113, 0.2)' } }}
+                              sx={{ 
+                                '& .MuiOutlinedInput-root': {
+                                  '& fieldset': { border: 'none' },
+                                }
+                              }}
                             />
                             <IconButton 
                               size="small" 
                               onClick={() => stepOrderQuantity(o.symbol, 1)}
                               disabled={isExecuting}
-                              sx={{ color: '#f87171', p: 0.5, bgcolor: 'rgba(239, 68, 68, 0.08)' }}
+                              sx={{ color: '#f87171', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.15)' } }}
                             >
-                              <FontAwesomeIcon icon={faPlus} size="xs" />
+                              <FontAwesomeIcon icon={faPlus} style={{ fontSize: '0.65rem' }} />
                             </IconButton>
                           </Box>
                         </StyledCell>
@@ -431,43 +469,72 @@ export default function RebalanceRefineStep({
 
                         {/* Limit Price Stepper */}
                         <StyledCell align="right">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => stepOrderPrice(o.symbol, -0.05)}
-                              disabled={isExecuting}
-                              sx={{ color: '#9ca3af', p: 0.5, bgcolor: 'rgba(255,255,255,0.05)' }}
-                            >
-                              <FontAwesomeIcon icon={faMinus} size="xs" />
-                            </IconButton>
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={o.price}
-                              onChange={(e) => updateOrderPrice(o.symbol, parseFloat(e.target.value) || 0.05)}
-                              disabled={isExecuting}
-                              slotProps={{
-                                htmlInput: { step: 0.05, style: { textAlign: 'right', padding: '4px 8px', fontSize: '0.8rem', fontFamily: 'monospace' } }
-                              }}
-                              sx={{ width: 90, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
-                            />
-                            <IconButton 
-                              size="small" 
-                              onClick={() => stepOrderPrice(o.symbol, 0.05)}
-                              disabled={isExecuting}
-                              sx={{ color: '#9ca3af', p: 0.5, bgcolor: 'rgba(255,255,255,0.05)' }}
-                            >
-                              <FontAwesomeIcon icon={faPlus} size="xs" />
-                            </IconButton>
-                            <Tooltip title="Reset to LTP">
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75 }}>
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 1.5, p: '2px' }}>
                               <IconButton 
                                 size="small" 
+                                onClick={() => stepOrderPrice(o.symbol, -0.05)}
+                                disabled={isExecuting}
+                                sx={{ color: '#9ca3af', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' } }}
+                              >
+                                <FontAwesomeIcon icon={faMinus} style={{ fontSize: '0.65rem' }} />
+                              </IconButton>
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={o.price}
+                                onChange={(e) => updateOrderPrice(o.symbol, parseFloat(e.target.value) || 0.05)}
+                                disabled={isExecuting}
+                                slotProps={{
+                                  htmlInput: { 
+                                    step: 0.05, 
+                                    style: { 
+                                      textAlign: 'right', 
+                                      padding: '2px 6px', 
+                                      fontSize: '0.8rem', 
+                                      fontFamily: 'monospace',
+                                      fontWeight: 600,
+                                      width: 74,
+                                      color: '#fff'
+                                    } 
+                                  }
+                                }}
+                                sx={{ 
+                                  '& .MuiOutlinedInput-root': {
+                                    '& fieldset': { border: 'none' },
+                                  }
+                                }}
+                              />
+                              <IconButton 
+                                size="small" 
+                                onClick={() => stepOrderPrice(o.symbol, 0.05)}
+                                disabled={isExecuting}
+                                sx={{ color: '#9ca3af', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' } }}
+                              >
+                                <FontAwesomeIcon icon={faPlus} style={{ fontSize: '0.65rem' }} />
+                              </IconButton>
+                            </Box>
+                            <Tooltip title="Reset to LTP">
+                              <Button
+                                size="small"
+                                variant="text"
                                 onClick={() => resetOrderToLtp(o.symbol)}
                                 disabled={isExecuting}
-                                sx={{ color: '#60a5fa', p: 0.5, fontSize: '0.65rem' }}
+                                sx={{ 
+                                  minWidth: 32, 
+                                  height: 28, 
+                                  px: 0.75, 
+                                  fontSize: '0.65rem', 
+                                  fontWeight: 700, 
+                                  color: '#60a5fa', 
+                                  bgcolor: 'rgba(96, 165, 250, 0.1)', 
+                                  border: '1px solid rgba(96, 165, 250, 0.2)',
+                                  borderRadius: 1,
+                                  '&:hover': { bgcolor: 'rgba(96, 165, 250, 0.2)' }
+                                }}
                               >
                                 LTP
-                              </IconButton>
+                              </Button>
                             </Tooltip>
                           </Box>
                         </StyledCell>
@@ -483,34 +550,34 @@ export default function RebalanceRefineStep({
                         <StyledCell align="center">
                           <Button
                             size="small"
-                            variant="text"
-                            onClick={() => setExpandedDepthSymbol(isDepthOpen ? null : o.symbol)}
-                            endIcon={<FontAwesomeIcon icon={isDepthOpen ? faChevronUp : faChevronDown} size="xs" />}
-                            sx={{ fontSize: '0.7rem', textTransform: 'none', color: isDepthOpen ? '#60a5fa' : '#9ca3af', px: 1, py: 0.2 }}
+                            variant={isDepthOpen ? 'contained' : 'outlined'}
+                            onClick={(e) => handleOpenDepth(e, o.symbol)}
+                            startIcon={<FontAwesomeIcon icon={faChartSimple} style={{ fontSize: '0.7rem' }} />}
+                            sx={{
+                              fontSize: '0.7rem',
+                              height: 28,
+                              textTransform: 'none',
+                              px: 1.2,
+                              bgcolor: isDepthOpen ? '#2563eb' : 'rgba(255,255,255,0.03)',
+                              borderColor: isDepthOpen ? '#3b82f6' : 'rgba(255,255,255,0.12)',
+                              color: isDepthOpen ? '#fff' : '#9ca3af',
+                              borderRadius: 1,
+                              '&:hover': {
+                                bgcolor: isDepthOpen ? '#1d4ed8' : 'rgba(255,255,255,0.08)',
+                                color: '#fff',
+                                borderColor: 'rgba(255,255,255,0.25)',
+                              }
+                            }}
                           >
                             Depth
                           </Button>
                         </StyledCell>
                       </StyledTableRow>
-
-                      {/* Collapsible Depth Row */}
-                      {isDepthOpen && (
-                        <TableRow>
-                          <TableCell colSpan={6} sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Collapse in={isDepthOpen}>
-                              <MarketDepthPanel 
-                                symbol={o.symbol} 
-                                onSelectPrice={(price) => updateOrderPrice(o.symbol, price)} 
-                              />
-                            </Collapse>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Box>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Box>
           </Box>
         )}
 
@@ -529,24 +596,31 @@ export default function RebalanceRefineStep({
               </Typography>
             </Box>
 
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <StyledHeaderCell>Stock</StyledHeaderCell>
-                  <StyledHeaderCell align="center" sx={{ width: 170 }}>Quantity</StyledHeaderCell>
-                  <StyledHeaderCell align="right">LTP (Market)</StyledHeaderCell>
-                  <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price (₹)</StyledHeaderCell>
-                  <StyledHeaderCell align="right">Total Value</StyledHeaderCell>
-                  <StyledHeaderCell align="center" sx={{ width: 100 }}>Market Depth</StyledHeaderCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {buyOrders.map((o) => {
-                  const isDepthOpen = expandedDepthSymbol === o.symbol;
+            <Box sx={{ 
+              maxHeight: 280, 
+              overflowY: 'auto',
+              overflowX: 'auto',
+              '&::-webkit-scrollbar': { width: 6, height: 6 },
+              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 3 },
+              '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
+            }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <StyledHeaderCell>Stock</StyledHeaderCell>
+                    <StyledHeaderCell align="center" sx={{ width: 170 }}>Quantity</StyledHeaderCell>
+                    <StyledHeaderCell align="right">LTP (Market)</StyledHeaderCell>
+                    <StyledHeaderCell align="right" sx={{ width: 230 }}>Limit Price (₹)</StyledHeaderCell>
+                    <StyledHeaderCell align="right">Total Value</StyledHeaderCell>
+                    <StyledHeaderCell align="center" sx={{ width: 110 }}>Market Depth</StyledHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {buyOrders.map((o) => {
+                    const isDepthOpen = selectedDepthSymbol === o.symbol && Boolean(depthAnchorEl);
 
-                  return (
-                    <Box component="tbody" key={o.symbol} sx={{ display: 'contents' }}>
-                      <StyledTableRow>
+                    return (
+                      <StyledTableRow key={o.symbol}>
                         {/* Stock */}
                         <StyledCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -558,14 +632,14 @@ export default function RebalanceRefineStep({
 
                         {/* Quantity Stepper */}
                         <StyledCell align="center">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(74, 222, 128, 0.25)', borderRadius: 1.5, p: '2px' }}>
                             <IconButton 
                               size="small" 
                               onClick={() => stepOrderQuantity(o.symbol, -1)}
                               disabled={o.quantity <= 1 || isExecuting}
-                              sx={{ color: '#4ade80', p: 0.5, bgcolor: 'rgba(74, 222, 128, 0.08)' }}
+                              sx={{ color: '#4ade80', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(74, 222, 128, 0.15)' } }}
                             >
-                              <FontAwesomeIcon icon={faMinus} size="xs" />
+                              <FontAwesomeIcon icon={faMinus} style={{ fontSize: '0.65rem' }} />
                             </IconButton>
                             <TextField
                               size="small"
@@ -574,17 +648,32 @@ export default function RebalanceRefineStep({
                               onChange={(e) => updateOrderQuantity(o.symbol, parseInt(e.target.value) || 1)}
                               disabled={isExecuting}
                               slotProps={{
-                                htmlInput: { min: 1, style: { textAlign: 'center', padding: '4px 6px', fontSize: '0.8rem', fontFamily: 'monospace', color: '#4ade80', fontWeight: 700 } }
+                                htmlInput: { 
+                                  min: 1, 
+                                  style: { 
+                                    textAlign: 'center', 
+                                    padding: '2px 4px', 
+                                    fontSize: '0.8rem', 
+                                    fontFamily: 'monospace', 
+                                    fontWeight: 700, 
+                                    width: 52,
+                                    color: '#4ade80' 
+                                  } 
+                                }
                               }}
-                              sx={{ width: 65, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(74, 222, 128, 0.2)' } }}
+                              sx={{ 
+                                '& .MuiOutlinedInput-root': {
+                                  '& fieldset': { border: 'none' },
+                                }
+                              }}
                             />
                             <IconButton 
                               size="small" 
                               onClick={() => stepOrderQuantity(o.symbol, 1)}
                               disabled={isExecuting}
-                              sx={{ color: '#4ade80', p: 0.5, bgcolor: 'rgba(74, 222, 128, 0.08)' }}
+                              sx={{ color: '#4ade80', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(74, 222, 128, 0.15)' } }}
                             >
-                              <FontAwesomeIcon icon={faPlus} size="xs" />
+                              <FontAwesomeIcon icon={faPlus} style={{ fontSize: '0.65rem' }} />
                             </IconButton>
                           </Box>
                         </StyledCell>
@@ -598,43 +687,72 @@ export default function RebalanceRefineStep({
 
                         {/* Limit Price Stepper */}
                         <StyledCell align="right">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-                            <IconButton 
-                              size="small" 
-                              onClick={() => stepOrderPrice(o.symbol, -0.05)}
-                              disabled={isExecuting}
-                              sx={{ color: '#9ca3af', p: 0.5, bgcolor: 'rgba(255,255,255,0.05)' }}
-                            >
-                              <FontAwesomeIcon icon={faMinus} size="xs" />
-                            </IconButton>
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={o.price}
-                              onChange={(e) => updateOrderPrice(o.symbol, parseFloat(e.target.value) || 0.05)}
-                              disabled={isExecuting}
-                              slotProps={{
-                                htmlInput: { step: 0.05, style: { textAlign: 'right', padding: '4px 8px', fontSize: '0.8rem', fontFamily: 'monospace' } }
-                              }}
-                              sx={{ width: 90, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
-                            />
-                            <IconButton 
-                              size="small" 
-                              onClick={() => stepOrderPrice(o.symbol, 0.05)}
-                              disabled={isExecuting}
-                              sx={{ color: '#9ca3af', p: 0.5, bgcolor: 'rgba(255,255,255,0.05)' }}
-                            >
-                              <FontAwesomeIcon icon={faPlus} size="xs" />
-                            </IconButton>
-                            <Tooltip title="Reset to LTP">
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75 }}>
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 1.5, p: '2px' }}>
                               <IconButton 
                                 size="small" 
+                                onClick={() => stepOrderPrice(o.symbol, -0.05)}
+                                disabled={isExecuting}
+                                sx={{ color: '#9ca3af', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' } }}
+                              >
+                                <FontAwesomeIcon icon={faMinus} style={{ fontSize: '0.65rem' }} />
+                              </IconButton>
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={o.price}
+                                onChange={(e) => updateOrderPrice(o.symbol, parseFloat(e.target.value) || 0.05)}
+                                disabled={isExecuting}
+                                slotProps={{
+                                  htmlInput: { 
+                                    step: 0.05, 
+                                    style: { 
+                                      textAlign: 'right', 
+                                      padding: '2px 6px', 
+                                      fontSize: '0.8rem', 
+                                      fontFamily: 'monospace',
+                                      fontWeight: 600,
+                                      width: 74,
+                                      color: '#fff'
+                                    } 
+                                  }
+                                }}
+                                sx={{ 
+                                  '& .MuiOutlinedInput-root': {
+                                    '& fieldset': { border: 'none' },
+                                  }
+                                }}
+                              />
+                              <IconButton 
+                                size="small" 
+                                onClick={() => stepOrderPrice(o.symbol, 0.05)}
+                                disabled={isExecuting}
+                                sx={{ color: '#9ca3af', width: 24, height: 24, borderRadius: 1, '&:hover': { bgcolor: 'rgba(255,255,255,0.08)', color: '#fff' } }}
+                              >
+                                <FontAwesomeIcon icon={faPlus} style={{ fontSize: '0.65rem' }} />
+                              </IconButton>
+                            </Box>
+                            <Tooltip title="Reset to LTP">
+                              <Button
+                                size="small"
+                                variant="text"
                                 onClick={() => resetOrderToLtp(o.symbol)}
                                 disabled={isExecuting}
-                                sx={{ color: '#60a5fa', p: 0.5, fontSize: '0.65rem' }}
+                                sx={{ 
+                                  minWidth: 32, 
+                                  height: 28, 
+                                  px: 0.75, 
+                                  fontSize: '0.65rem', 
+                                  fontWeight: 700, 
+                                  color: '#60a5fa', 
+                                  bgcolor: 'rgba(96, 165, 250, 0.1)', 
+                                  border: '1px solid rgba(96, 165, 250, 0.2)',
+                                  borderRadius: 1,
+                                  '&:hover': { bgcolor: 'rgba(96, 165, 250, 0.2)' }
+                                }}
                               >
                                 LTP
-                              </IconButton>
+                              </Button>
                             </Tooltip>
                           </Box>
                         </StyledCell>
@@ -650,37 +768,75 @@ export default function RebalanceRefineStep({
                         <StyledCell align="center">
                           <Button
                             size="small"
-                            variant="text"
-                            onClick={() => setExpandedDepthSymbol(isDepthOpen ? null : o.symbol)}
-                            endIcon={<FontAwesomeIcon icon={isDepthOpen ? faChevronUp : faChevronDown} size="xs" />}
-                            sx={{ fontSize: '0.7rem', textTransform: 'none', color: isDepthOpen ? '#60a5fa' : '#9ca3af', px: 1, py: 0.2 }}
+                            variant={isDepthOpen ? 'contained' : 'outlined'}
+                            onClick={(e) => handleOpenDepth(e, o.symbol)}
+                            startIcon={<FontAwesomeIcon icon={faChartSimple} style={{ fontSize: '0.7rem' }} />}
+                            sx={{
+                              fontSize: '0.7rem',
+                              height: 28,
+                              textTransform: 'none',
+                              px: 1.2,
+                              bgcolor: isDepthOpen ? '#2563eb' : 'rgba(255,255,255,0.03)',
+                              borderColor: isDepthOpen ? '#3b82f6' : 'rgba(255,255,255,0.12)',
+                              color: isDepthOpen ? '#fff' : '#9ca3af',
+                              borderRadius: 1,
+                              '&:hover': {
+                                bgcolor: isDepthOpen ? '#1d4ed8' : 'rgba(255,255,255,0.08)',
+                                color: '#fff',
+                                borderColor: 'rgba(255,255,255,0.25)',
+                              }
+                            }}
                           >
                             Depth
                           </Button>
                         </StyledCell>
                       </StyledTableRow>
-
-                      {/* Collapsible Depth Row */}
-                      {isDepthOpen && (
-                        <TableRow>
-                          <TableCell colSpan={6} sx={{ p: 1.5, bgcolor: 'rgba(0,0,0,0.3)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Collapse in={isDepthOpen}>
-                              <MarketDepthPanel 
-                                symbol={o.symbol} 
-                                onSelectPrice={(price) => updateOrderPrice(o.symbol, price)} 
-                              />
-                            </Collapse>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Box>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Box>
           </Box>
         )}
       </Box>
+
+      {/* Market Depth Popover Overlay */}
+      <Popover
+        open={Boolean(depthAnchorEl && selectedDepthSymbol)}
+        anchorEl={depthAnchorEl}
+        onClose={handleCloseDepth}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              mt: 0.5,
+              bgcolor: 'transparent',
+              boxShadow: 'none',
+              border: 'none',
+              backgroundImage: 'none',
+              overflow: 'visible',
+            }
+          }
+        }}
+      >
+        {selectedDepthSymbol && (
+          <MarketDepthPanel
+            symbol={selectedDepthSymbol}
+            onClose={handleCloseDepth}
+            onSelectPrice={(price) => {
+              updateOrderPrice(selectedDepthSymbol, price);
+              handleCloseDepth();
+            }}
+          />
+        )}
+      </Popover>
 
       {/* Footer Navigation Bar */}
       <Box sx={{ 
