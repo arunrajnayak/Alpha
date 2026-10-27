@@ -178,6 +178,22 @@ model UpstoxToken {
   @@index([expiresAt])
 }
 
+// Zerodha Kite Connect token storage for authenticated sessions
+model ZerodhaToken {
+  id          Int      @id @default(autoincrement())
+  accessToken String
+  publicToken String?
+  userId      String
+  userName    String?
+  userType    String?
+  email       String?
+  issuedAt    DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
 // AMFI Market Cap Classification
 // Stores stock classifications from AMFI (Large/Mid/Small Cap)
 // Updated every 6 months based on AMFI data releases
