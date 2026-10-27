@@ -553,13 +553,40 @@ export default function RebalanceModal({
             />
           </Box>
 
-          <IconButton 
-            onClick={onClose} 
-            size="small" 
-            sx={{ color: '#9ca3af', bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', color: '#fff' } }}
-          >
-            <FontAwesomeIcon icon={faXmark} />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {activeStep === 1 && (
+              <Button
+                size="small"
+                variant="contained"
+                disabled={summary.actions.length === 0}
+                onClick={() => setActiveStep(2)}
+                endIcon={<FontAwesomeIcon icon={faArrowRight} size="xs" />}
+                sx={{
+                  height: 32,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  textTransform: 'none',
+                  bgcolor: '#2563eb',
+                  color: '#fff',
+                  px: 2,
+                  borderRadius: '6px',
+                  boxShadow: '0 0 12px rgba(37, 99, 235, 0.4)',
+                  '&:hover': { bgcolor: '#1d4ed8' },
+                  '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }
+                }}
+              >
+                Go Ahead
+              </Button>
+            )}
+
+            <IconButton 
+              onClick={onClose} 
+              size="small" 
+              sx={{ color: '#9ca3af', bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', color: '#fff' } }}
+            >
+              <FontAwesomeIcon icon={faXmark} />
+            </IconButton>
+          </Box>
         </Box>
 
         {/* STEP CONTENT CONTAINER */}
@@ -973,27 +1000,6 @@ export default function RebalanceModal({
                                    <FontAwesomeIcon icon={faCopy} size="xs" />
                                </IconButton>
                             </Tooltip>
-
-                            <Button
-                                size="small"
-                                variant="contained"
-                                onClick={() => setActiveStep(2)}
-                                endIcon={<FontAwesomeIcon icon={faArrowRight} size="xs" />}
-                                sx={{
-                                    height: 28,
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    textTransform: 'none',
-                                    bgcolor: '#2563eb',
-                                    color: '#fff',
-                                    px: 2,
-                                    borderRadius: '4px',
-                                    boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
-                                    '&:hover': { bgcolor: '#1d4ed8' }
-                                }}
-                            >
-                                Go Ahead →
-                            </Button>
                         </Box>
                     )}
                </Box>
