@@ -37,13 +37,15 @@ import {
   faCopy,
   faFloppyDisk,
   faBolt,
-  faArrowUpRightFromSquare
+  faArrowRight
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { searchStocks, getStockPrice, StockSearchResult } from '@/app/actions/stocks';
 import { logger } from '@/lib/logger';
-import RebalanceExecutionModal from './RebalanceExecutionModal';
-import { getRebalancePreflightAction, getKitePublisherBasketAction } from '@/app/actions/zerodha-orders';
+import RebalanceStepper from './rebalance/RebalanceStepper';
+import RebalanceRefineStep from './rebalance/RebalanceRefineStep';
+import RebalanceTrackStep from './rebalance/RebalanceTrackStep';
+import type { RebalanceOrderItem } from '@/lib/types';
 
 const rebalanceLogger = logger.scope('Rebalance');
 import {
@@ -261,7 +263,8 @@ export default function RebalanceModal({
   const [addError, setAddError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [executionOpen, setExecutionOpen] = useState(false);
+  const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
+  const [refinedOrders, setRefinedOrders] = useState<RebalanceOrderItem[]>([]);
   const [isWithdrawal, setIsWithdrawal] = useState(false);
   const [localCashflow, setLocalCashflow] = useState('');
   const [sortBy, setSortBy] = useState<'symbol' | 'weight' | null>(null);
@@ -496,50 +499,6 @@ export default function RebalanceModal({
     }
   };
 
-  const [openingBasket, setOpeningBasket] = useState(false);
-
-  const handleOpenKiteBasketDirect = async () => {
-    if (summary.actions.length === 0) return;
-    setOpeningBasket(true);
-    try {
-      const preflightRes = await getRebalancePreflightAction(summary.actions, priceMap);
-      if (!preflightRes.success) {
-        alert(preflightRes.error);
-        return;
-      }
-      const basketRes = await getKitePublisherBasketAction(preflightRes.data.orders);
-      if (!basketRes.success) {
-        alert(basketRes.error);
-        return;
-      }
-
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = basketRes.data.actionUrl;
-      form.target = '_blank';
-
-      const apiKeyInput = document.createElement('input');
-      apiKeyInput.type = 'hidden';
-      apiKeyInput.name = 'api_key';
-      apiKeyInput.value = basketRes.data.apiKey;
-      form.appendChild(apiKeyInput);
-
-      const dataInput = document.createElement('input');
-      dataInput.type = 'hidden';
-      dataInput.name = 'data';
-      dataInput.value = basketRes.data.dataJson;
-      form.appendChild(dataInput);
-
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to open Kite Basket');
-    } finally {
-      setOpeningBasket(false);
-    }
-  };
-
   return (
     <Dialog
       open={open}
@@ -559,23 +518,75 @@ export default function RebalanceModal({
         }
       }}
     >
-      <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        
-        {/* LEFT PANEL: Table Area (70%) */}
-        <Box sx={{ flex: '1 1 70%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-          
-          {/* Header */}
-          <Box sx={{ 
-            p: 3, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            borderBottom: '1px solid rgba(255,255,255,0.05)' 
-          }}>
-             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-               <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-2xl" />
-               <Typography variant="h5" className="gradient-text font-bold">Rebalance Portfolio</Typography>
-             </Box>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        {/* PERSISTENT 3-STEP HEADER */}
+        <Box sx={{ 
+          px: { xs: 2, sm: 3 }, 
+          py: 1.5, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          bgcolor: 'rgba(15, 23, 42, 0.7)',
+          backdropFilter: 'blur(10px)',
+          zIndex: 10
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1.5, sm: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-xl" />
+              <Typography variant="h6" className="gradient-text font-bold" sx={{ fontSize: '1.05rem', display: { xs: 'none', sm: 'block' } }}>
+                Rebalance Portfolio
+              </Typography>
+            </Box>
+
+            <RebalanceStepper 
+              activeStep={activeStep} 
+              onStepClick={(step) => {
+                if (step === 1) setActiveStep(1);
+                if (step === 2 && summary.actions.length > 0) setActiveStep(2);
+              }}
+              canNavigateToStep={(step) => {
+                if (step === 1) return true;
+                if (step === 2) return summary.actions.length > 0;
+                return activeStep === 3;
+              }}
+            />
+          </Box>
+
+          <IconButton 
+            onClick={onClose} 
+            size="small" 
+            sx={{ color: '#9ca3af', bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', color: '#fff' } }}
+          >
+            <FontAwesomeIcon icon={faXmark} />
+          </IconButton>
+        </Box>
+
+        {/* STEP CONTENT CONTAINER */}
+        <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {activeStep === 1 && (
+            <Box sx={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+              {/* LEFT PANEL: Table Area (70%) */}
+              <Box sx={{ flex: '1 1 70%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                
+                {/* Header */}
+                <Box sx={{ 
+                  p: 2.5, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)' 
+                }}>
+                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                     <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>
+                       Target Portfolio
+                     </Typography>
+                     <Chip 
+                       label={`${state.holdings.length} stocks`} 
+                       size="small" 
+                       sx={{ height: 20, fontSize: '0.65rem', bgcolor: 'rgba(255,255,255,0.05)', color: '#9ca3af' }} 
+                     />
+                   </Box>
 
              {/* Stock Search in Header */}
              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative' }}>
@@ -703,9 +714,6 @@ export default function RebalanceModal({
                      <FontAwesomeIcon icon={faScaleBalanced} size="sm" />
                    </IconButton>
                  </Tooltip>
-                 <IconButton onClick={onClose} sx={{ color: '#9ca3af', '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}>
-                    <FontAwesomeIcon icon={faXmark} size="sm" />
-                 </IconButton>
              </Box>
           </Box>
 
@@ -968,43 +976,23 @@ export default function RebalanceModal({
 
                             <Button
                                 size="small"
-                                variant="outlined"
-                                disabled={openingBasket}
-                                onClick={handleOpenKiteBasketDirect}
-                                startIcon={openingBasket ? <CircularProgress size={10} color="inherit" /> : <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />}
-                                sx={{
-                                    height: 26,
-                                    fontSize: '0.7rem',
-                                    fontWeight: 600,
-                                    textTransform: 'none',
-                                    borderColor: 'rgba(255,255,255,0.15)',
-                                    color: '#d1d5db',
-                                    px: 1.2,
-                                    borderRadius: '4px',
-                                    '&:hover': { borderColor: 'rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.05)' }
-                                }}
-                            >
-                                Kite Basket
-                            </Button>
-                            <Button
-                                size="small"
                                 variant="contained"
-                                onClick={() => setExecutionOpen(true)}
-                                startIcon={<FontAwesomeIcon icon={faBolt} size="xs" />}
+                                onClick={() => setActiveStep(2)}
+                                endIcon={<FontAwesomeIcon icon={faArrowRight} size="xs" />}
                                 sx={{
-                                    height: 26,
-                                    fontSize: '0.7rem',
+                                    height: 28,
+                                    fontSize: '0.75rem',
                                     fontWeight: 700,
                                     textTransform: 'none',
                                     bgcolor: '#2563eb',
                                     color: '#fff',
-                                    px: 1.5,
+                                    px: 2,
                                     borderRadius: '4px',
                                     boxShadow: '0 0 10px rgba(37, 99, 235, 0.3)',
                                     '&:hover': { bgcolor: '#1d4ed8' }
                                 }}
                             >
-                                Execute
+                                Go Ahead →
                             </Button>
                         </Box>
                     )}
@@ -1080,17 +1068,35 @@ export default function RebalanceModal({
            </Box>
 
 
+            </Box>
+          </Box>
+        )}
+
+          {activeStep === 2 && (
+            <RebalanceRefineStep
+              actions={summary.actions}
+              priceMap={priceMap}
+              orders={refinedOrders}
+              onUpdateOrders={setRefinedOrders}
+              onBackToPlan={() => setActiveStep(1)}
+              onProceedToExecute={(ordersToRun) => {
+                setRefinedOrders(ordersToRun);
+                setActiveStep(3);
+              }}
+            />
+          )}
+
+          {activeStep === 3 && (
+            <RebalanceTrackStep
+              initialOrders={refinedOrders}
+              onFinishRebalance={() => {
+                onClose();
+                window.location.reload();
+              }}
+            />
+          )}
         </Box>
       </Box>
-
-      {/* Zerodha Rebalance Execution Modal (CNC Limit Only) */}
-      <RebalanceExecutionModal
-        open={executionOpen}
-        onClose={() => setExecutionOpen(false)}
-        actions={summary.actions}
-        priceMap={priceMap}
-        availableCash={availableCash}
-      />
     </Dialog>
   );
 }

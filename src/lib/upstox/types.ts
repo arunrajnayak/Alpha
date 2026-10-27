@@ -19,12 +19,24 @@ export interface UpstoxLiveQuote {
   is_pre_open?: boolean;
 }
 
+export interface MarketDepthLevel {
+  quantity: number;
+  price: number;
+  orders: number;
+}
+
+export interface MarketDepth {
+  buy: MarketDepthLevel[];
+  sell: MarketDepthLevel[];
+}
+
 export interface UpstoxFullQuote {
   instrument_token: string;
   symbol: string;
   last_price: number;
   volume: number;
   average_price: number;
+  depth?: MarketDepth;
   ohlc: {
     open: number;
     high: number;

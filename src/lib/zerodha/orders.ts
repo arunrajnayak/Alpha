@@ -406,6 +406,57 @@ export async function generateKitePublisherBasket(
 }
 
 /**
+ * Modify an open order in Zerodha (e.g. adjust limit price or quantity).
+ */
+export async function modifyZerodhaOrder(
+    orderId: string,
+    params: { price?: number; quantity?: number }
+): Promise<{ orderId: string }> {
+    try {
+        const kc = await getAuthenticatedKiteClient();
+        orderLogger.info(`Modifying order #${orderId}:`, params);
+
+        const payload: Record<string, unknown> = {
+            order_type: 'LIMIT',
+        };
+        if (params.price !== undefined) {
+            payload.price = Number(params.price.toFixed(2));
+        }
+        if (params.quantity !== undefined) {
+            payload.quantity = Math.max(1, Math.round(params.quantity));
+        }
+
+        const resp = await kc.modifyOrder('regular', orderId, payload);
+        const modifiedId = resp?.order_id || String(resp) || orderId;
+        orderLogger.info(`Order #${orderId} modified successfully!`);
+        return { orderId: modifiedId };
+    } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        orderLogger.error(`Failed to modify order #${orderId}:`, errMsg);
+        throw new Error(errMsg);
+    }
+}
+
+/**
+ * Cancel an open order in Zerodha.
+ */
+export async function cancelZerodhaOrder(orderId: string): Promise<{ orderId: string }> {
+    try {
+        const kc = await getAuthenticatedKiteClient();
+        orderLogger.info(`Cancelling order #${orderId}...`);
+
+        const resp = await kc.cancelOrder('regular', orderId);
+        const cancelledId = resp?.order_id || String(resp) || orderId;
+        orderLogger.info(`Order #${orderId} cancelled successfully!`);
+        return { orderId: cancelledId };
+    } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        orderLogger.error(`Failed to cancel order #${orderId}:`, errMsg);
+        throw new Error(errMsg);
+    }
+}
+
+/**
  * Fetch live status of placed orders from Kite Connect.
  */
 export async function fetchKiteOrdersStatus(

@@ -6,7 +6,9 @@ import {
     executeOrderBatch, 
     executeSingleOrder,
     generateKitePublisherBasket,
-    fetchKiteOrdersStatus
+    fetchKiteOrdersStatus,
+    modifyZerodhaOrder,
+    cancelZerodhaOrder
 } from '@/lib/zerodha/orders';
 import { getStoredZerodhaToken } from '@/lib/kite-client';
 import type { 
@@ -170,6 +172,59 @@ export async function checkRebalanceOrdersStatusAction(
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Failed to check orders status',
+        };
+    }
+}
+
+/**
+ * Server action to modify an open limit order in Zerodha.
+ */
+export async function modifyZerodhaOrderAction(
+    orderId: string,
+    params: { price?: number; quantity?: number }
+): Promise<ActionResponse<{ orderId: string }>> {
+    try {
+        const token = await getStoredZerodhaToken();
+        if (!token) {
+            return {
+                success: false,
+                error: 'Zerodha session is not active.',
+                isAuthError: true,
+            };
+        }
+
+        const result = await modifyZerodhaOrder(orderId, params);
+        return { success: true, data: result };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to modify order',
+        };
+    }
+}
+
+/**
+ * Server action to cancel an open order in Zerodha.
+ */
+export async function cancelZerodhaOrderAction(
+    orderId: string
+): Promise<ActionResponse<{ orderId: string }>> {
+    try {
+        const token = await getStoredZerodhaToken();
+        if (!token) {
+            return {
+                success: false,
+                error: 'Zerodha session is not active.',
+                isAuthError: true,
+            };
+        }
+
+        const result = await cancelZerodhaOrder(orderId);
+        return { success: true, data: result };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to cancel order',
         };
     }
 }
