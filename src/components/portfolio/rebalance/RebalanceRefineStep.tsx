@@ -32,7 +32,7 @@ import { formatCurrency, formatNumber } from '@/lib/format';
 import type { RebalanceOrderItem, RebalancePreflightSummary } from '@/lib/types';
 import type { RebalanceAction } from '@/lib/rebalance';
 import { getRebalancePreflightAction } from '@/app/actions/zerodha-orders';
-import { getTickSize, roundToTick } from '@/lib/zerodha/orders';
+import { getTickSize, roundToTick, getNextTickPrice } from '@/lib/tick-utils';
 import MarketDepthPanel from './MarketDepthPanel';
 
 const StyledHeaderCell = styled(TableCell)(() => ({
@@ -396,9 +396,8 @@ export default function RebalanceRefineStep({
   const stepOrderPrice = useCallback((symbol: string, direction: 1 | -1) => {
     const o = orders.find(x => x.symbol === symbol);
     if (!o) return;
-    const tick = getTickSize(o.price);
-    const nextPrice = direction > 0 ? o.price + tick : Math.max(tick, o.price - tick);
-    updateOrderPrice(symbol, roundToTick(nextPrice, tick));
+    const nextPrice = getNextTickPrice(o.price, direction);
+    updateOrderPrice(symbol, nextPrice);
   }, [orders, updateOrderPrice]);
 
   const resetOrderToLtp = useCallback((symbol: string) => {
