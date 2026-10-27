@@ -54,6 +54,10 @@ const EquityCurve = dynamic(() => import('@/components/portfolio/EquityCurve'), 
   loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
   ssr: false,
 });
+const RunningAlphaChart = dynamic(() => import('@/components/portfolio/RunningAlphaChart'), {
+  loading: () => <div className="h-[400px] bg-slate-800/30 rounded-xl animate-pulse" />,
+  ssr: false,
+});
 const DailyPnLChart = dynamic(() => import('@/components/portfolio/DailyPnLChart'), {
   loading: () => <div className="h-[300px] bg-slate-800/30 rounded-xl animate-pulse" />,
   ssr: false,
@@ -293,6 +297,25 @@ export default function DashboardClient({ initialData = null }: DashboardClientP
                      <ChartErrorBoundary componentName="Equity Curve">
                        <InViewChart minHeight={400}>
                          <EquityCurve data={chartData} />
+                       </InViewChart>
+                     </ChartErrorBoundary>
+                </div>
+          </div>
+      </motion.div>
+
+      {/* Row 4.5: Running Alpha Chart */}
+      <motion.div
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="visible"
+        viewport={viewportConfig}
+        className="w-full h-auto flex-none"
+      >
+          <div className="h-full bg-slate-900/50 rounded-2xl border border-white/5 overflow-hidden flex flex-col glass-card p-6">
+                <div className="flex-1">
+                     <ChartErrorBoundary componentName="Running Alpha Chart">
+                       <InViewChart minHeight={400}>
+                         <RunningAlphaChart data={chartData} />
                        </InViewChart>
                      </ChartErrorBoundary>
                 </div>
