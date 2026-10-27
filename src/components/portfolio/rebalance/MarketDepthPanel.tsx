@@ -17,6 +17,20 @@ interface MarketDepthPanelProps {
   onClose?: () => void;
 }
 
+function formatDepthQty(qty: number): string {
+  if (!qty || qty <= 0) return '-';
+  if (qty >= 10000000) {
+    return `${Number((qty / 10000000).toFixed(2))}Cr`;
+  }
+  if (qty >= 100000) {
+    return `${Number((qty / 100000).toFixed(2))}L`;
+  }
+  if (qty >= 10000) {
+    return `${Number((qty / 1000).toFixed(1))}k`;
+  }
+  return formatNumber(qty);
+}
+
 export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: MarketDepthPanelProps) {
   const [data, setData] = useState<StockMarketDepthData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,8 +95,8 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
       display: 'flex', 
       flexDirection: 'column', 
       gap: 1.5,
-      maxWidth: 480,
-      width: '100%',
+      width: { xs: '92vw', sm: 530 },
+      maxWidth: 550,
       boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6)',
     }}>
       {/* Header bar */}
@@ -127,10 +141,10 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
       </Box>
 
       {/* 5-Level Table: Bids (left) and Asks (right) */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
         {/* BUY BIDS */}
         <Box sx={{ border: '1px solid rgba(74, 222, 128, 0.15)', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'rgba(34, 197, 94, 0.02)' }}>
-          <Box sx={{ px: 1.5, py: 0.6, bgcolor: 'rgba(34, 197, 94, 0.08)', display: 'grid', gridTemplateColumns: '40px 1fr 1fr', borderBottom: '1px solid rgba(74, 222, 128, 0.15)' }}>
+          <Box sx={{ px: 1.5, py: 0.6, bgcolor: 'rgba(34, 197, 94, 0.08)', display: 'grid', gridTemplateColumns: '32px 1fr 1fr', columnGap: 1, borderBottom: '1px solid rgba(74, 222, 128, 0.15)' }}>
             <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#4ade80' }}>Orders</Typography>
             <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#4ade80', textAlign: 'right' }}>Qty</Typography>
             <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#4ade80', textAlign: 'right' }}>Bid (₹)</Typography>
@@ -143,20 +157,23 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
                 px: 1.5, 
                 py: 0.45, 
                 display: 'grid', 
-                gridTemplateColumns: '40px 1fr 1fr', 
+                gridTemplateColumns: '32px 1fr 1fr', 
+                columnGap: 1,
                 borderBottom: idx < 4 ? '1px solid rgba(255,255,255,0.03)' : 'none',
                 cursor: b.price > 0 ? 'pointer' : 'default',
                 transition: 'background-color 0.15s',
                 '&:hover': b.price > 0 ? { bgcolor: 'rgba(74, 222, 128, 0.12)' } : {}
               }}
             >
-              <Typography sx={{ fontSize: '0.7rem', color: '#9ca3af', fontFamily: 'monospace' }}>
+              <Typography sx={{ fontSize: '0.68rem', color: '#9ca3af', fontFamily: 'monospace' }}>
                 {b.orders > 0 ? b.orders : '-'}
               </Typography>
-              <Typography sx={{ fontSize: '0.7rem', color: '#e2e8f0', fontFamily: 'monospace', textAlign: 'right' }}>
-                {b.quantity > 0 ? formatNumber(b.quantity) : '-'}
-              </Typography>
-              <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#4ade80', fontFamily: 'monospace', textAlign: 'right' }}>
+              <Tooltip title={b.quantity > 0 ? formatNumber(b.quantity) : ''} enterDelay={300}>
+                <Typography sx={{ fontSize: '0.68rem', color: '#e2e8f0', fontFamily: 'monospace', textAlign: 'right' }}>
+                  {formatDepthQty(b.quantity)}
+                </Typography>
+              </Tooltip>
+              <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, color: '#4ade80', fontFamily: 'monospace', textAlign: 'right' }}>
                 {b.price > 0 ? formatNumber(b.price, 2) : '-'}
               </Typography>
             </Box>
@@ -171,7 +188,7 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
 
         {/* SELL ASKS */}
         <Box sx={{ border: '1px solid rgba(248, 113, 113, 0.15)', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'rgba(239, 68, 68, 0.02)' }}>
-          <Box sx={{ px: 1.5, py: 0.6, bgcolor: 'rgba(239, 68, 68, 0.08)', display: 'grid', gridTemplateColumns: '1fr 1fr 40px', borderBottom: '1px solid rgba(248, 113, 113, 0.15)' }}>
+          <Box sx={{ px: 1.5, py: 0.6, bgcolor: 'rgba(239, 68, 68, 0.08)', display: 'grid', gridTemplateColumns: '1fr 1fr 32px', columnGap: 1, borderBottom: '1px solid rgba(248, 113, 113, 0.15)' }}>
             <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#f87171' }}>Ask (₹)</Typography>
             <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#f87171', textAlign: 'right' }}>Qty</Typography>
             <Typography sx={{ fontSize: '0.65rem', fontWeight: 700, color: '#f87171', textAlign: 'right' }}>Orders</Typography>
@@ -184,20 +201,23 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
                 px: 1.5, 
                 py: 0.45, 
                 display: 'grid', 
-                gridTemplateColumns: '1fr 1fr 40px', 
+                gridTemplateColumns: '1fr 1fr 32px', 
+                columnGap: 1,
                 borderBottom: idx < 4 ? '1px solid rgba(255,255,255,0.03)' : 'none',
                 cursor: s.price > 0 ? 'pointer' : 'default',
                 transition: 'background-color 0.15s',
                 '&:hover': s.price > 0 ? { bgcolor: 'rgba(248, 113, 113, 0.12)' } : {}
               }}
             >
-              <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: '#f87171', fontFamily: 'monospace' }}>
+              <Typography sx={{ fontSize: '0.68rem', fontWeight: 700, color: '#f87171', fontFamily: 'monospace' }}>
                 {s.price > 0 ? formatNumber(s.price, 2) : '-'}
               </Typography>
-              <Typography sx={{ fontSize: '0.7rem', color: '#e2e8f0', fontFamily: 'monospace', textAlign: 'right' }}>
-                {s.quantity > 0 ? formatNumber(s.quantity) : '-'}
-              </Typography>
-              <Typography sx={{ fontSize: '0.7rem', color: '#9ca3af', fontFamily: 'monospace', textAlign: 'right' }}>
+              <Tooltip title={s.quantity > 0 ? formatNumber(s.quantity) : ''} enterDelay={300}>
+                <Typography sx={{ fontSize: '0.68rem', color: '#e2e8f0', fontFamily: 'monospace', textAlign: 'right' }}>
+                  {formatDepthQty(s.quantity)}
+                </Typography>
+              </Tooltip>
+              <Typography sx={{ fontSize: '0.68rem', color: '#9ca3af', fontFamily: 'monospace', textAlign: 'right' }}>
                 {s.orders > 0 ? s.orders : '-'}
               </Typography>
             </Box>
@@ -214,8 +234,8 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
       {/* Additional Stats: Circuit Limits, Avg Price, Volume */}
       <Box sx={{ 
         display: 'grid', 
-        gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, 
-        gap: 1, 
+        gridTemplateColumns: 'repeat(4, 1fr)', 
+        columnGap: 1, 
         pt: 1, 
         borderTop: '1px solid rgba(255, 255, 255, 0.05)' 
       }}>
