@@ -25,9 +25,7 @@ import {
   faMinus, 
   faCoins, 
   faChartSimple,
-  faArrowLeft,
-  faCheck,
-  faTriangleExclamation
+  faArrowLeft
 } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import type { RebalanceOrderItem, RebalancePreflightSummary } from '@/lib/types';
@@ -179,70 +177,6 @@ export default function RebalanceRefineStep({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Subheader: Session Status & Refresh */}
-      <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between', 
-        px: { xs: 2, sm: 3 }, 
-        py: 1.2, 
-        borderBottom: '1px solid rgba(255,255,255,0.06)', 
-        bgcolor: 'rgba(15, 23, 42, 0.4)' 
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {preflight?.hasActiveSession ? (
-            <Chip
-              size="small"
-              icon={<FontAwesomeIcon icon={faCheck} size="xs" style={{ color: 'inherit' }} />}
-              label="Zerodha Session Active"
-              sx={{
-                height: 22,
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                bgcolor: 'rgba(34, 197, 94, 0.15)',
-                color: '#4ade80',
-                border: '1px solid rgba(34, 197, 94, 0.3)'
-              }}
-            />
-          ) : (
-            <Chip
-              size="small"
-              icon={<FontAwesomeIcon icon={faTriangleExclamation} size="xs" style={{ color: 'inherit' }} />}
-              label="Zerodha Disconnected"
-              sx={{
-                height: 22,
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                bgcolor: 'rgba(239, 68, 68, 0.15)',
-                color: '#f87171',
-                border: '1px solid rgba(239, 68, 68, 0.3)'
-              }}
-            />
-          )}
-          <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.75rem', display: { xs: 'none', md: 'block' } }}>
-            SELL orders are executed first to release margin · Refine quantities, limit prices, or inspect market depth
-          </Typography>
-        </Box>
-
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => loadPreflight(orders)}
-          disabled={isLoadingPreflight || isExecuting}
-          startIcon={isLoadingPreflight ? <CircularProgress size={12} color="inherit" /> : <FontAwesomeIcon icon={faRotateRight} size="xs" />}
-          sx={{
-            color: '#d1d5db',
-            borderColor: 'rgba(255,255,255,0.15)',
-            textTransform: 'none',
-            fontSize: '0.75rem',
-            height: 30,
-            '&:hover': { borderColor: 'rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.03)' }
-          }}
-        >
-          Refresh Margins
-        </Button>
-      </Box>
-
       {/* Main Content Area */}
       <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 2, sm: 3 }, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {preflightError && (
@@ -309,9 +243,21 @@ export default function RebalanceRefineStep({
 
           {/* 4. Available Cash */}
           <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(30, 41, 59, 0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
-              Zerodha Cash Balance
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="caption" sx={{ color: '#9ca3af', fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 600 }}>
+                Zerodha Cash Balance
+              </Typography>
+              <Tooltip title="Refresh margins">
+                <IconButton 
+                  size="small" 
+                  onClick={() => loadPreflight(orders)} 
+                  disabled={isLoadingPreflight || isExecuting}
+                  sx={{ p: 0.2, color: '#9ca3af', '&:hover': { color: '#60a5fa' } }}
+                >
+                  {isLoadingPreflight ? <CircularProgress size={10} color="inherit" /> : <FontAwesomeIcon icon={faRotateRight} style={{ fontSize: '0.65rem' }} />}
+                </IconButton>
+              </Tooltip>
+            </Box>
             <Typography sx={{ color: '#60a5fa', fontSize: '1.1rem', fontWeight: 700, mt: 0.5 }}>
               {formatCurrency(availableCash)}
             </Typography>
@@ -861,13 +807,14 @@ export default function RebalanceRefineStep({
             fontSize: '0.8rem',
             borderColor: 'rgba(255,255,255,0.15)',
             color: '#d1d5db',
+            borderRadius: 1.5,
             '&:hover': { borderColor: 'rgba(255,255,255,0.3)', bgcolor: 'rgba(255,255,255,0.05)' }
           }}
         >
-          ← Back to Plan (Step 1)
+          Back to Plan
         </Button>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
           <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
             <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }}>
               {orders.length} Orders · Outlay: {formatCurrency(liveTotalBuy)}
@@ -879,23 +826,39 @@ export default function RebalanceRefineStep({
 
           <Button
             variant="contained"
-            size="small"
             onClick={() => onProceedToExecute(orders)}
             disabled={orders.length === 0 || isExecuting}
             startIcon={isExecuting ? <CircularProgress size={14} color="inherit" /> : <FontAwesomeIcon icon={faBolt} size="xs" />}
             sx={{
               textTransform: 'none',
               height: 38,
-              px: 3,
+              px: 3.5,
               fontSize: '0.85rem',
               fontWeight: 700,
-              bgcolor: '#2563eb',
+              letterSpacing: '0.01em',
+              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
               color: '#fff',
-              boxShadow: '0 0 15px rgba(37, 99, 235, 0.4)',
-              '&:hover': { bgcolor: '#1d4ed8' }
+              borderRadius: 1.5,
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              boxShadow: '0 4px 14px 0 rgba(37, 99, 235, 0.4)',
+              transition: 'all 0.15s ease-in-out',
+              '&:hover': { 
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                boxShadow: '0 6px 20px 0 rgba(37, 99, 235, 0.55)',
+                transform: 'translateY(-1px)',
+              },
+              '&:active': {
+                transform: 'translateY(0)',
+              },
+              '&.Mui-disabled': {
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: '#64748b',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                boxShadow: 'none',
+              }
             }}
           >
-            Execute (Sells First) →
+            {isExecuting ? 'Executing...' : 'Execute Rebalance'}
           </Button>
         </Box>
       </Box>
