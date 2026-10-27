@@ -590,7 +590,7 @@ export default function RebalanceModal({
         </Box>
 
         {/* STEP CONTENT CONTAINER */}
-        <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {activeStep === 1 && (
             <Box sx={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
               {/* LEFT PANEL: Table Area (70%) */}
