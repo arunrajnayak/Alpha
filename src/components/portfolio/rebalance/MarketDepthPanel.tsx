@@ -5,6 +5,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
+import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRotateRight, faXmark } from '@fortawesome/free-solid-svg-icons';
@@ -57,34 +58,8 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
     fetchDepth();
   }, [fetchDepth]);
 
-  if (loading && !data) {
-    return (
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 1.5 }}>
-        <CircularProgress size={16} sx={{ color: '#60a5fa' }} />
-        <Typography variant="caption" sx={{ color: '#9ca3af' }}>
-          Loading 5-level market depth for {symbol}...
-        </Typography>
-      </Box>
-    );
-  }
-
-  if (error && !data) {
-    return (
-      <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 1.5 }}>
-        <Typography variant="caption" sx={{ color: '#f87171' }}>
-          Market depth unavailable: {error}
-        </Typography>
-        <IconButton size="small" onClick={fetchDepth} sx={{ color: '#f87171', p: 0.5 }}>
-          <FontAwesomeIcon icon={faRotateRight} size="xs" />
-        </IconButton>
-      </Box>
-    );
-  }
-
-  if (!data) return null;
-
-  const totalBuy = data.totalBuyQuantity;
-  const totalSell = data.totalSellQuantity;
+  const totalBuy = data?.totalBuyQuantity ?? 0;
+  const totalSell = data?.totalSellQuantity ?? 0;
 
   return (
     <Box sx={{ 
@@ -103,16 +78,18 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#f3f4f6', letterSpacing: '0.02em' }}>
-            {data.symbol}
+            {data?.symbol || symbol}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: data.netChange >= 0 ? '#4ade80' : '#f87171' }}>
-              ₹{formatNumber(data.lastPrice, 2)}
-            </Typography>
-            <Typography sx={{ fontSize: '0.7rem', color: data.netChange >= 0 ? '#4ade80' : '#f87171' }}>
-              ({data.netChange >= 0 ? '+' : ''}{formatNumber(data.netChange, 2)})
-            </Typography>
-          </Box>
+          {data && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: data.netChange >= 0 ? '#4ade80' : '#f87171' }}>
+                ₹{formatNumber(data.lastPrice, 2)}
+              </Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: data.netChange >= 0 ? '#4ade80' : '#f87171' }}>
+                ({data.netChange >= 0 ? '+' : ''}{formatNumber(data.netChange, 2)})
+              </Typography>
+            </Box>
+          )}
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -140,7 +117,77 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
         </Box>
       </Box>
 
-      {/* 5-Level Table: Bids (left) and Asks (right) */}
+      {/* Body States */}
+      {loading && !data ? (
+        <Box sx={{ 
+          py: 6, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: 1.5,
+          minHeight: 180,
+        }}>
+          <CircularProgress size={24} sx={{ color: '#60a5fa' }} />
+          <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+            Loading 5-level market depth...
+          </Typography>
+        </Box>
+      ) : error && !data ? (
+        <Box sx={{ 
+          p: 2.5, 
+          bgcolor: 'rgba(239, 68, 68, 0.06)', 
+          border: '1px solid rgba(239, 68, 68, 0.25)', 
+          borderRadius: 1.5,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          gap: 1.5,
+          minHeight: 180,
+        }}>
+          <Typography sx={{ color: '#f87171', fontWeight: 600, fontSize: '0.85rem' }}>
+            Market Depth Unavailable
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#cbd5e1', maxWidth: 360, lineHeight: 1.4 }}>
+            {error}
+          </Typography>
+          <Button 
+            variant="outlined" 
+            size="small" 
+            onClick={fetchDepth}
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={12} color="inherit" /> : <FontAwesomeIcon icon={faRotateRight} size="xs" />}
+            sx={{ 
+              borderColor: 'rgba(239, 68, 68, 0.4)', 
+              color: '#f87171', 
+              fontSize: '0.75rem',
+              textTransform: 'none',
+              py: 0.4,
+              px: 1.5,
+              mt: 0.5,
+              '&:hover': {
+                borderColor: '#f87171',
+                bgcolor: 'rgba(239, 68, 68, 0.1)',
+              }
+            }}
+          >
+            {loading ? 'Retrying...' : 'Retry'}
+          </Button>
+        </Box>
+      ) : data ? (
+        <>
+          {error && (
+            <Box sx={{ px: 1.5, py: 0.75, bgcolor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography sx={{ color: '#f87171', fontSize: '0.75rem' }}>Failed to refresh: {error}</Typography>
+              <IconButton size="small" onClick={fetchDepth} sx={{ color: '#f87171', p: 0.25 }}>
+                <FontAwesomeIcon icon={faRotateRight} size="xs" />
+              </IconButton>
+            </Box>
+          )}
+
+          {/* 5-Level Table: Bids (left) and Asks (right) */}
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
         {/* BUY BIDS */}
         <Box sx={{ border: '1px solid rgba(74, 222, 128, 0.15)', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'rgba(34, 197, 94, 0.02)' }}>
@@ -264,6 +311,8 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
           </Typography>
         </Box>
       </Box>
+        </>
+      ) : null}
     </Box>
   );
 }
