@@ -981,8 +981,8 @@ export default function RebalanceModal({
                        </span>
                    </Tooltip>
 
-                   {/* Execute in Alpha Button */}
-                   <Tooltip title="Execute directly in Alpha (CNC Limit Orders, Sells First, Auto-Retry)">
+                   {/* Execute Button */}
+                   <Tooltip title="Execute (CNC Limit Orders, Sells First, Auto-Retry)">
                        <span>
                            <Button
                                size="small"
@@ -1004,7 +1004,7 @@ export default function RebalanceModal({
                                    opacity: summary.actions.length === 0 ? 0.5 : 1
                                }}
                            >
-                               Execute in Alpha
+                               Execute
                            </Button>
                        </span>
                    </Tooltip>
@@ -1061,7 +1061,7 @@ export default function RebalanceModal({
                                     '&:hover': { bgcolor: '#1d4ed8' }
                                 }}
                             >
-                                Execute in Alpha
+                                Execute
                             </Button>
                         </Box>
                     )}

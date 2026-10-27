@@ -347,7 +347,7 @@ export default function RebalanceExecutionModal({
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700, color: '#f3f4f6' }}>
-                Execute in Alpha (Zerodha API)
+                Execute (Zerodha API)
               </Typography>
               <Chip
                 size="small"
@@ -991,7 +991,7 @@ export default function RebalanceExecutionModal({
               '&:hover': { bgcolor: '#1d4ed8' }
             }}
           >
-            {isAllPlaced ? 'All Orders Placed' : isExecuting ? 'Executing...' : 'Execute in Alpha (Sells First)'}
+            {isAllPlaced ? 'All Orders Placed' : isExecuting ? 'Executing...' : 'Execute (Sells First)'}
           </Button>
         </Box>
       </Box>
