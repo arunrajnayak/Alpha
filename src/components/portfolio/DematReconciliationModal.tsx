@@ -413,9 +413,16 @@ export default function DematReconciliationModal({
 
                       {/* Demat Qty */}
                       <StyledCell align="right">
-                        <Typography sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#f3f4f6' }}>
-                          {formatNumber(item.dematQty)}
-                        </Typography>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <Typography sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#f3f4f6' }}>
+                            {formatNumber(item.dematQty)}
+                          </Typography>
+                          {item.t1Qty > 0 && (
+                            <Typography variant="caption" sx={{ color: '#38bdf8', fontSize: '0.65rem', fontFamily: 'monospace' }}>
+                              {item.settledQty !== undefined ? `${formatNumber(item.settledQty)} set. + ${formatNumber(item.t1Qty)} T1` : `${formatNumber(item.t1Qty)} T1`}
+                            </Typography>
+                          )}
+                        </Box>
                       </StyledCell>
 
                       {/* Difference */}
@@ -472,17 +479,20 @@ export default function DematReconciliationModal({
                       <StyledCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           {isDiscrepancy && (
-                            <FontAwesomeIcon icon={faTriangleExclamation} style={{ color: '#fbbf24', fontSize: '0.75rem' }} />
+                            <FontAwesomeIcon icon={faTriangleExclamation} style={{ color: '#fbbf24', fontSize: '0.75rem', flexShrink: 0 }} />
                           )}
                           {isMissingAlpha && (
-                            <FontAwesomeIcon icon={faCircleExclamation} style={{ color: '#38bdf8', fontSize: '0.75rem' }} />
+                            <FontAwesomeIcon icon={faCircleExclamation} style={{ color: '#38bdf8', fontSize: '0.75rem', flexShrink: 0 }} />
                           )}
                           {isMissingDemat && (
-                            <FontAwesomeIcon icon={faCircleExclamation} style={{ color: '#f87171', fontSize: '0.75rem' }} />
+                            <FontAwesomeIcon icon={faCircleExclamation} style={{ color: '#f87171', fontSize: '0.75rem', flexShrink: 0 }} />
+                          )}
+                          {isMatch && item.t1Qty > 0 && (
+                            <FontAwesomeIcon icon={faCheck} style={{ color: '#38bdf8', fontSize: '0.75rem', flexShrink: 0 }} />
                           )}
                           <Typography sx={{ 
                             fontSize: '0.75rem', 
-                            color: isMatch ? '#64748b' : isDiscrepancy ? '#fde68a' : '#cbd5e1' 
+                            color: isMatch ? (item.t1Qty > 0 ? '#38bdf8' : '#64748b') : isDiscrepancy ? '#fde68a' : '#cbd5e1' 
                           }}>
                             {item.potentialReason || (isMatch ? 'All records in sync' : 'Review transaction history')}
                           </Typography>

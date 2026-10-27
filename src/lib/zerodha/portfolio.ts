@@ -133,15 +133,16 @@ export async function reconcilePortfolioWithZerodha(): Promise<DematReconciliati
         // Combine if multiple listings exist (e.g. NSE + BSE)
         const existing = dematMap.get(canonical);
         if (existing) {
+            const prevTotal = existing.quantity + existing.t1Quantity;
+            const addTotal = h.quantity + h.t1Quantity;
+            const newTotal = prevTotal + addTotal;
+            if (newTotal > 0) {
+                existing.averagePrice = ((existing.averagePrice * prevTotal) + (h.averagePrice * addTotal)) / newTotal;
+            }
             existing.quantity += h.quantity;
             existing.t1Quantity += h.t1Quantity;
             existing.pledgedQuantity += h.pledgedQuantity;
             existing.realisedQuantity += h.realisedQuantity;
-            // Weighted average price
-            const totalQty = existing.quantity;
-            if (totalQty > 0) {
-                existing.averagePrice = ((existing.averagePrice * (existing.quantity - h.quantity)) + (h.averagePrice * h.quantity)) / totalQty;
-            }
         } else {
             dematMap.set(canonical, { ...h, symbol: canonical });
         }
@@ -157,53 +158,59 @@ export async function reconcilePortfolioWithZerodha(): Promise<DematReconciliati
         const demat = dematMap.get(sym);
 
         const alphaQty = alpha.quantity;
-        const dematQty = demat?.quantity ?? 0;
-        const deltaQty = dematQty - alphaQty;
+        const settledQty = demat?.quantity ?? 0;
+        const t1Qty = demat?.t1Quantity ?? 0;
+        const totalZerodhaQty = settledQty + t1Qty;
+        const deltaQty = totalZerodhaQty - alphaQty;
         const diffAbs = Math.abs(deltaQty);
 
         const currentPrice = demat?.lastPrice && demat.lastPrice > 0 ? demat.lastPrice : alpha.price;
         const alphaAvgPrice = alpha.invested > 0 && alphaQty > 0 ? alpha.invested / alphaQty : 0;
         const dematAvgPrice = demat?.averagePrice ?? 0;
-        const t1Qty = demat?.t1Quantity ?? 0;
         const pledgedQty = demat?.pledgedQuantity ?? 0;
 
         let status: DematReconciliationItem['status'];
         let potentialReason: string | undefined;
 
-        if (dematQty === 0) {
+        if (totalZerodhaQty === 0) {
             status = 'missing_in_demat';
             potentialReason = 'Stock exists in Alpha ledger but zero balance in Demat. (May have been sold outside Alpha or transferred).';
         } else if (diffAbs < 0.001) {
             status = 'matched';
             if (t1Qty > 0) {
-                potentialReason = `${t1Qty} shares pending T+1 settlement.`;
+                potentialReason = settledQty > 0
+                    ? `${t1Qty} shares in T+1 settlement (${settledQty} settled, total matched).`
+                    : `${t1Qty} shares in T+1 settlement pending depository credit (total matched).`;
             } else if (pledgedQty > 0) {
                 potentialReason = `${pledgedQty} shares pledged as collateral.`;
             }
         } else {
             status = 'discrepancy';
-            // Detect common corporate action multiples
+            // Detect common corporate action multiples or reasons
             if (alphaQty > 0) {
-                const ratio = dematQty / alphaQty;
+                const ratio = totalZerodhaQty / alphaQty;
                 if (Math.abs(ratio - 2) < 0.05) potentialReason = 'Likely 1:1 Stock Split or Bonus';
                 else if (Math.abs(ratio - 3) < 0.05) potentialReason = 'Likely 2:1 Stock Split or Bonus';
                 else if (Math.abs(ratio - 5) < 0.05) potentialReason = 'Likely 5:1 Stock Split';
                 else if (Math.abs(ratio - 10) < 0.05) potentialReason = 'Likely 10:1 Stock Split';
-                else if (t1Qty > 0 && Math.abs(diffAbs - t1Qty) < 0.001) {
-                    potentialReason = `Discrepancy matches unsettled T+1 shares (${t1Qty}).`;
+                else if (Math.abs(settledQty - alphaQty) < 0.001) {
+                    potentialReason = `Matches settled Demat quantity (${settledQty}), but ${t1Qty} unsettled T+1 shares not accounted for in Alpha.`;
+                } else if (t1Qty > 0 && Math.abs(diffAbs - t1Qty) < 0.001) {
+                    potentialReason = `Discrepancy of ${deltaQty > 0 ? `+${deltaQty}` : deltaQty} matches unsettled T+1 shares (${t1Qty}).`;
                 }
             }
         }
 
         const alphaValue = alphaQty * currentPrice;
-        const dematValue = dematQty * currentPrice;
+        const dematValue = totalZerodhaQty * currentPrice;
         const valueDiff = dematValue - alphaValue;
 
         items.push({
             symbol: sym,
             companyName: companyNameMap.get(sym) || sym,
             alphaQty,
-            dematQty,
+            dematQty: totalZerodhaQty,
+            settledQty,
             deltaQty,
             t1Qty,
             pledgedQty,
@@ -223,18 +230,23 @@ export async function reconcilePortfolioWithZerodha(): Promise<DematReconciliati
         if (processedSymbols.has(sym)) continue;
 
         const alphaQty = 0;
-        const dematQty = demat.quantity;
-        const deltaQty = dematQty;
+        const settledQty = demat.quantity;
+        const t1Qty = demat.t1Quantity;
+        const totalZerodhaQty = settledQty + t1Qty;
+        if (totalZerodhaQty === 0) continue;
+
+        const deltaQty = totalZerodhaQty;
         const currentPrice = demat.lastPrice > 0 ? demat.lastPrice : demat.closePrice;
-        const dematValue = dematQty * currentPrice;
+        const dematValue = totalZerodhaQty * currentPrice;
 
         items.push({
             symbol: sym,
             companyName: companyNameMap.get(sym) || sym,
             alphaQty,
-            dematQty,
+            dematQty: totalZerodhaQty,
+            settledQty,
             deltaQty,
-            t1Qty: demat.t1Quantity,
+            t1Qty,
             pledgedQty: demat.pledgedQuantity,
             alphaAvgPrice: 0,
             dematAvgPrice: demat.averagePrice,
@@ -243,7 +255,9 @@ export async function reconcilePortfolioWithZerodha(): Promise<DematReconciliati
             dematValue,
             valueDiff: dematValue,
             status: 'missing_in_alpha',
-            potentialReason: 'Demat holding has no corresponding transactions in Alpha.',
+            potentialReason: t1Qty > 0
+                ? `Demat holding (${settledQty} settled + ${t1Qty} T+1) has no transactions in Alpha.`
+                : 'Demat holding has no corresponding transactions in Alpha.',
         });
     }
 

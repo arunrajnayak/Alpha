@@ -88,7 +88,8 @@ export interface DematReconciliationItem {
   symbol: string;
   companyName?: string;
   alphaQty: number;
-  dematQty: number;
+  dematQty: number; // total quantity in Zerodha (settled + T1)
+  settledQty?: number; // settled quantity delivered to Demat
   deltaQty: number; // dematQty - alphaQty
   t1Qty: number;
   pledgedQty: number;
