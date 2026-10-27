@@ -7,7 +7,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faRotateRight, faArrowTrendUp, faArrowTrendDown, faXmark } from '@fortawesome/free-solid-svg-icons';
+import { faRotateRight, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { formatCurrency, formatNumber } from '@/lib/format';
 import { getStockMarketDepthAction, StockMarketDepthData } from '@/app/actions/stocks';
 
@@ -71,8 +71,6 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
 
   const totalBuy = data.totalBuyQuantity;
   const totalSell = data.totalSellQuantity;
-  const totalVolumeOrders = totalBuy + totalSell;
-  const buyPercent = totalVolumeOrders > 0 ? (totalBuy / totalVolumeOrders) * 100 : 50;
 
   return (
     <Box sx={{ 
@@ -90,8 +88,8 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
       {/* Header bar */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontWeight: 700, fontSize: '0.8rem', color: '#f3f4f6', letterSpacing: '0.02em' }}>
-            5-Level Order Book — {data.symbol}
+          <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#f3f4f6', letterSpacing: '0.02em' }}>
+            {data.symbol}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: data.netChange >= 0 ? '#4ade80' : '#f87171' }}>
@@ -104,9 +102,6 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem', display: { xs: 'none', sm: 'inline' } }}>
-            Click price to fill
-          </Typography>
           <Tooltip title="Refresh depth">
             <IconButton 
               size="small" 
@@ -216,18 +211,7 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
         </Box>
       </Box>
 
-      {/* Buy / Sell Pressure Ratio Bar */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#9ca3af' }}>
-          <span>Buyers: {buyPercent.toFixed(1)}%</span>
-          <span>Sellers: {(100 - buyPercent).toFixed(1)}%</span>
-        </Box>
-        <Box sx={{ height: 4, borderRadius: 2, bgcolor: '#f87171', overflow: 'hidden', display: 'flex' }}>
-          <Box sx={{ width: `${buyPercent}%`, bgcolor: '#4ade80', transition: 'width 0.3s ease' }} />
-        </Box>
-      </Box>
-
-      {/* Additional Stats: Circuit Limits, VWAP, Volume, OHLC */}
+      {/* Additional Stats: Circuit Limits, Avg Price, Volume */}
       <Box sx={{ 
         display: 'grid', 
         gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, 
@@ -236,19 +220,19 @@ export default function MarketDepthPanel({ symbol, onSelectPrice, onClose }: Mar
         borderTop: '1px solid rgba(255, 255, 255, 0.05)' 
       }}>
         <Box>
-          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>Lower Circuit (LCL)</Typography>
+          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>Lower Circuit</Typography>
           <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#f87171', fontFamily: 'monospace' }}>
             {data.lowerCircuitLimit > 0 ? formatCurrency(data.lowerCircuitLimit) : 'N/A'}
           </Typography>
         </Box>
         <Box>
-          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>Upper Circuit (UCL)</Typography>
+          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>Upper Circuit</Typography>
           <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#4ade80', fontFamily: 'monospace' }}>
             {data.upperCircuitLimit > 0 ? formatCurrency(data.upperCircuitLimit) : 'N/A'}
           </Typography>
         </Box>
         <Box>
-          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>Avg Price (VWAP)</Typography>
+          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.65rem' }}>Avg Price</Typography>
           <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: '#cbd5e1', fontFamily: 'monospace' }}>
             {data.averagePrice > 0 ? formatCurrency(data.averagePrice) : 'N/A'}
           </Typography>
