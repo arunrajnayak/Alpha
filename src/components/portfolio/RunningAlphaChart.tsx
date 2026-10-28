@@ -138,16 +138,11 @@ const CustomTooltip = memo(function CustomTooltip({
                   {alphaVal.toFixed(2)}%
                 </span>
               </div>
-              <div className="flex justify-between text-[10px] text-gray-500 pl-3.5">
-                <span>
-                  {s.benchLabel}:{' '}
-                  {benchReturn != null
-                    ? `${benchReturn >= 0 ? '+' : ''}${benchReturn.toFixed(2)}%`
-                    : '—'}
-                </span>
-                <span className={`italic ${isPos ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-                  {isPos ? 'Outperforming' : 'Lagging'}
-                </span>
+              <div className="text-[10px] text-gray-500 pl-3.5">
+                {s.benchLabel}:{' '}
+                {benchReturn != null
+                  ? `${benchReturn >= 0 ? '+' : ''}${benchReturn.toFixed(2)}%`
+                  : '—'}
               </div>
             </div>
           );
