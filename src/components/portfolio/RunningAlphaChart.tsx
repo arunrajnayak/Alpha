@@ -321,19 +321,9 @@ export default function RunningAlphaChart({ data }: RunningAlphaChartProps) {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-500/5 flex items-center justify-center flex-shrink-0">
             <FontAwesomeIcon icon={faScaleBalanced} className="text-indigo-400 text-lg" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                Running Alpha
-              </span>
-              <span className="text-[10px] text-gray-500 font-medium hidden sm:inline">
-                (Excess Return vs Benchmarks)
-              </span>
-            </div>
-            <p className="text-[11px] text-gray-500">
-              Cumulative spread from start of selected timeframe
-            </p>
-          </div>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+            Running Alpha
+          </span>
         </div>
 
         {/* Center: Live Alpha Badges */}
