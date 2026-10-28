@@ -43,8 +43,7 @@ interface RunningAlphaChartProps {
 const SERIES_CONFIG = [
   {
     key: 'alphaNifty' as const,
-    label: 'Alpha vs Nifty 50',
-    shortLabel: 'vs Nifty 50',
+    label: 'vs Nifty 50',
     color: '#8b5cf6', // violet-500
     gradientId: 'gradient-alpha-nifty',
     benchKey: 'niftyReturn' as const,
@@ -52,8 +51,7 @@ const SERIES_CONFIG = [
   },
   {
     key: 'alphaN500M50' as const,
-    label: 'Alpha vs N500M50',
-    shortLabel: 'vs N500M50',
+    label: 'vs N500M50',
     color: '#06b6d4', // cyan-500
     gradientId: 'gradient-alpha-n500m50',
     benchKey: 'n500m50Return' as const,
