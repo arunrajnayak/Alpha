@@ -259,6 +259,25 @@ export async function calculateRebalancePreflight(
 }
 
 /**
+ * Extract a human-readable error message from Kite SDK errors.
+ * The Kite SDK throws plain objects { error_type, message, status } — not Error instances.
+ */
+function extractKiteError(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (err && typeof err === 'object') {
+        const e = err as Record<string, unknown>;
+        // Kite SDK plain error object: { error_type, message, status }
+        if (typeof e.message === 'string' && e.message) {
+            const prefix = typeof e.error_type === 'string' ? `[${e.error_type}] ` : '';
+            return `${prefix}${e.message}`;
+        }
+        // Fallback to JSON
+        try { return JSON.stringify(e); } catch { /* ignore */ }
+    }
+    return String(err);
+}
+
+/**
  * Execute a single CNC Limit order directly in Zerodha.
  */
 export async function executeSingleOrder(order: RebalanceOrderItem): Promise<OrderExecutionResult> {
@@ -291,8 +310,8 @@ export async function executeSingleOrder(order: RebalanceOrderItem): Promise<Ord
             success: true,
         };
     } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        orderLogger.error(`Failed to place ${order.transactionType} ${order.symbol}:`, errMsg);
+        const errMsg = extractKiteError(err);
+        orderLogger.error(`Failed to place ${order.transactionType} ${order.symbol}: ${errMsg}`);
         return {
             symbol: order.symbol,
             transactionType: order.transactionType,
@@ -424,8 +443,8 @@ export async function modifyZerodhaOrder(
         orderLogger.info(`Order #${orderId} modified successfully!`);
         return { orderId: modifiedId };
     } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        orderLogger.error(`Failed to modify order #${orderId}:`, errMsg);
+        const errMsg = extractKiteError(err);
+        orderLogger.error(`Failed to modify order #${orderId}: ${errMsg}`);
         throw new Error(errMsg);
     }
 }
@@ -443,8 +462,8 @@ export async function cancelZerodhaOrder(orderId: string): Promise<{ orderId: st
         orderLogger.info(`Order #${orderId} cancelled successfully!`);
         return { orderId: cancelledId };
     } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        orderLogger.error(`Failed to cancel order #${orderId}:`, errMsg);
+        const errMsg = extractKiteError(err);
+        orderLogger.error(`Failed to cancel order #${orderId}: ${errMsg}`);
         throw new Error(errMsg);
     }
 }
