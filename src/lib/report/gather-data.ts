@@ -27,7 +27,7 @@ function signalReason(opts: {
   rank: number | null;
 }): string {
   const parts: string[] = [];
-  if (opts.byFilter)                parts.push('below 200 DMA / far from ATH');
+  if (opts.byFilter)                parts.push('below 200 DMA');
   if (opts.by50Dma && !opts.byFilter) parts.push('below 50 DMA');
   if (opts.byDrawdown)              parts.push('dropped > 25% since entry');
   else if (opts.byDrawdownWarn)     parts.push('dropped > 20% since entry');

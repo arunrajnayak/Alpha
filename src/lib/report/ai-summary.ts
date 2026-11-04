@@ -27,8 +27,8 @@ Include a Markdown Table listing all Exit (🔴) and Warning (🟡) stocks:
 | Symbol | Signal | Rank | Key Trigger / Reason | Action / Status |
 |---|---|---|---|---|
 Provide commentary on technical breaches:
-- **EXIT (Red)**: Below 200 DMA & >25% ATH drawdown, rank >70, or dropped screener universe.
-- **WARNING (Yellow)**: Below 50 DMA, rank 51–70, moved to BE category, or dropped > 20% from post-portfolio addition high.
+- **EXIT (Red)**: Below 200 DMA, rank > 70, dropped out of screener universe, or > 25% drawdown from post-portfolio addition peak.
+- **WARNING (Yellow)**: Below 50 DMA, rank 51–70, or dropped 20–25% from post-portfolio addition peak.
 - **Protected**: Note stocks held < 14 days (cannot be exited yet).
 
 ### 🚀 Opportunity & Deployment Candidates
@@ -52,7 +52,7 @@ function holdingSignalSummary(h: PortfolioHolding): string {
 
 function exitSummary(e: ExitCandidate): string {
   const reasons: string[] = [];
-  if (e.byFilter)   reasons.push('below 200 DMA / far from ATH');
+  if (e.byFilter)   reasons.push('below 200 DMA');
   if (e.by50Dma && !e.byFilter) reasons.push('below 50 DMA');
   if (e.byDrawdown) reasons.push('dropped > 25% since entry');
   else if (e.byDrawdownWarn) reasons.push('dropped > 20% since entry');

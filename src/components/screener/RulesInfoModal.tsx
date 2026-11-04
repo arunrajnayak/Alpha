@@ -37,15 +37,21 @@ export default function RulesInfoModal({ open, onClose }: RulesInfoModalProps) {
             </div>
 
             {/* Universe Filters */}
-            <Section title="Pre-filtered Criteria" subtitle="All must pass for Pre-filtered tab (AND logic). All tab has no market cap or price/trend filters.">
-              <RuleRow label="Exchange" value="NSE equity (EQ & BE series) + GOLDBEES, SILVERBEES" />
-              <RuleRow label="Market Cap" value=">= 1,000 Crores (NSE bhavcopy) — Pre-filtered tab only" />
+            <Section title="Entry Criteria" subtitle="All must pass to appear in the ranked list (AND logic).">
+              <RuleRow label="Exchange" value="NSE equity (EQ series only — BE excluded) + GOLDBEES, SILVERBEES" />
+              <RuleRow label="Market Cap" value=">= 1,500 Crores (NSE bhavcopy)" />
               <RuleRow label="Min Price" value=">= ₹50 (ETFs exempt)" />
               <RuleRow label="Volume" value="Median daily turnover >= ₹1 Cr (126 trading days)" />
-              <RuleRow label="Circuit Limit" value="Band width >= 9% (5% circuit stocks tagged with Warning; 2% circuit excluded)" />
-              <RuleRow label="BE Category" value="Included with Warning/Caution tag (trade-to-trade stocks)" />
+              <RuleRow label="Circuit Limit" value="Band width >= 15% (5% and 2% circuit stocks excluded)" />
               <RuleRow label="200 DMA" value="Close >= 200-day simple moving average" />
               <RuleRow label="ATH Proximity" value="Close >= 70% of all-time high" />
+            </Section>
+
+            {/* Exit Signals */}
+            <Section title="Portfolio Exit & Warning Signals" subtitle="Evaluated daily for active portfolio holdings.">
+              <RuleRow label="🔴 Exit (Red)" value="Close < 200 DMA, rank > 70, drawdown > 25% from post-entry peak, or dropped from universe" />
+              <RuleRow label="🟡 Warning (Yellow)" value="Close < 50 DMA, rank 51–70, drawdown 20–25% from post-entry peak, or 5% circuit" />
+              <RuleRow label="🔒 Min Hold" value="Holdings < 14 days old are locked against premature exit signals" />
             </Section>
 
             {/* Scoring */}

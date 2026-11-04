@@ -84,31 +84,12 @@ const getCachedActiveScores = unstable_cache(
   { revalidate: 3600, tags: ['screener-scores'] },
 );
 
-const getCachedFilteredSymbols = unstable_cache(
-  async () => {
-    const rows = await prisma.momentumScore.findMany({
-      where: { isActive: true, rankType: 'filtered' },
-      select: { symbol: true },
-    });
-    return rows.map(r => r.symbol);
-  },
-  ['screener-filtered-symbols'],
-  { revalidate: 3600, tags: ['screener-scores'] },
-);
 
 export async function getScreenerData(
-  tab: 'all' | 'prefiltered' | 'portfolio' = 'prefiltered',
+  tab: 'all' | 'prefiltered' | 'portfolio' = 'portfolio',
 ): Promise<{ rows: ScreenerRow[]; stats: ScreenerStats }> {
-  // Determine which rankType to query for the main scores list
-  let rankTypeForScores: 'filtered' | 'all';
-  if (tab === 'all') {
-    rankTypeForScores = 'all';
-  } else {
-    // 'prefiltered', 'portfolio' all use filtered rankings
-    rankTypeForScores = 'filtered';
-  }
-
-  const scores = await getCachedActiveScores(rankTypeForScores);
+  // 'prefiltered', 'portfolio' and legacy 'all' now all use the active ranked scores
+  const scores = await getCachedActiveScores('filtered');
   const beSymbols = await getBESymbols();
 
   // Fetch ASM surveillance list
@@ -203,16 +184,10 @@ export async function getScreenerData(
     };
   }
 
-  // For All tab: fetch which symbols also pass pre-filtering — used for row highlights
-  let filteredSymbols = new Set<string>();
-  if (tab === 'all') {
-    filteredSymbols = new Set(await getCachedFilteredSymbols());
-  }
-
   // Compute rank change from RankingHistory (not stored prevRank) so it's always
   // correct regardless of how many times the cron ran today.
   const todayDate = scores[0]?.computedDate ?? null;
-  const prevDayRanks = await loadPrevDayRanksForDisplay(todayDate, rankTypeForScores);
+  const prevDayRanks = await loadPrevDayRanksForDisplay(todayDate, 'filtered');
 
   const rankedSymbols = new Set<string>();
   const allRows: ScreenerRow[] = scores.map(s => {
@@ -256,7 +231,6 @@ export async function getScreenerData(
       prevRank,
       rankChange,
       inPortfolio,
-      isPreFiltered: filteredSymbols.size > 0 ? filteredSymbols.has(s.symbol) : undefined,
       isBE: beSymbols.has(s.symbol) || s.symbol.endsWith('-BE'),
       asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
       drawdownSinceEntry,
@@ -384,7 +358,7 @@ export async function getScreenerData(
         if (isBE) {
           unrankedReason = 'BE category (Trade-to-Trade)';
         } else if (marketCapCr > 0 && marketCapCr < PARAMS.mcapMinCr) {
-          unrankedReason = `Market cap < ₹1,000 Cr (₹${marketCapCr.toFixed(0)} Cr)`;
+          unrankedReason = `Market cap < ₹${PARAMS.mcapMinCr.toLocaleString()} Cr (₹${marketCapCr.toFixed(0)} Cr)`;
         } else if (closes.length < 248) {
           unrankedReason = `Price history < 248 days (${closes.length}/248)`;
         } else if (closes.length >= 248 && compositeScore === 0) {
@@ -464,20 +438,8 @@ export async function getScreenerData(
       const is5PctCircuit = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
       const byRank   = isUnranked || row.rank > 50;
 
-      // ATH proximity breach (> 25% below ATH).
-      // Relaxation: If the holding maintains strong momentum (rank <= 50), remains above its 200 DMA,
-      // and has suffered mild/no drawdown since entry (>= -10%), relax the ATH breach trigger
-      // so strong momentum holdings with minimal capital loss aren't prematurely flagged for exit.
-      const isAthBreached = row.athProximity < 0.75;
-      const isAthRelaxed  =
-        isAthBreached &&
-        !isUnranked &&
-        row.rank <= 50 &&
-        row.dmaSwatches.above200 &&
-        (row.drawdownSinceEntry === null || row.drawdownSinceEntry === undefined || row.drawdownSinceEntry >= -10);
-      const byAth = isAthBreached && !isAthRelaxed;
-
-      const byFilter = !row.dmaSwatches.above200 || byAth;
+      // Technical filter breach: below 200 DMA
+      const byFilter = !row.dmaSwatches.above200;
       const by50Dma = !row.dmaSwatches.above50;
       const byDrawdownWarn = row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null && row.drawdownSinceEntry < -20;
       const byDrawdown     = row.drawdownSinceEntry !== undefined && row.drawdownSinceEntry !== null && row.drawdownSinceEntry < -25;
@@ -486,17 +448,17 @@ export async function getScreenerData(
       const isProtected = ageDays < 14;
 
       // Determine signal type:
-      // Red: byFilter, or other unranked reasons (not BE), or rank > 70, or DD > 25%
-      // Yellow: BE category OR 5% circuit OR rank 51-70 OR below 50 DMA OR DD 20-25% (warn zone)
+      // Red: below 200 DMA (byFilter), or dropped out of universe (isUnranked), or major rank drop (rank > 70), or drawdown > 25% since entry (byDrawdown)
+      // Yellow: rank 51-70 OR below 50 DMA OR DD 20-25% (warn zone) OR 5% circuit
       let signalType: 'green' | 'yellow' | 'red';
-      const isRed = byFilter || (isUnranked && !isBE) || (!isUnranked && row.rank > 70) || byDrawdown;
+      const isRed = byFilter || isUnranked || (!isUnranked && row.rank > 70) || byDrawdown;
       if (isRed) {
         signalType = 'red';
       } else {
         signalType = 'yellow';
       }
 
-      row.exitSignal = { byRank, byFilter, byAth, by50Dma, byDrawdownWarn, byDrawdown, protected: isProtected, isUnranked, isBE, is5PctCircuit, unrankedReason: row.unrankedReason, signalType };
+      row.exitSignal = { byRank, byFilter, by50Dma, byDrawdownWarn, byDrawdown, protected: isProtected, isUnranked, isBE, is5PctCircuit, unrankedReason: row.unrankedReason, signalType };
     }
   }
 
@@ -552,8 +514,7 @@ async function computeStats(
 
   // Always query canonical counts regardless of which tab's rows we received
   const symList = portfolioSymbols && portfolioSymbols.size > 0 ? [...portfolioSymbols] : [];
-  const [allTotal, filteredTotal, rankedPortfolioCount] = await Promise.all([
-    prisma.momentumScore.count({ where: { isActive: true, rankType: 'all' } }),
+  const [filteredTotal, rankedPortfolioCount] = await Promise.all([
     prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered' } }),
     symList.length > 0
       ? prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered', symbol: { in: symList } } })
@@ -561,10 +522,10 @@ async function computeStats(
   ]);
 
   return {
-    total: filteredTotal,          // always pre-filtered count, tab-independent
-    allTotal,                      // always all-universe count
+    total: filteredTotal,          // ranked count
+    allTotal: filteredTotal,       // mirrors ranked total (All tab removed)
     portfolioCount,                // always total portfolio size (holdings)
-    rankedPortfolioCount,          // portfolio stocks in pre-filtered set
+    rankedPortfolioCount,          // portfolio stocks in ranked set
     rankBuckets: { hold: holdCount, warning: warningCount, exit: exitCount },
     mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0, nano: 0 },
     dataDate: null,

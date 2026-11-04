@@ -13,7 +13,7 @@ export const PARAMS = {
   athWindow: 'full' as const,
   volumeThresholdCr: 1.0,
   volumeLookbackDays: 126,   // 6-month median
-  mcapMinCr: 1000,
+  mcapMinCr: 1500,
   minPrice: 50,
 } as const;
 

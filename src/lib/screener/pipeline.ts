@@ -110,10 +110,10 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     return true;
   });
 
-  // BE (trade-to-trade) stocks are included in the universe (ranked with warning highlight in pre-filtered tab)
+  // BE (trade-to-trade) stocks are excluded from the screener universe
   const beSymbols = await getBESymbols();
-  const tradeableFiltered = tradeable;
-  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (including ${beSymbols.size} BE series)`);
+  const tradeableFiltered = tradeable.filter(i => !beSymbols.has(i.symbol) && !i.symbol.endsWith('-BE'));
+  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (${beSymbols.size} BE series excluded)`);
   await progress(10, `${tradeableFiltered.length} instruments`);
 
   // ── Step 3: Patch today's prices (batch OHLC) ─────────────────────────────
@@ -313,14 +313,9 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     loadNiftyIndexMap(),
   ]);
 
-  const [prevRanks, prevAllRanks] = await Promise.all([
+  const [prevRanks, rankingHistory] = await Promise.all([
     loadPreviousDayRanks(today, 'filtered'),
-    loadPreviousDayRanks(today, 'all'),
-  ]);
-
-  const [rankingHistory, allRankingHistory] = await Promise.all([
     loadRankingHistoryForStats('filtered', today),
-    loadRankingHistoryForStats('all', today),
   ]);
 
   pipelineLogger.info(`[${elapsed()}] DB loads complete (including ${niftyMap.size} NIFTY benchmark dates)`);
@@ -399,11 +394,11 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
       const allResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { skipFilters: true, beta });
       if (!allResult) continue;
 
-      // Circuit band < 9% (2% circuit stocks and narrow bands) excluded from pre-filtered; 5% circuits (bandWidth ~10.5%) are allowed with warning highlight
-      // Market cap must be >= 1,000 Cr (or whitelisted ETF / portfolio holding)
+      // Circuit band < 15% (2% and 5% circuit stocks) excluded; 10% and 20% circuits are allowed
+      // Market cap must be >= 1,500 Cr (or whitelisted ETF / portfolio holding)
       const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { beta });
       const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol) || !!portfolioSymbols?.has(inst.symbol);
-      const passesCircuit = bandWidth === undefined || bandWidth >= 0.09 || !!portfolioSymbols?.has(inst.symbol);
+      const passesCircuit = (bandWidth === undefined || bandWidth >= 0.15) || !!portfolioSymbols?.has(inst.symbol);
       const passesFilters = filteredResult !== null && passesCircuit && passesMcap;
 
       const sparkline = closes.slice(-50);
@@ -456,45 +451,10 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
     await prisma.rankingHistory.createMany({ data: chunk });
   }
 
-  pipelineLogger.info(`[${elapsed()}] Filtered rankings stored`);
-  await progress(80, 'Filtered stored');
+  pipelineLogger.info(`[${elapsed()}] Ranked scores stored`);
+  await progress(85, 'Rankings stored');
 
-  // ── Step 10: Store all-universe rankings (skip on timeout) ─────────────────
-  if (isTimedOut()) {
-    pipelineLogger.warn('Timeout — skipping all-universe store');
-    errors.push('Skipped all-universe scoring due to timeout');
-    return {
-      success: true, date: today, bhavcopyUpdated, candlesFetched, candlesInserted,
-      athUpdated, universeSize: tradeable.length, scored: filteredScored.length,
-      ranked: filteredScored.length, corporateActionsFlushed, errors,
-      durationMs: Date.now() - start,
-    };
-  }
-
-  await prisma.momentumScore.updateMany({
-    where: { isActive: true, rankType: 'all' },
-    data: { isActive: false },
-  });
-  await prisma.momentumScore.deleteMany({ where: { computedDate: today, rankType: 'all' } });
-
-  const allRows = buildScoreRows(allScored, today, 'all', prevAllRanks, allRankingHistory);
-  for (const chunk of chunkArray(allRows, TURSO_WRITE_CHUNK)) {
-    await prisma.momentumScore.createMany({ data: chunk });
-  }
-
-  await prisma.rankingHistory.deleteMany({ where: { date: today, rankType: 'all' } });
-  const allHistoryRows = allScored.map((s, idx) => ({
-    symbol: s.symbol, date: today, rank: idx + 1,
-    compositeScore: s.score.compositeScore, rankType: 'all',
-  }));
-  for (const chunk of chunkArray(allHistoryRows, TURSO_WRITE_CHUNK)) {
-    await prisma.rankingHistory.createMany({ data: chunk });
-  }
-
-  pipelineLogger.info(`[${elapsed()}] All-universe rankings stored`);
-  await progress(90, 'All stored');
-
-  // ── Step 10b: Update daily market health history in AppConfig ─────────────
+  // ── Step 10: Update daily market health history in AppConfig ───────────────
   try {
     const total = allScored.length;
     if (total > 0) {

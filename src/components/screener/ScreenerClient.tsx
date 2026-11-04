@@ -295,7 +295,7 @@ function SortHeader({
 export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [rows, setRows] = useState<ScreenerRow[]>(initialData.rows);
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
-  const [activeTab, setActiveTab] = useState<'all' | 'prefiltered' | 'portfolio'>('portfolio');
+  const [activeTab, setActiveTab] = useState<'prefiltered' | 'portfolio'>('portfolio');
   const [hidePortfolio, setHidePortfolio] = useState(true);
   const [hideWarnings, setHideWarnings] = useState(true);
   const [signalFilter, setSignalFilter] = useState<'hold' | 'warning' | 'exit' | null>(null);
@@ -363,7 +363,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  // only on mount — initialData is stable
 
-  const handleTabChange = useCallback(async (tab: 'all' | 'prefiltered' | 'portfolio') => {
+  const handleTabChange = useCallback(async (tab: 'prefiltered' | 'portfolio') => {
     setActiveTab(tab);
     setSignalFilter(null);
     setLoading(true);
@@ -371,8 +371,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       const data = await getScreenerData(tab);
       setRows(data.rows);
       setStats(data.stats);
-      const rType = tab === 'all' ? 'all' : 'filtered';
-      prefetchRankHistories(data.rows, rType);  // background prefetch — non-blocking
+      prefetchRankHistories(data.rows, 'filtered');  // background prefetch — non-blocking
     } finally {
       setLoading(false);
     }
@@ -534,7 +533,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     });
   }, [rows, sortField, sortDir, activeTab, hidePortfolio, hideWarnings, signalFilter]);
 
-  const isClickableTab = activeTab === 'all' || activeTab === 'prefiltered' || activeTab === 'portfolio';
+  const isClickableTab = activeTab === 'prefiltered' || activeTab === 'portfolio';
 
   return (
     <motion.div className="flex flex-col gap-4" initial={false} animate={{ opacity: 1 }}>
@@ -671,42 +670,25 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                   ? row.adjustedRank
                   : row.rank;
 
-                // All-tab tier: portfolio > pre-filtered > universe-only
-                const isAllTab = activeTab === 'all';
-                const allTier = isAllTab
-                  ? row.inPortfolio ? 'portfolio'
-                  : row.isPreFiltered ? 'prefiltered'
-                  : 'normal'
-                  : null;
-
-                const accentColor = isAllTab
-                  ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'rgb(34,197,94)'
-                  : 'rgb(39,39,42)'
-                  : isExitCandidate
-                    ? 'rgb(239,68,68)'
-                    : isWarning
+                const accentColor = isExitCandidate
+                  ? 'rgb(239,68,68)'
+                  : isWarning
+                    ? 'rgb(234,179,8)'
+                    : isProtected
                       ? 'rgb(234,179,8)'
-                      : isProtected
-                        ? 'rgb(234,179,8)'
-                        : row.isUnranked
-                          ? 'rgb(63,63,70)'
-                          : getRankAccent(effectiveRank);
+                      : row.isUnranked
+                        ? 'rgb(63,63,70)'
+                        : getRankAccent(effectiveRank);
 
-                const rankTextColor = isAllTab
-                  ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'text-emerald-400'
-                  : 'text-zinc-400'
-                  : isExitCandidate
-                    ? 'text-red-400'
-                    : isWarning
-                      ? 'text-yellow-400'
-                      : isProtected
-                        ? 'text-amber-400'
-                        : getRankTextColor(effectiveRank);
+                const rankTextColor = isExitCandidate
+                  ? 'text-red-400'
+                  : isWarning
+                    ? 'text-yellow-400'
+                    : isProtected
+                      ? 'text-amber-400'
+                      : getRankTextColor(effectiveRank);
 
-                const rowBg = isAllTab
-                  ? (allTier === 'portfolio' || allTier === 'prefiltered') ? 'bg-emerald-950/20 hover:bg-emerald-950/30'
-                  : 'bg-zinc-950 hover:bg-zinc-800/40'
-                  : isExitCandidate           ? 'bg-red-500/[0.08] hover:bg-red-500/[0.13]'
+                const rowBg = isExitCandidate ? 'bg-red-500/[0.08] hover:bg-red-500/[0.13]'
                   : isWarning                 ? 'bg-amber-500/[0.06] hover:bg-amber-500/[0.11]'
                   : isProtected               ? 'bg-amber-500/[0.03] hover:bg-amber-500/[0.08]'
                   : row.isUnranked            ? 'bg-zinc-950'
@@ -779,12 +761,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                             exit.isUnranked
                                ? (exit.unrankedReason || 'Outside screener universe')
                                : exit.byRank ? (row.rank > 0 ? `Rank #${row.rank} (> 70)` : 'Rank > 70') : '',
-                            ...(exit.byFilter ? (() => {
-                              const f: string[] = [];
-                              if (!row.dmaSwatches.above200) f.push('Below 200 DMA');
-                              if (exit.byAth ?? row.athProximity < 0.75) f.push('> 25% below ATH');
-                              return f.length > 0 ? f : ['Below 200 DMA or > 25% below ATH'];
-                            })() : []),
+                            ...(exit.byFilter ? ['Below 200 DMA'] : []),
                             exit.by50Dma && !exit.byFilter ? 'Below 50 DMA' : '',
                             exit.byDrawdown ? 'Drawdown > 25% since entry' : '',
                             exit.protected ? 'Min hold not met (< 14 days)' : '',
@@ -970,7 +947,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         <RankHistoryModal
           symbol={selectedSymbol}
           companyName={selectedCompany}
-          rankType={activeTab === 'all' ? 'all' : 'filtered'}
+          rankType="filtered"
           onClose={() => setSelectedSymbol(null)}
           onOpenChart={(sym) => setChartSymbol(sym)}
           preloadedHistory={rankHistoryCacheRef.current[selectedSymbol]}

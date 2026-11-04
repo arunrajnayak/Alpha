@@ -50,41 +50,42 @@ saveScores()        ← upsert MomentumScore (today's computedDate)
 saveRankingHistory()← append to RankingHistory (50-day rolling window)
 ```
 
-## Entry filters (ALL must pass for Pre-filtered tab; All tab has no market cap or entry filters)
+## Entry filters (ALL must pass to be ranked)
 
 | Filter | Value | Source |
 |--------|-------|--------|
-| Market cap | ≥ ₹1,000 Cr (Pre-filtered only) | `StockMarketCap` (bhavcopy) |
+| Market cap | ≥ ₹1,500 Cr | `StockMarketCap` (bhavcopy) |
 | Price | ≥ ₹50 | Latest close |
 | Price exemption | GOLDBEES, SILVERBEES | Hardcoded |
 | Above 200 DMA | close ≥ SMA(200) | `ScreenerPrice` |
 | ATH proximity | close ≥ 70% × ATH | `StockATH` |
 | Turnover | median(close × volume, 126d) ≥ ₹1 Cr | `ScreenerPrice` |
-| Circuit band | ≥ 9% (5% circuit tagged Caution) | NSE instrument data |
-| Series | EQ & BE included (BE tagged Caution) | Instrument master |
+| Circuit band | ≥ 15% (excludes 2% and 5% circuits) | NSE instrument data |
+| Series | EQ series only (BE excluded; GOLDBEES/SILVERBEES permitted) | Instrument master |
 | Data history | ≥ 248 trading days (~12m) | `ScreenerPrice` row count |
 
 ## Exit & Warning Signal Logic (src/app/actions/screener.ts)
 
-A portfolio holding is evaluated daily against three potential signal conditions:
+A portfolio holding is evaluated daily against signal conditions:
 
 - **`byRank`**: Stock is unranked OR its rank is $> 50$.
-- **`byFilter`**: Close is below 200 DMA **OR** close is $> 25\%$ below ATH (`athProximity < 0.75`), unless relaxed (relaxed if `rank <= 50`, above 200 DMA, and drawdown since entry $< 10\%$).
+- **`byFilter`**: Close is below 200 DMA.
 - **`by50Dma`**: Close is below the 50-day Simple Moving Average (50 DMA).
+- **`byDrawdown`**: Dropped $> 25\%$ from peak price since entry into portfolio.
+- **`byDrawdownWarn`**: Dropped $20–25\%$ from peak price since entry into portfolio.
 
 ### 🔴 Red (Exit Signal)
 A holding triggers a Red Exit Signal if:
-- **Major filter breach** (`byFilter` is true).
+- **Major filter breach** (`byFilter` is true: close below 200 DMA).
 - **Major rank drop**: Stock's rank is $> 70$.
-- **Major drawdown**: Dropped $> 25\%$ from peak since entry.
-- **Fell out of universe**: Stock is unranked for reasons other than being in the BE category.
+- **Major drawdown**: Dropped $> 25\%$ from peak price since entry into portfolio.
+- **Fell out of universe**: Stock is unranked / dropped from the screener universe.
 
 ### 🟡 Yellow (Warning Signal)
 A holding triggers a Yellow Warning Signal if it does not meet the Red criteria, but satisfies:
 - **DMA breach**: Close is below 50 DMA (`by50Dma` is true).
 - **Moderate rank drop**: Stock's rank is between 51 and 70.
-- **BE Category**: Stock belongs to the Trade-to-Trade (BE) category (ranked $\le 70$).
-- **Moderate drawdown**: Dropped between 20% and 25% from peak since entry.
+- **Moderate drawdown**: Dropped between 20% and 25% from peak price since entry into portfolio.
 
 ### 🔒 Min Hold Protection (Lock)
 ```typescript

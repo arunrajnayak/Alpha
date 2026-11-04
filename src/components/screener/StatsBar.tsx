@@ -6,7 +6,7 @@ import type { ScreenerStats } from '@/app/actions/screener';
 interface StatsBarProps {
   stats: ScreenerStats;
   activeTab: 'all' | 'prefiltered' | 'portfolio';
-  onTabChange: (tab: 'all' | 'prefiltered' | 'portfolio') => void;
+  onTabChange: (tab: 'prefiltered' | 'portfolio') => void;
   filteredCount: number;
   hidePortfolio: boolean;
   onHidePortfolioChange: (val: boolean) => void;
@@ -28,13 +28,12 @@ export default memo(function StatsBar({
   signalFilter,
   onSignalFilterChange,
 }: StatsBarProps) {
-  const { total, allTotal, portfolioCount, rankedPortfolioCount, rankBuckets, mcapBreakdown } = stats;
+  const { total, portfolioCount, rankBuckets, mcapBreakdown } = stats;
   const totalMcap = mcapBreakdown.large + mcapBreakdown.mid + mcapBreakdown.small + mcapBreakdown.micro + (mcapBreakdown.nano || 0);
 
   const tabs = [
-    { key: 'all' as const,         label: 'All',          count: allTotal },
-    { key: 'prefiltered' as const, label: 'Pre-filtered', count: total },
-    { key: 'portfolio' as const,   label: 'Portfolio',    count: portfolioCount },
+    { key: 'prefiltered' as const, label: 'All Ranked', count: total },
+    { key: 'portfolio' as const,   label: 'Portfolio',  count: portfolioCount },
   ];
 
   const handleStatClick = (type: 'hold' | 'warning' | 'exit') => {

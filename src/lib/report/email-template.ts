@@ -388,7 +388,7 @@ function renderExits(exits: ExitCandidate[]): string {
 
   const rows = exits.map((e) => {
     const reasons: string[] = [];
-    if (e.byFilter)                        reasons.push('Below 200 DMA / far from ATH');
+    if (e.byFilter)                        reasons.push('Below 200 DMA');
     if (e.by50Dma && !e.byFilter)          reasons.push('Below 50 DMA');
     if (e.byDrawdown)                      reasons.push('Dropped > 25% since entry');
     else if (e.byDrawdownWarn)             reasons.push('Dropped > 20% since entry');
