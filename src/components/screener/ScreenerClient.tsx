@@ -52,11 +52,6 @@ function getRankTextColor(rank: number): string {
   return 'text-red-400';
 }
 
-function isStockWarning(row: ScreenerRow): boolean {
-  const is5PctCircuit = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
-  return Boolean(row.isBE || is5PctCircuit || row.exitSignal?.signalType === 'yellow');
-}
-
 // ─── Badge Tooltip ───────────────────────────────────────────────────────────
 
 interface BadgeTooltipProps {
@@ -297,7 +292,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const [stats, setStats] = useState<ScreenerStats>(initialData.stats);
   const [activeTab, setActiveTab] = useState<'prefiltered' | 'portfolio'>('portfolio');
   const [hidePortfolio, setHidePortfolio] = useState(true);
-  const [hideWarnings, setHideWarnings] = useState(true);
   const [signalFilter, setSignalFilter] = useState<'hold' | 'warning' | 'exit' | null>(null);
   const [loading, setLoading] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -406,7 +400,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
     if (!displayRows.length) return;
     const headers = ['Rank', 'Symbol', 'Company', 'Score', 'Beta', 'Avg Sharpe', 'ATH Proximity', 'Price', '200 DMA %', 'Turnover Cr', 'Market Cap Cr', 'Category', 'Rank Change'];
     const csvRows = displayRows.map(r => {
-      const rk = (activeTab === 'prefiltered' && hideWarnings && r.adjustedRank != null) ? r.adjustedRank : r.rank;
+      const rk = r.rank;
       return [
         rk === 9999 ? '' : rk,
         r.symbol,
@@ -436,22 +430,9 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const displayRows = useMemo(() => {
     let filtered = [...rows];
 
-    // On pre-filtered tab, if hideWarnings is active, assign sequential rank ignoring warning stocks
-    if (activeTab === 'prefiltered' && hideWarnings) {
-      let seq = 1;
-      const rankMap = new Map<string, number>();
-      for (const r of rows) {
-        if (!isStockWarning(r)) {
-          rankMap.set(r.symbol, seq++);
-        }
-      }
-
-      filtered = filtered
-        .filter(r => !isStockWarning(r))
-        .map(r => ({
-          ...r,
-          adjustedRank: rankMap.get(r.symbol) ?? r.rank,
-        }));
+    // On prefiltered ("All Ranked") tab, ensure BE and 5% circuit stocks are fully excluded
+    if (activeTab === 'prefiltered') {
+      filtered = filtered.filter(r => !r.isBE && !(r.circuitBandPct !== null && r.circuitBandPct < 15));
     }
 
     if (activeTab === 'prefiltered' && hidePortfolio) {
@@ -485,13 +466,11 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       // by their compositeScore relative to ranked stocks so they appear
       // at their natural score position rather than pinned to the bottom.
       if (sortField === 'rank' || sortField === 'default') {
-        const aRank = (activeTab === 'prefiltered' && hideWarnings && a.adjustedRank != null) ? a.adjustedRank : a.rank;
-        const bRank = (activeTab === 'prefiltered' && hideWarnings && b.adjustedRank != null) ? b.adjustedRank : b.rank;
         const aUnranked = a.rank === 9999;
         const bUnranked = b.rank === 9999;
         if (!aUnranked && !bUnranked) {
           // Both ranked — sort by rank asc/desc normally
-          return sortDir === 'asc' ? aRank - bRank : bRank - aRank;
+          return sortDir === 'asc' ? a.rank - b.rank : b.rank - a.rank;
         }
         if (aUnranked && bUnranked) {
           // Both unranked — sort by score desc (higher score = better position)
@@ -500,9 +479,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         // One ranked, one unranked: find where unranked's score fits
         const rankedRow = aUnranked ? b : a;
         const unrankedRow = aUnranked ? a : b;
-        // Unranked goes after ranked stock if ranked score > unranked score
         const cmp = rankedRow.compositeScore - unrankedRow.compositeScore;
-        // aUnranked: a is unranked; if cmp > 0 ranked is better, so a goes after => +1
         return aUnranked ? cmp : -cmp;
       }
 
@@ -524,14 +501,12 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         case 'beta':       cmp = (a.beta ?? 0) - (b.beta ?? 0); break;
         case 'rankChange': cmp = (a.rankChange ?? 0) - (b.rankChange ?? 0); break;
         default: {
-          const aRank = (activeTab === 'prefiltered' && hideWarnings && a.adjustedRank != null) ? a.adjustedRank : a.rank;
-          const bRank = (activeTab === 'prefiltered' && hideWarnings && b.adjustedRank != null) ? b.adjustedRank : b.rank;
-          cmp = aRank - bRank;
+          cmp = a.rank - b.rank;
         }
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, sortField, sortDir, activeTab, hidePortfolio, hideWarnings, signalFilter]);
+  }, [rows, sortField, sortDir, activeTab, hidePortfolio, signalFilter]);
 
   const isClickableTab = activeTab === 'prefiltered' || activeTab === 'portfolio';
 
@@ -608,8 +583,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         filteredCount={rows.length}
         hidePortfolio={hidePortfolio}
         onHidePortfolioChange={setHidePortfolio}
-        hideWarnings={hideWarnings}
-        onHideWarningsChange={setHideWarnings}
         signalFilter={signalFilter}
         onSignalFilterChange={setSignalFilter}
       />
@@ -663,12 +636,9 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
               ) : displayRows.map(row => {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
-                const is5PctCircuit    = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
-                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && row.rank <= 50 && (!!row.isBE || is5PctCircuit));
+                const isWarning        = !!exit && exit.signalType === 'yellow';
                 const isProtected      = !!exit && exit.protected;
-                const effectiveRank    = (activeTab === 'prefiltered' && hideWarnings && row.adjustedRank != null)
-                  ? row.adjustedRank
-                  : row.rank;
+                const effectiveRank    = row.rank;
 
                 const accentColor = isExitCandidate
                   ? 'rgb(239,68,68)'
@@ -709,11 +679,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     <td
                       className="pl-5 pr-2 py-3"
                       style={{ boxShadow: `inset 5px 0 0 ${accentColor}` }}
-                      title={
-                        activeTab === 'prefiltered' && hideWarnings && row.adjustedRank != null && row.adjustedRank !== row.rank
-                          ? `Adjusted Rank: #${row.adjustedRank} (Original Rank: #${row.rank} — warning stocks ignored)`
-                          : undefined
-                      }
                     >
                       {row.isUnranked ? (
                         <span className="text-zinc-600 text-xs">—</span>
@@ -795,22 +760,6 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                               label="CAUTION"
                               badgeCls="text-amber-400 hover:text-amber-300"
                               lines={cautionLines}
-                              iconOnly
-                              icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
-                            />
-                          );
-                        })()}
-                        {/* Warning badge (BE / 5% Circuit) — shown outside portfolio tab */}
-                        {activeTab !== 'portfolio' && (row.isBE || is5PctCircuit) && (() => {
-                          const warnLines = [
-                            row.isBE ? 'BE series (Trade-to-Trade)' : '',
-                            is5PctCircuit ? '5% daily circuit limit' : '',
-                          ].filter(Boolean) as string[];
-                          return (
-                            <BadgeTooltip
-                              label="WARNING"
-                              badgeCls="text-amber-400 hover:text-amber-300"
-                              lines={warnLines}
                               iconOnly
                               icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
                             />

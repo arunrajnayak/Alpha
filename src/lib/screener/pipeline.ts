@@ -63,7 +63,7 @@ type ScoredStock = {
   passesFilters: boolean; // true = in filtered set, false = all-universe only
 };
 
-export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set<string>): Promise<PipelineResult> {
+export async function runScreenerPipeline(jobId?: string, _portfolioSymbols?: Set<string>): Promise<PipelineResult> {
   const start = Date.now();
   const TIMEOUT_MS = 270_000;
   const duringMarket = isMarketHours();
@@ -395,11 +395,13 @@ export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set
       if (!allResult) continue;
 
       // Circuit band < 15% (2% and 5% circuit stocks) excluded; 10% and 20% circuits are allowed
-      // Market cap must be >= 1,500 Cr (or whitelisted ETF / portfolio holding)
+      // Market cap must be >= 1,500 Cr (or whitelisted ETF)
+      // BE series and 5% circuit limit stocks are fully excluded from the ranked list
       const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { beta });
-      const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol) || !!portfolioSymbols?.has(inst.symbol);
-      const passesCircuit = (bandWidth === undefined || bandWidth >= 0.15) || !!portfolioSymbols?.has(inst.symbol);
-      const passesFilters = filteredResult !== null && passesCircuit && passesMcap;
+      const isBE = beSymbols.has(inst.symbol) || inst.symbol.endsWith('-BE');
+      const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol);
+      const passesCircuit = bandWidth === undefined || bandWidth >= 0.15;
+      const passesFilters = filteredResult !== null && passesCircuit && passesMcap && !isBE;
 
       const sparkline = closes.slice(-50);
 

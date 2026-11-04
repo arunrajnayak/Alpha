@@ -15,7 +15,6 @@ import { getCategoriesBatch } from '@/lib/amfi';
 
 export interface ScreenerRow {
   rank: number;
-  adjustedRank?: number;
   symbol: string;
   companyName: string;
   compositeScore: number;
@@ -189,12 +188,20 @@ export async function getScreenerData(
   const todayDate = scores[0]?.computedDate ?? null;
   const prevDayRanks = await loadPrevDayRanksForDisplay(todayDate, 'filtered');
 
+  // Exclude BE and 5% circuit stocks fully from the ranked universe
+  const cleanScores = scores.filter(s => {
+    const isBE = beSymbols.has(s.symbol) || s.symbol.endsWith('-BE');
+    const is5PctCircuit = s.circuitBandPct !== null && s.circuitBandPct !== undefined && s.circuitBandPct < 15;
+    return !isBE && !is5PctCircuit;
+  });
+
   const rankedSymbols = new Set<string>();
-  const allRows: ScreenerRow[] = scores.map(s => {
+  const allRows: ScreenerRow[] = cleanScores.map((s, idx) => {
+    const cleanRank = idx + 1;
     rankedSymbols.add(s.symbol);
     const inPortfolio = portfolioSymbols.has(s.symbol);
     const prevRank = prevDayRanks.get(s.symbol) ?? null;
-    const rankChange = prevRank !== null ? prevRank - s.rank : null;
+    const rankChange = prevRank !== null ? prevRank - cleanRank : null;
 
     const asm = asmMap.get(s.symbol);
 
@@ -207,7 +214,7 @@ export async function getScreenerData(
     }
 
     return {
-      rank: s.rank,
+      rank: cleanRank,
       symbol: s.symbol,
       companyName: s.companyName,
       compositeScore: s.compositeScore,
@@ -231,7 +238,7 @@ export async function getScreenerData(
       prevRank,
       rankChange,
       inPortfolio,
-      isBE: beSymbols.has(s.symbol) || s.symbol.endsWith('-BE'),
+      isBE: false,
       asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
       drawdownSinceEntry,
     };
@@ -473,7 +480,7 @@ export async function getScreenerData(
   }
 
   // Compute stats AFTER exit signals are set so hold/warn/exit counts are correct
-  const stats = await computeStats(rows, portfolioSymbols.size, portfolioSymbols);
+  const stats = computeStats(rows, portfolioSymbols.size, cleanScores.length, portfolioSymbols, cleanScores);
 
   // Mcap breakdown by actual portfolio position value (qty × currentPrice)
   let mcLarge = 0, mcMid = 0, mcSmall = 0, mcMicro = 0, mcNano = 0;
@@ -495,11 +502,13 @@ export async function getScreenerData(
 
 // ── Helpers ──
 
-async function computeStats(
+function computeStats(
   rows: ScreenerRow[],
   portfolioCount: number = 0,
+  cleanRankedCount: number = 0,
   portfolioSymbols?: Set<string>,
-): Promise<ScreenerStats> {
+  cleanScores?: Array<{ symbol: string }>,
+): ScreenerStats {
   // Signal bucket counts for portfolio tab (hold/warning/exit)
   let holdCount = 0, warningCount = 0, exitCount = 0;
   for (const r of rows) {
@@ -512,20 +521,15 @@ async function computeStats(
     }
   }
 
-  // Always query canonical counts regardless of which tab's rows we received
-  const symList = portfolioSymbols && portfolioSymbols.size > 0 ? [...portfolioSymbols] : [];
-  const [filteredTotal, rankedPortfolioCount] = await Promise.all([
-    prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered' } }),
-    symList.length > 0
-      ? prisma.momentumScore.count({ where: { isActive: true, rankType: 'filtered', symbol: { in: symList } } })
-      : Promise.resolve(0),
-  ]);
+  const rankedPortfolioCount = cleanScores && portfolioSymbols
+    ? cleanScores.filter(s => portfolioSymbols.has(s.symbol)).length
+    : 0;
 
   return {
-    total: filteredTotal,          // ranked count
-    allTotal: filteredTotal,       // mirrors ranked total (All tab removed)
-    portfolioCount,                // always total portfolio size (holdings)
-    rankedPortfolioCount,          // portfolio stocks in ranked set
+    total: cleanRankedCount,
+    allTotal: cleanRankedCount,
+    portfolioCount,
+    rankedPortfolioCount,
     rankBuckets: { hold: holdCount, warning: warningCount, exit: exitCount },
     mcapBreakdown: { large: 0, mid: 0, small: 0, micro: 0, nano: 0 },
     dataDate: null,
