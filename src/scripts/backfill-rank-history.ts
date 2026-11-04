@@ -2,17 +2,17 @@
  * backfill-rank-history.ts
  * ========================
  * Prefills RankingHistory for the past 50 trading days for:
- *   - rankType: 'filtered'  (pre-filtered tab)
- *   - rankType: 'all'       (all-universe tab)
+ *   - rankType: 'filtered'  (All Ranked list, with new rules: mcap >= 1500 Cr,
+ *                           BE & 5% circuit limit excluded unless in portfolio)
+ *   - rankType: 'all'       (all-universe ranking)
  *
- * Portfolio tab reads from 'filtered' rankings — covered automatically.
+ * Also recalculates denormalized stats (avgRank50d, bestRank, appearances, t50Pct,
+ * t100Pct, prevRank) on active MomentumScore records.
  *
  * Usage:
- *   npx tsx src/scripts/backfill-rank-history.ts
+ *   NODE_TLS_REJECT_UNAUTHORIZED=0 node_modules/.bin/tsx src/scripts/backfill-rank-history.ts
  *
- * Safe to re-run — deletes existing history before inserting.
- * Uses current market cap data as proxy for historical mcap (good enough for ranking).
- * ATH is computed from historical highs slice (accurate per-date).
+ * Safe to re-run — deletes existing history for the target dates before inserting.
  */
 
 import dotenv from 'dotenv';
@@ -32,7 +32,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const Module  = require('module');
 const _orig   = Module._load;
- 
+
 Module._load = function(req: string, parent: any, isMain: boolean) {
   if (req === 'server-only') return {};
   if (req === 'next/cache')  return { unstable_cache: (fn: any) => fn, revalidateTag: () => {}, revalidatePath: () => {} };
@@ -42,88 +42,159 @@ Module._load = function(req: string, parent: any, isMain: boolean) {
 
 const DAYS_TO_BACKFILL = 50;
 
+function findLastIndex(dates: string[], targetDate: string): number {
+  let low = 0, high = dates.length - 1, ans = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if (dates[mid] <= targetDate) {
+      ans = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return ans;
+}
+
+interface SymbolData {
+  symbol: string;
+  dates: string[];
+  closes: number[];
+  highs: number[];
+  volumes: number[];
+}
+
 async function main() {
-  // Dynamic imports — MUST come after Module._load mock above
-  const { prisma, chunkArray }                         = await import('../lib/db');
-  const { scoreStock, PARAMS, isETFWhitelisted }        = await import('../lib/screener/scoring');
+  const { prisma, chunkArray } = await import('../lib/db');
+  const { scoreStock, PARAMS, isETFWhitelisted } = await import('../lib/screener/scoring');
+  const { getBESymbols } = await import('../lib/instrument-service');
 
   const t0 = Date.now();
-  console.log(`\n=== Rank History Backfill ===`);
-  console.log(`Params: sharpeWeight=${PARAMS.sharpeWeight}, skipMonths=${PARAMS.skipMonths}`);
+  console.log(`\n=== Rank History Backfill (50 Trading Days) ===`);
+  console.log(`Rules: Mcap >= ₹${PARAMS.mcapMinCr.toLocaleString()} Cr | BE & 5% Circuit excluded unless in portfolio`);
+  console.log(`Scoring: sharpeWeight=${PARAMS.sharpeWeight}, skipMonths=${PARAMS.skipMonths}`);
 
-  // ── 1. Load all price data once ────────────────────────────────────────────
-  console.log('\n[1/4] Loading price data...');
+  // ── 1. Load active portfolio holdings ─────────────────────────────────────
+  console.log('\n[1/6] Loading portfolio holdings...');
+  const txns = await prisma.transaction.findMany({ select: { symbol: true, type: true, quantity: true } });
+  const qtyMap = new Map<string, number>();
+  for (const t of txns) {
+    const q = qtyMap.get(t.symbol) ?? 0;
+    qtyMap.set(t.symbol, t.type === 'BUY' ? q + t.quantity : q - t.quantity);
+  }
+  const portfolioSymbols = new Set([...qtyMap.entries()].filter(([, q]) => q > 0.01).map(([s]) => s));
+  console.log(`  ${portfolioSymbols.size} active portfolio holdings found`);
+
+  // ── 2. Load BE symbols, circuit bands & stored ATH ─────────────────────────
+  console.log('\n[2/6] Loading BE symbols, circuit bands & ATH...');
+  const [beSymbols, circuitScores, athRows] = await Promise.all([
+    getBESymbols(),
+    prisma.momentumScore.findMany({
+      where: { circuitBandPct: { not: null } },
+      select: { symbol: true, circuitBandPct: true },
+      distinct: ['symbol'],
+      orderBy: { computedDate: 'desc' },
+    }),
+    prisma.stockATH.findMany({ select: { symbol: true, ath: true } }),
+  ]);
+  const circuitMap = new Map<string, number>();
+  for (const s of circuitScores) {
+    if (s.circuitBandPct !== null) circuitMap.set(s.symbol, s.circuitBandPct);
+  }
+  const athMap = new Map(athRows.map(r => [r.symbol, r.ath]));
+  console.log(`  ${beSymbols.size} BE symbols | ${circuitMap.size} circuit bands | ${athMap.size} ATH entries`);
+
+  // ── 3. Load all price data once into column arrays ─────────────────────────
+  console.log('\n[3/6] Loading price data...');
   const allPrices = await prisma.screenerPrice.findMany({
     orderBy: [{ symbol: 'asc' }, { date: 'asc' }],
     select: { symbol: true, date: true, close: true, high: true, volume: true },
   });
   console.log(`  Loaded ${allPrices.length.toLocaleString()} price rows`);
 
-  // Group by symbol — arrays already sorted oldest-first (from orderBy date asc)
-  const pricesBySymbol = new Map<string, Array<{ date: string; close: number; high: number; volume: number }>>();
+  const symbolMap = new Map<string, SymbolData>();
   for (const p of allPrices) {
-    let arr = pricesBySymbol.get(p.symbol);
-    if (!arr) { arr = []; pricesBySymbol.set(p.symbol, arr); }
-    arr.push({ date: p.date, close: p.close, high: p.high, volume: p.volume });
+    let d = symbolMap.get(p.symbol);
+    if (!d) {
+      d = { symbol: p.symbol, dates: [], closes: [], highs: [], volumes: [] };
+      symbolMap.set(p.symbol, d);
+    }
+    d.dates.push(p.date);
+    d.closes.push(p.close);
+    d.highs.push(p.high);
+    d.volumes.push(p.volume);
   }
-  console.log(`  ${pricesBySymbol.size} symbols in price DB`);
+  console.log(`  ${symbolMap.size} symbols organized`);
 
-  // ── 2. Determine 50 most recent trading dates ──────────────────────────────
-  console.log('\n[2/4] Identifying trading dates...');
-  const allDates = [...new Set(allPrices.map(p => p.date))].sort(); // ascending
-  const tradingDates = allDates.slice(-DAYS_TO_BACKFILL);           // last 50
-  console.log(`  Date range: ${tradingDates[0]} → ${tradingDates[tradingDates.length - 1]} (${tradingDates.length} days)`);
+  // ── 4. Determine 50 most recent trading dates ─────────────────────────────
+  console.log('\n[4/6] Identifying trading dates...');
+  const allDates = [...new Set(allPrices.map(p => p.date))].sort();
+  const tradingDates = allDates.slice(-DAYS_TO_BACKFILL);
+  console.log(`  Date range: ${tradingDates[0]} → ${tradingDates[tradingDates.length - 1]} (${tradingDates.length} trading days)`);
 
-  // ── 3. Load current market caps ────────────────────────────────────────────
-  console.log('\n[3/4] Loading market caps...');
+  // ── 5. Load current market caps ───────────────────────────────────────────
+  console.log('\n[5/6] Loading market caps...');
   const mcapRows = await prisma.stockMarketCap.findMany({
     select: { symbol: true, marketCap: true },
   });
   const mcapMap = new Map(mcapRows.map(r => [r.symbol, r.marketCap]));
   console.log(`  ${mcapMap.size} symbols with mcap data`);
 
-  // ── 4. For each historical date, score → rank → insert ────────────────────
-  console.log('\n[4/4] Scoring and inserting history...\n');
+  // ── 6. For each historical date, score → rank → insert ───────────────────
+  console.log('\n[6/6] Scoring and backfilling ranking history...\n');
 
   let totalInserted = 0;
 
   for (let di = 0; di < tradingDates.length; di++) {
     const date = tradingDates[di];
     const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
-    process.stdout.write(`  [${di + 1}/${tradingDates.length}] ${date}  (${elapsed}s elapsed)  `);
+    process.stdout.write(`  [${di + 1}/${tradingDates.length}] ${date} (${elapsed}s) `);
 
     const filteredScored: Array<{ symbol: string; compositeScore: number }> = [];
     const allScored:      Array<{ symbol: string; compositeScore: number }> = [];
 
-    for (const [symbol, candles] of pricesBySymbol) {
+    for (const [symbol, data] of symbolMap) {
       const mcap = mcapMap.get(symbol);
       const isEtf = isETFWhitelisted(symbol);
+      const inPortfolio = portfolioSymbols.has(symbol);
 
-      // Universe gate: mcap >= 1000 Cr or whitelisted ETF
-      if ((!mcap || mcap < PARAMS.mcapMinCr) && !isEtf) continue;
+      // Fast mcap gate: must have mcap >= 1500 Cr, ETF, or in portfolio
+      const passesMcap = (mcap !== undefined && mcap >= PARAMS.mcapMinCr) || isEtf || inPortfolio;
+      if (!passesMcap) continue;
 
-      // Slice to data available on this date (inclusive)
-      const slice = candles.filter(c => c.date <= date);
+      // Fast binary search for date boundary
+      const lastIdx = findLastIndex(data.dates, date);
+      if (lastIdx < 247) continue; // Need at least 248 candles
 
-      // Need at least dateIdx(247) + 1 = 248 candles (~12 months)
-      if (slice.length < 248) continue;
+      // Fast native slice
+      const sliceCloses = data.closes.slice(0, lastIdx + 1);
+      const sliceHighs = data.highs.slice(0, lastIdx + 1);
+      const sliceVolumes = data.volumes.slice(0, lastIdx + 1);
+      const storedAth = athMap.get(symbol);
 
-      const closes  = slice.map(c => c.close);
-      const highs   = slice.map(c => c.high);
-      const volumes = slice.map(c => c.volume);
-
-      // All-universe (no entry filters, ATH computed from historical slice)
-      const allResult = scoreStock(closes, highs, volumes, symbol, undefined, { skipFilters: true });
-      if (allResult) {
-        allScored.push({ symbol, compositeScore: allResult.compositeScore });
+      // All-universe scoring (skipFilters: true)
+      const passesMcapAll = (mcap !== undefined && mcap >= PARAMS.mcapMinCr) || isEtf;
+      if (passesMcapAll) {
+        const allResult = scoreStock(sliceCloses, sliceHighs, sliceVolumes, symbol, storedAth, { skipFilters: true });
+        if (allResult) {
+          allScored.push({ symbol, compositeScore: allResult.compositeScore });
+        }
       }
 
-      // Pre-filtered (applies 200 DMA, ATH proximity, volume, price filters)
-      if (mcap && mcap >= PARAMS.mcapMinCr) {
-        const filtResult = scoreStock(closes, highs, volumes, symbol, undefined);
-        if (filtResult) {
-          filteredScored.push({ symbol, compositeScore: filtResult.compositeScore });
-        }
+      // Filtered (All Ranked) scoring:
+      // Exclude BE and narrow circuit (< 15%) UNLESS held in portfolio
+      const isBE = beSymbols.has(symbol) || symbol.endsWith('-BE');
+      const bandPct = circuitMap.get(symbol);
+      const isNarrowCircuit = bandPct !== undefined && bandPct < 15;
+
+      const passesBE = !isBE || inPortfolio;
+      const passesCircuit = !isNarrowCircuit || inPortfolio;
+      if (!passesBE || !passesCircuit) continue;
+
+      // Score with entry filters (200 DMA, min price, ATH proximity, volume)
+      const filtResult = scoreStock(sliceCloses, sliceHighs, sliceVolumes, symbol, storedAth);
+      if (filtResult) {
+        filteredScored.push({ symbol, compositeScore: filtResult.compositeScore });
       }
     }
 
@@ -152,16 +223,73 @@ async function main() {
       })),
     ];
 
-    for (const chunk of chunkArray(rows, 100)) {
+    for (const chunk of chunkArray(rows, 200)) {
       await prisma.rankingHistory.createMany({ data: chunk });
     }
 
     totalInserted += rows.length;
-    console.log(`filtered=${filteredScored.length}, all=${allScored.length}`);
+    console.log(`→ filtered=${filteredScored.length}, all=${allScored.length}`);
   }
 
+  // Prune any dates older than the 50 most recent trading dates
+  const cutoffDate = tradingDates[0];
+  const pruned = await prisma.rankingHistory.deleteMany({
+    where: { date: { lt: cutoffDate } },
+  });
+  if (pruned.count > 0) {
+    console.log(`\n  Pruned ${pruned.count} records older than ${cutoffDate}`);
+  }
+
+  // ── 7. Update denormalized stats on active MomentumScore ──────────────────
+  console.log('\n[7/7] Updating denormalized 50-day stats on active MomentumScore...');
+  const prevDate = tradingDates[tradingDates.length - 2];
+  const [allFilteredHistory, prevDayRanks, activeScores] = await Promise.all([
+    prisma.rankingHistory.findMany({
+      where: { rankType: 'filtered' },
+      select: { symbol: true, rank: true },
+    }),
+    prevDate ? prisma.rankingHistory.findMany({
+      where: { rankType: 'filtered', date: prevDate },
+      select: { symbol: true, rank: true },
+    }) : Promise.resolve([]),
+    prisma.momentumScore.findMany({
+      where: { isActive: true, rankType: 'filtered' },
+      select: { id: true, symbol: true, rank: true },
+    }),
+  ]);
+
+  const histMap = new Map<string, number[]>();
+  for (const r of allFilteredHistory) {
+    let arr = histMap.get(r.symbol);
+    if (!arr) { arr = []; histMap.set(r.symbol, arr); }
+    arr.push(r.rank);
+  }
+  const prevRankMap = new Map(prevDayRanks.map(r => [r.symbol, r.rank]));
+
+  console.log(`  Updating ${activeScores.length} active scores...`);
+  const updateChunks = chunkArray(activeScores, 25);
+  for (const chunk of updateChunks) {
+    await Promise.all(
+      chunk.map(s => {
+        const history = histMap.get(s.symbol) || [s.rank];
+        const avgRank50d = history.length > 0 ? history.reduce((a, b) => a + b, 0) / history.length : null;
+        const bestRank = history.length > 0 ? Math.min(...history) : null;
+        const appearances = history.length;
+        const t50Pct = history.length > 0 ? (history.filter(r => r <= 50).length / history.length) * 100 : 0;
+        const t100Pct = history.length > 0 ? (history.filter(r => r <= 100).length / history.length) * 100 : 0;
+        const prevRank = prevRankMap.get(s.symbol) ?? null;
+
+        return prisma.momentumScore.update({
+          where: { id: s.id },
+          data: { avgRank50d, bestRank, appearances, t50Pct, t100Pct, prevRank },
+        });
+      })
+    );
+  }
+  console.log('  Updated active scores with consistent 50-day statistics.');
+
   const totalSec = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\n✓ Done in ${totalSec}s — inserted ${totalInserted.toLocaleString()} history rows`);
+  console.log(`\n✓ Done in ${totalSec}s — inserted ${totalInserted.toLocaleString()} history rows across ${tradingDates.length} days`);
   await prisma.$disconnect();
 }
 

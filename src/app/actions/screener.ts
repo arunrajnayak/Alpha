@@ -55,6 +55,7 @@ export interface ScreenerRow {
     desc: string;
   };
   drawdownSinceEntry?: number | null;
+  top50Days?: number;
 }
 
 export interface ScreenerStats {
@@ -181,10 +182,20 @@ export async function getScreenerData(
     };
   }
 
-  // Compute rank change from RankingHistory (not stored prevRank) so it's always
-  // correct regardless of how many times the cron ran today.
+  // Compute rank change and top 50 frequency from RankingHistory
   const todayDate = scores[0]?.computedDate ?? null;
-  const prevDayRanks = await loadPrevDayRanksForDisplay(todayDate, 'filtered');
+  const [prevDayRanks, top50Rows] = await Promise.all([
+    loadPrevDayRanksForDisplay(todayDate, 'filtered'),
+    prisma.rankingHistory.findMany({
+      where: { rankType: 'filtered', rank: { lte: 50 } },
+      select: { symbol: true },
+    }),
+  ]);
+
+  const top50CountMap = new Map<string, number>();
+  for (const r of top50Rows) {
+    top50CountMap.set(r.symbol, (top50CountMap.get(r.symbol) ?? 0) + 1);
+  }
 
   // Exclude BE and 5% circuit stocks from the ranked universe UNLESS they are in portfolio
   const cleanScores = scores.filter(s => {
@@ -241,6 +252,7 @@ export async function getScreenerData(
       isBE: beSymbols.has(s.symbol) || s.symbol.endsWith('-BE'),
       asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
       drawdownSinceEntry,
+      top50Days: top50CountMap.get(s.symbol) ?? 0,
     };
   });
 
@@ -429,6 +441,7 @@ export async function getScreenerData(
           isBE,
           asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
           drawdownSinceEntry,
+          top50Days: top50CountMap.get(sym) ?? 0,
         });
       }
     }

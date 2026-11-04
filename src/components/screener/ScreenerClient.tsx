@@ -245,6 +245,7 @@ function SkeletonRow() {
       </td>
       <td className="px-1 py-3"><div className="h-3.5 w-10 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-3 py-3 hidden md:table-cell"><div className="h-9 bg-zinc-800/50 rounded" /></td>
+      <td className="px-1 py-3"><div className="h-3.5 w-8 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-8 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-2 py-3">
@@ -267,15 +268,16 @@ function SkeletonRow() {
 const TH_BASE = 'px-3 py-4 text-sm font-bold text-zinc-300 uppercase tracking-wider select-none';
 
 function SortHeader({
-  field, current, dir, onClick, children, center, pl,
+  field, current, dir, onClick, children, center, pl, title,
 }: {
   field: string; current: string; dir: 'asc' | 'desc';
-  onClick: (f: string) => void; children: React.ReactNode; center?: boolean; pl?: string;
+  onClick: (f: string) => void; children: React.ReactNode; center?: boolean; pl?: string; title?: string;
 }) {
   return (
     <th
       className={`${TH_BASE} cursor-pointer hover:text-zinc-200 transition-colors${pl ? ` ${pl}` : ''}`}
       onClick={() => onClick(field)}
+      title={title}
     >
       <span className={`flex items-center gap-0.5 ${center ? 'justify-center' : ''}`}>
         {children}
@@ -393,12 +395,12 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
 
   const handleSort = (field: string) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir(field === 'score' || field === 'rankChange' || field === 'beta' ? 'desc' : 'asc'); }
+    else { setSortField(field); setSortDir(field === 'score' || field === 'rankChange' || field === 'beta' || field === 'top50Days' ? 'desc' : 'asc'); }
   };
 
   const handleExportCSV = () => {
     if (!displayRows.length) return;
-    const headers = ['Rank', 'Symbol', 'Company', 'Score', 'Beta', 'Avg Sharpe', 'ATH Proximity', 'Price', '200 DMA %', 'Turnover Cr', 'Market Cap Cr', 'Category', 'Rank Change'];
+    const headers = ['Rank', 'Symbol', 'Company', 'Score', 'Top 50 Days (50d)', 'Beta', 'Avg Sharpe', 'ATH Proximity', 'Price', '200 DMA %', 'Turnover Cr', 'Market Cap Cr', 'Category', 'Rank Change'];
     const csvRows = displayRows.map(r => {
       const rk = r.rank;
       return [
@@ -406,6 +408,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
         r.symbol,
         r.companyName,
         r.compositeScore.toFixed(4),
+        r.top50Days ?? 0,
         r.beta != null ? r.beta.toFixed(2) : '',
         r.avgSharpe.toFixed(4),
         r.athProximity.toFixed(4),
@@ -498,6 +501,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
           break;
         }
         case 'score':      cmp = a.compositeScore - b.compositeScore; break;
+        case 'top50Days':  cmp = (a.top50Days ?? 0) - (b.top50Days ?? 0); break;
         case 'beta':       cmp = (a.beta ?? 0) - (b.beta ?? 0); break;
         case 'rankChange': cmp = (a.rankChange ?? 0) - (b.rankChange ?? 0); break;
         default: {
@@ -594,15 +598,16 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
       >
         <table className="w-full text-sm" style={{ tableLayout: 'fixed', minWidth: '1000px' }}>
             <colgroup>
-              <col style={{ width: '4%',  minWidth: '60px' }} />
-              <col style={{ width: '4%',  minWidth: '50px' }} />
-              <col style={{ width: '17%', minWidth: '170px' }} />
-              <col style={{ width: '7%',  minWidth: '65px' }} />
-              <col style={{ width: '15%', minWidth: '150px' }} />
+              <col style={{ width: '4%',  minWidth: '55px' }} />
+              <col style={{ width: '4%',  minWidth: '45px' }} />
+              <col style={{ width: '16%', minWidth: '160px' }} />
+              <col style={{ width: '6%',  minWidth: '60px' }} />
+              <col style={{ width: '13%', minWidth: '130px' }} />
+              <col style={{ width: '6%',  minWidth: '65px' }} />
               <col style={{ width: '8%',  minWidth: '85px' }} />
               <col style={{ width: '6%',  minWidth: '60px' }} />
-              <col style={{ width: '9%',  minWidth: '95px' }} />
-              <col style={{ width: '9%',  minWidth: '95px' }} />
+              <col style={{ width: '8%',  minWidth: '85px' }} />
+              <col style={{ width: '8%',  minWidth: '85px' }} />
               <col style={{ width: '6%',  minWidth: '60px' }} />
             </colgroup>
 
@@ -613,6 +618,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 <SortHeader field="symbol" current={sortField} dir={sortDir} onClick={handleSort}>Stock</SortHeader>
                 <SortHeader field="score"  current={sortField} dir={sortDir} onClick={handleSort} center>Score</SortHeader>
                 <th className={`${TH_BASE} hidden md:table-cell`}>Trend</th>
+                <SortHeader field="top50Days" current={sortField} dir={sortDir} onClick={handleSort} center title="Days in Top 50 over the last 50 trading days">Top 50</SortHeader>
                 <SortHeader field="mcap"   current={sortField} dir={sortDir} onClick={handleSort} center>Marketcap</SortHeader>
                 <SortHeader field="beta"   current={sortField} dir={sortDir} onClick={handleSort} center>Beta</SortHeader>
                 <th className={`${TH_BASE} text-center`} title="10 / 20 / 50 / 100 / 200 DMA">DMA</th>
@@ -626,7 +632,7 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                 [...Array(12)].map((_, i) => <SkeletonRow key={i} />)
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center">
+                  <td colSpan={11} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-zinc-500 text-sm">
                       <span>No rankings yet.</span>
                       <span className="text-xs text-zinc-600">Trigger a sync to run the pipeline.</span>
@@ -828,6 +834,30 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     {/* Price trend sparkline */}
                     <td className="px-3 py-3 hidden md:table-cell">
                       <Sparkline data={row.sparklineData} />
+                    </td>
+
+                    {/* Top 50 Days in last 50 days */}
+                    <td className="px-1 py-3 text-center">
+                      {row.top50Days !== undefined && row.top50Days > 0 ? (() => {
+                        const d = row.top50Days;
+                        const cls = d >= 40
+                          ? 'text-emerald-400 font-bold'
+                          : d >= 25
+                            ? 'text-cyan-400 font-semibold'
+                            : d >= 10
+                              ? 'text-amber-300 font-medium'
+                              : 'text-zinc-400 font-normal';
+                        return (
+                          <span
+                            className={`font-mono text-xs tabular-nums ${cls}`}
+                            title={`${d} of last 50 trading days in Top 50`}
+                          >
+                            {d}d
+                          </span>
+                        );
+                      })() : (
+                        <span className="font-mono text-xs text-zinc-600">—</span>
+                      )}
                     </td>
 
                     {/* Mcap */}
