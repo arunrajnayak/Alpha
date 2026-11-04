@@ -179,14 +179,27 @@ function buildSparklinePath(data: number[], w: number, h: number): string | null
 }
 
 const Sparkline = memo(function Sparkline({ data }: { data: number[] }) {
-  const w = 240, h = 36;
+  const w = 120, h = 30;
   const path = buildSparklinePath(data, w, h);
   if (!path) return <span className="text-zinc-600 text-xs">—</span>;
   const isUp = data[data.length - 1] >= data[0];
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
-      <path d={path} fill="none" stroke={isUp ? '#10b981' : '#f43f5e'} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="w-full max-w-[120px] flex items-center">
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="w-full h-7 overflow-hidden block"
+        preserveAspectRatio="none"
+      >
+        <path
+          d={path}
+          fill="none"
+          stroke={isUp ? '#10b981' : '#f43f5e'}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
   );
 });
 
@@ -832,12 +845,12 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                     </td>
 
                     {/* Price trend sparkline */}
-                    <td className="px-3 py-3 hidden md:table-cell">
+                    <td className="px-2 py-3 hidden md:table-cell overflow-hidden">
                       <Sparkline data={row.sparklineData} />
                     </td>
 
                     {/* Top 50 Days in last 50 days */}
-                    <td className="px-1 py-3 text-center">
+                    <td className="px-2 py-3 text-center whitespace-nowrap">
                       {row.top50Days !== undefined && row.top50Days > 0 ? (() => {
                         const d = row.top50Days;
                         const cls = d >= 40
