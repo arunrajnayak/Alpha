@@ -169,25 +169,26 @@ function buildSparklinePath(data: number[], w: number, h: number): string | null
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  const pad = 2;
+  const padX = 1;
+  const padY = 3;
   const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * (w - pad * 2) + pad;
-    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    const x = (i / (data.length - 1)) * (w - padX * 2) + padX;
+    const y = h - padY - ((v - min) / range) * (h - padY * 2);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   return 'M ' + pts.join(' L ');
 }
 
 const Sparkline = memo(function Sparkline({ data }: { data: number[] }) {
-  const w = 120, h = 30;
+  const w = 200, h = 40;
   const path = buildSparklinePath(data, w, h);
   if (!path) return <span className="text-zinc-600 text-xs">—</span>;
   const isUp = data[data.length - 1] >= data[0];
   return (
-    <div className="w-full max-w-[120px] flex items-center">
+    <div className="w-full h-10 flex items-center">
       <svg
         viewBox={`0 0 ${w} ${h}`}
-        className="w-full h-7 overflow-hidden block"
+        className="w-full h-full overflow-hidden block"
         preserveAspectRatio="none"
       >
         <path
@@ -195,6 +196,7 @@ const Sparkline = memo(function Sparkline({ data }: { data: number[] }) {
           fill="none"
           stroke={isUp ? '#10b981' : '#f43f5e'}
           strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -257,7 +259,7 @@ function SkeletonRow() {
         </div>
       </td>
       <td className="px-1 py-3"><div className="h-3.5 w-10 bg-zinc-800 rounded mx-auto" /></td>
-      <td className="px-3 py-3 hidden md:table-cell"><div className="h-9 bg-zinc-800/50 rounded" /></td>
+      <td className="px-2 py-3 hidden md:table-cell overflow-hidden"><div className="h-10 w-full bg-zinc-800/50 rounded" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-8 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-14 bg-zinc-800 rounded mx-auto" /></td>
       <td className="px-1 py-3"><div className="h-3.5 w-8 bg-zinc-800 rounded mx-auto" /></td>
