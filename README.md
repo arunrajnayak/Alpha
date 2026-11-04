@@ -435,8 +435,8 @@ Composite Score = avgSharpe = mean(Sharpe_12m, Sharpe_6m, Sharpe_3m)
 | 200 DMA | Close ≥ 200-day SMA |
 | ATH proximity | Within 30% of all-time high |
 | Volume | Median daily turnover ≥ ₹1 Cr (126-day lookback) |
-| Circuit band | ≥ 15% (excludes 2% and 5% circuit stocks) |
-| Series | EQ series only (BE series excluded; GOLDBEES/SILVERBEES permitted) |
+| Circuit band | ≥ 15% (excludes 2% and 5% circuit stocks unless held in portfolio) |
+| Series | EQ series only (BE series excluded unless held in portfolio; GOLDBEES/SILVERBEES permitted) |
 | History | ≥ 248 trading days of data (~12 months) |
 
 ### Exit & Warning Signals

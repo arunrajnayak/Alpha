@@ -63,12 +63,28 @@ type ScoredStock = {
   passesFilters: boolean; // true = in filtered set, false = all-universe only
 };
 
-export async function runScreenerPipeline(jobId?: string, _portfolioSymbols?: Set<string>): Promise<PipelineResult> {
+export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set<string>): Promise<PipelineResult> {
   const start = Date.now();
   const TIMEOUT_MS = 270_000;
   const duringMarket = isMarketHours();
   const today = await resolveLastTradingDay();
   const errors: string[] = [];
+
+  // Ensure active portfolio symbols are loaded so held BE / narrow-circuit stocks are retained
+  let activePortfolioSymbols = portfolioSymbols;
+  if (!activePortfolioSymbols) {
+    try {
+      const txns = await prisma.transaction.findMany({ select: { symbol: true, type: true, quantity: true } });
+      const qtyMap = new Map<string, number>();
+      for (const t of txns) {
+        const q = qtyMap.get(t.symbol) ?? 0;
+        qtyMap.set(t.symbol, t.type === 'BUY' ? q + t.quantity : q - t.quantity);
+      }
+      activePortfolioSymbols = new Set([...qtyMap.entries()].filter(([, q]) => q > 0.01).map(([s]) => s));
+    } catch {
+      activePortfolioSymbols = new Set();
+    }
+  }
 
   const isTimedOut = () => Date.now() - start > TIMEOUT_MS;
   const elapsed = () => `${((Date.now() - start) / 1000).toFixed(1)}s`;
@@ -110,10 +126,10 @@ export async function runScreenerPipeline(jobId?: string, _portfolioSymbols?: Se
     return true;
   });
 
-  // BE (trade-to-trade) stocks are excluded from the screener universe
+  // BE (trade-to-trade) stocks are excluded from the screener universe unless held in portfolio
   const beSymbols = await getBESymbols();
-  const tradeableFiltered = tradeable.filter(i => !beSymbols.has(i.symbol) && !i.symbol.endsWith('-BE'));
-  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (${beSymbols.size} BE series excluded)`);
+  const tradeableFiltered = tradeable.filter(i => (!beSymbols.has(i.symbol) && !i.symbol.endsWith('-BE')) || activePortfolioSymbols?.has(i.symbol));
+  pipelineLogger.info(`[${elapsed()}] ${tradeableFiltered.length} tradeable instruments (${beSymbols.size} BE series; portfolio BE retained)`);
   await progress(10, `${tradeableFiltered.length} instruments`);
 
   // ── Step 3: Patch today's prices (batch OHLC) ─────────────────────────────
@@ -394,14 +410,16 @@ export async function runScreenerPipeline(jobId?: string, _portfolioSymbols?: Se
       const allResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { skipFilters: true, beta });
       if (!allResult) continue;
 
-      // Circuit band < 15% (2% and 5% circuit stocks) excluded; 10% and 20% circuits are allowed
-      // Market cap must be >= 1,500 Cr (or whitelisted ETF)
-      // BE series and 5% circuit limit stocks are fully excluded from the ranked list
+      // Circuit band < 15% (2% and 5% circuit stocks) excluded unless part of portfolio; 10% and 20% circuits are allowed
+      // Market cap must be >= 1,500 Cr (or whitelisted ETF / portfolio holding)
+      // BE series and 5% circuit limit stocks are ranked ONLY if they are part of portfolio
       const filteredResult = scoreStock(closes, highs, volumes, inst.symbol, storedATH, { beta });
       const isBE = beSymbols.has(inst.symbol) || inst.symbol.endsWith('-BE');
-      const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol);
-      const passesCircuit = bandWidth === undefined || bandWidth >= 0.15;
-      const passesFilters = filteredResult !== null && passesCircuit && passesMcap && !isBE;
+      const inPortfolio = !!activePortfolioSymbols?.has(inst.symbol);
+      const passesMcap = (mcap >= PARAMS.mcapMinCr) || isETFWhitelisted(inst.symbol) || inPortfolio;
+      const passesCircuit = (bandWidth === undefined || bandWidth >= 0.15) || inPortfolio;
+      const passesBE = !isBE || inPortfolio;
+      const passesFilters = filteredResult !== null && passesCircuit && passesMcap && passesBE;
 
       const sparkline = closes.slice(-50);
 

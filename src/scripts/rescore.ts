@@ -58,8 +58,9 @@ async function main() {
   }
   console.log(`  ${allPrices.length.toLocaleString()} rows, ${pricesBySymbol.size} symbols`);
 
-  console.log('[2/5] Loading mcap, ATH, metadata, previous ranks...');
-  const [mcapRows, athRows, prevFilteredRows, prevAllRows] = await Promise.all([
+  console.log('[2/5] Loading mcap, ATH, metadata, previous ranks, portfolio & BE symbols...');
+  const { getBESymbols } = await import('../lib/instrument-service');
+  const [mcapRows, athRows, prevFilteredRows, prevAllRows, txns, beSymbols] = await Promise.all([
     prisma.stockMarketCap.findMany({ select: { symbol: true, marketCap: true } }),
     prisma.stockATH.findMany({ select: { symbol: true, ath: true } }),
     prisma.momentumScore.findMany({ where: { isActive: true, rankType: 'filtered' },
@@ -68,7 +69,16 @@ async function main() {
     prisma.momentumScore.findMany({ where: { isActive: true, rankType: 'all' },
       select: { symbol: true, rank: true, instrumentKey: true, companyName: true,
                 sparklineData: true, circuitBandPct: true, marketCapCategory: true } }),
+    prisma.transaction.findMany({ select: { symbol: true, type: true, quantity: true } }),
+    getBESymbols(),
   ]);
+  const qtyMap = new Map<string, number>();
+  for (const t of txns) {
+    const q = qtyMap.get(t.symbol) ?? 0;
+    qtyMap.set(t.symbol, t.type === 'BUY' ? q + t.quantity : q - t.quantity);
+  }
+  const portfolioSymbols = new Set([...qtyMap.entries()].filter(([, q]) => q > 0.01).map(([s]) => s));
+
   const mcapMap      = new Map(mcapRows.map(r => [r.symbol, r.marketCap]));
   const athMap       = new Map(athRows.map(r => [r.symbol, r.ath]));
   const prevFiltered = new Map(prevFilteredRows.map(r => [r.symbol, r.rank]));
@@ -77,7 +87,7 @@ async function main() {
   type Meta = { instrumentKey: string; companyName: string; sparklineData: string | null; circuitBandPct: number | null; marketCapCategory: string | null };
   const metaFiltered = new Map<string, Meta>(prevFilteredRows.map(r => [r.symbol, r]));
   const metaAll      = new Map<string, Meta>(prevAllRows.map(r => [r.symbol, r]));
-  console.log(`  ${mcapMap.size} mcap, ${athMap.size} ATH entries`);
+  console.log(`  ${mcapMap.size} mcap, ${athMap.size} ATH entries, ${portfolioSymbols.size} portfolio holdings, ${beSymbols.size} BE symbols`);
 
   // ── Load history for denormalized stats ──────────────────────────────────────
   console.log('[3/5] Loading ranking history for stats...');
@@ -119,7 +129,12 @@ async function main() {
     const allResult = scoreStock(closes, highs, volumes, symbol, ath, { skipFilters: true });
     if (allResult) allScored.push({ symbol, score: allResult });
 
-    if (mcap && mcap >= PARAMS.mcapMinCr) {
+    const inPortfolio = portfolioSymbols.has(symbol);
+    const isBE = beSymbols.has(symbol) || symbol.endsWith('-BE');
+    const bandPct = metaFiltered.get(symbol)?.circuitBandPct;
+    const isNarrowCircuit = bandPct !== null && bandPct !== undefined && bandPct < 15;
+
+    if (inPortfolio || (!isBE && !isNarrowCircuit && mcap && mcap >= PARAMS.mcapMinCr)) {
       const filtResult = scoreStock(closes, highs, volumes, symbol, ath);
       if (filtResult) filteredScored.push({ symbol, score: filtResult });
     }

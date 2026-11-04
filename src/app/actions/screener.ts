@@ -3,13 +3,11 @@
 import { revalidateTag, unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { computePortfolioState } from '@/lib/finance/recalculation';
-import { computeReturns, sharpeRatio, PARAMS, computeBetaFromCloses, scoreStock } from '@/lib/screener/scoring';
+import { PARAMS, computeBetaFromCloses, scoreStock } from '@/lib/screener/scoring';
 import { runScreenerPipeline } from '@/lib/screener/pipeline';
-import { detectAndFlushAnomalies } from '@/lib/screener/corporate-actions';
 import { getAllInstrumentData, getBESymbols } from '@/lib/instrument-service';
 import { createJob, completeJob, failJob } from '@/lib/jobs';
 import { fetchASMList } from '@/lib/nse-api';
-import { getCategoriesBatch } from '@/lib/amfi';
 
 // ── Types ──
 
@@ -188,8 +186,10 @@ export async function getScreenerData(
   const todayDate = scores[0]?.computedDate ?? null;
   const prevDayRanks = await loadPrevDayRanksForDisplay(todayDate, 'filtered');
 
-  // Exclude BE and 5% circuit stocks fully from the ranked universe
+  // Exclude BE and 5% circuit stocks from the ranked universe UNLESS they are in portfolio
   const cleanScores = scores.filter(s => {
+    const inPortfolio = portfolioSymbols.has(s.symbol);
+    if (inPortfolio) return true;
     const isBE = beSymbols.has(s.symbol) || s.symbol.endsWith('-BE');
     const is5PctCircuit = s.circuitBandPct !== null && s.circuitBandPct !== undefined && s.circuitBandPct < 15;
     return !isBE && !is5PctCircuit;
@@ -238,7 +238,7 @@ export async function getScreenerData(
       prevRank,
       rankChange,
       inPortfolio,
-      isBE: false,
+      isBE: beSymbols.has(s.symbol) || s.symbol.endsWith('-BE'),
       asmInfo: asm ? { type: asm.type, stage: asm.stage, desc: asm.desc } : undefined,
       drawdownSinceEntry,
     };

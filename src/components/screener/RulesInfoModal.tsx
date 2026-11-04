@@ -38,11 +38,11 @@ export default function RulesInfoModal({ open, onClose }: RulesInfoModalProps) {
 
             {/* Universe Filters */}
             <Section title="Entry Criteria" subtitle="All must pass to appear in the ranked list (AND logic).">
-              <RuleRow label="Exchange" value="NSE equity (EQ series only — BE excluded) + GOLDBEES, SILVERBEES" />
+              <RuleRow label="Exchange" value="NSE equity (EQ series only — BE excluded unless in portfolio) + GOLDBEES, SILVERBEES" />
               <RuleRow label="Market Cap" value=">= 1,500 Crores (NSE bhavcopy)" />
               <RuleRow label="Min Price" value=">= ₹50 (ETFs exempt)" />
               <RuleRow label="Volume" value="Median daily turnover >= ₹1 Cr (126 trading days)" />
-              <RuleRow label="Circuit Limit" value="Band width >= 15% (5% and 2% circuit stocks excluded)" />
+              <RuleRow label="Circuit Limit" value="Band width >= 15% (5% and 2% circuit stocks excluded unless in portfolio)" />
               <RuleRow label="200 DMA" value="Close >= 200-day simple moving average" />
               <RuleRow label="ATH Proximity" value="Close >= 70% of all-time high" />
             </Section>

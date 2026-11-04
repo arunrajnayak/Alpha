@@ -430,9 +430,9 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
   const displayRows = useMemo(() => {
     let filtered = [...rows];
 
-    // On prefiltered ("All Ranked") tab, ensure BE and 5% circuit stocks are fully excluded
+    // On prefiltered ("All Ranked") tab, exclude BE and 5% circuit stocks unless part of portfolio
     if (activeTab === 'prefiltered') {
-      filtered = filtered.filter(r => !r.isBE && !(r.circuitBandPct !== null && r.circuitBandPct < 15));
+      filtered = filtered.filter(r => r.inPortfolio || (!r.isBE && !(r.circuitBandPct !== null && r.circuitBandPct < 15)));
     }
 
     if (activeTab === 'prefiltered' && hidePortfolio) {
@@ -636,7 +636,8 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
               ) : displayRows.map(row => {
                 const exit = activeTab === 'portfolio' ? row.exitSignal : undefined;
                 const isExitCandidate = !!exit && exit.signalType === 'red' && !exit.protected;
-                const isWarning        = !!exit && exit.signalType === 'yellow';
+                const is5PctCircuit    = row.circuitBandPct !== null && row.circuitBandPct !== undefined && row.circuitBandPct < 15;
+                const isWarning        = (!!exit && exit.signalType === 'yellow') || (activeTab === 'prefiltered' && (!!row.isBE || is5PctCircuit));
                 const isProtected      = !!exit && exit.protected;
                 const effectiveRank    = row.rank;
 
@@ -760,6 +761,22 @@ export default function ScreenerClient({ initialData }: ScreenerClientProps) {
                               label="CAUTION"
                               badgeCls="text-amber-400 hover:text-amber-300"
                               lines={cautionLines}
+                              iconOnly
+                              icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
+                            />
+                          );
+                        })()}
+                        {/* Warning badge (BE / 5% Circuit) — shown outside portfolio tab for portfolio holdings */}
+                        {activeTab !== 'portfolio' && (row.isBE || is5PctCircuit) && (() => {
+                          const warnLines = [
+                            row.isBE ? 'BE series (Trade-to-Trade)' : '',
+                            is5PctCircuit ? '5% daily circuit limit' : '',
+                          ].filter(Boolean) as string[];
+                          return (
+                            <BadgeTooltip
+                              label="WARNING"
+                              badgeCls="text-amber-400 hover:text-amber-300"
+                              lines={warnLines}
                               iconOnly
                               icon={<WarningAmberIcon sx={{ fontSize: 16 }} />}
                             />

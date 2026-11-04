@@ -60,8 +60,8 @@ saveRankingHistory()← append to RankingHistory (50-day rolling window)
 | Above 200 DMA | close ≥ SMA(200) | `ScreenerPrice` |
 | ATH proximity | close ≥ 70% × ATH | `StockATH` |
 | Turnover | median(close × volume, 126d) ≥ ₹1 Cr | `ScreenerPrice` |
-| Circuit band | ≥ 15% (excludes 2% and 5% circuits) | NSE instrument data |
-| Series | EQ series only (BE excluded; GOLDBEES/SILVERBEES permitted) | Instrument master |
+| Circuit band | ≥ 15% (excludes 2% and 5% circuits unless held in portfolio) | NSE instrument data |
+| Series | EQ series only (BE excluded unless held in portfolio; GOLDBEES/SILVERBEES permitted) | Instrument master |
 | Data history | ≥ 248 trading days (~12m) | `ScreenerPrice` row count |
 
 ## Exit & Warning Signal Logic (src/app/actions/screener.ts)
