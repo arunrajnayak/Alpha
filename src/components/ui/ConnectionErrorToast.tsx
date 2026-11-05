@@ -3,6 +3,7 @@
 import { useMemo, useCallback, useSyncExternalStore } from 'react';
 import { useLiveData, ConnectionError } from '@/context/LiveDataContext';
 import { Snackbar, Alert, Button, IconButton } from '@mui/material';
+import type { SnackbarCloseReason } from '@mui/material/Snackbar';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -56,7 +57,7 @@ export default function ConnectionErrorToast() {
     const isErrorOpen = !!currentError;
     const isSuccessOpen = authSuccess === 'true' && !hasHandledAuth;
 
-    const handleClose = useCallback((_event?: React.SyntheticEvent | Event, reason?: string) => {
+    const handleClose = useCallback((_event?: React.SyntheticEvent | Event | null, reason?: SnackbarCloseReason | string) => {
         if (reason === 'clickaway') return;
         clearConnectionError();
         if (authError) {
