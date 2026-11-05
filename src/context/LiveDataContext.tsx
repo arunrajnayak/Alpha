@@ -134,12 +134,18 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       setData(options.bootstrapData);
       setLoading(false);
       setIsMarketHours(options.bootstrapData.marketStatus === 'OPEN' || options.bootstrapData.marketStatus === 'PRE_OPEN');
+      if (options.bootstrapData.pnlHistory && options.bootstrapData.pnlHistory.length > 0) {
+        setPnlHistory(options.bootstrapData.pnlHistory);
+      }
     }
     if (initializedRef.current) return;
     initializedRef.current = true;
     setInitialized(true);
-    // Only load P/L history if this is a portfolio initialization (not just token-only for market overview)
-    if (!options || options.bootstrapData !== undefined || options.tokenValid === undefined) {
+    // Only load P/L history if this is a portfolio initialization and not already loaded from bootstrap data
+    if (
+      (!options?.bootstrapData?.pnlHistory || options.bootstrapData.pnlHistory.length === 0) &&
+      (!options || options.bootstrapData !== undefined || options.tokenValid === undefined)
+    ) {
       getIntradayPnLHistory()
         .then(history => {
           if (history.length > 0) {
@@ -538,6 +544,10 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const [isVisible, setIsVisible] = useState(true);
+  const isVisibleRef = useRef(isVisible);
+  useEffect(() => {
+    isVisibleRef.current = isVisible;
+  }, [isVisible]);
 
   // Use Upstox stream hook for direct WebSocket connection
   const hasToken = hasTokenOverride !== null ? hasTokenOverride : !!data?.tokenStatus?.hasToken;
@@ -604,6 +614,21 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Tab visibility: pause polling when hidden, refresh immediately when returning
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const visible = typeof document !== 'undefined' && document.visibilityState !== 'hidden';
+      setIsVisible(visible);
+      if (visible && initializedRef.current) {
+        liveLogger.info('Tab visible again — refreshing live data');
+        refresh();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refresh]);
+
   // Ref to track market status without causing effect re-runs
   const marketStatusRef = useRef(data?.marketStatus);
   useEffect(() => {
@@ -650,14 +675,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
         // If not streaming, poll every 10 seconds (for real-time live pulse)
         const pollInterval = isStreaming ? 300000 : 10000; // 5 min vs 10 sec
 
-        if (isMarketCurrentlyActive()) {
+        if (isMarketCurrentlyActive() && isVisibleRef.current) {
           if (!isStreaming) {
             refresh();
           }
         }
 
         intervalId = setInterval(() => {
-          if (isMarketCurrentlyActive()) {
+          if (isMarketCurrentlyActive() && isVisibleRef.current) {
             if (!isStreaming) {
               refresh();
             }
@@ -672,7 +697,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     let indicesIntervalId: NodeJS.Timeout | null = null;
     if (isStreaming) {
       indicesIntervalId = setInterval(() => {
-        if (isMarketCurrentlyActive()) {
+        if (isMarketCurrentlyActive() && isVisibleRef.current) {
           refresh();
         }
       }, 300000); // Every 5 minutes

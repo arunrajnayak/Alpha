@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/upstox/auth';
 import { getInstrumentKeys } from '@/lib/instrument-service';
-import { computePortfolioState } from '@/lib/finance/recalculation';
+import { getActiveHoldingsSummary } from '@/lib/finance';
 import { format, subDays } from 'date-fns';
 import { istDayOfWeek } from '@/lib/tz';
 import { toDateStr } from '@/lib/screener/dates';
@@ -162,10 +162,8 @@ export async function GET(request: NextRequest) {
     if (symbolsParam) {
       symbols = symbolsParam.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
     } else {
-      const engine = await computePortfolioState(new Date());
-      symbols = Array.from(engine.holdings.values())
-        .filter(h => h.qty > 0.01)
-        .map(h => h.symbol);
+      const activeHoldings = await getActiveHoldingsSummary();
+      symbols = activeHoldings.map(h => h.symbol);
     }
 
     if (symbols.length === 0) {

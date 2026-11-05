@@ -1,6 +1,6 @@
 'use server';
 
-import { computePortfolioState, MarketCapCategory } from '@/lib/finance';
+import { getActiveHoldingsSummary, MarketCapCategory } from '@/lib/finance';
 import { fetchNseIndices } from './nse';
 import { prisma, chunkArray } from '@/lib/db';
 import { SectorAllocation } from '@/lib/types';
@@ -125,6 +125,14 @@ async function getLastTradingDayPrices(
   return { lastDayPrices, previousDayPrices, lastTradingDate };
 }
 
+export interface IntradayPnLPoint {
+  time: Date;
+  pnl: number;
+  percent: number;
+  nifty50Percent?: number | null;
+  n500m50Percent?: number | null;
+}
+
 export interface LiveDashboardData {
   totalEquity: number;
   totalInvested: number;
@@ -152,6 +160,7 @@ export interface LiveDashboardData {
   };
   marketStatus: MarketStatus;
   dataDate?: string;
+  pnlHistory?: IntradayPnLPoint[];
 }
 
 interface StockTechnicals {
@@ -249,20 +258,86 @@ async function getStockTechnicalsBatch(symbols: string[]): Promise<Map<string, S
   return result;
 }
 
+async function fetchSectorMapBatch(holdingSymbols: string[]): Promise<Map<string, string>> {
+  const sectorMap = new Map<string, string>();
+  if (holdingSymbols.length === 0) return sectorMap;
+
+  try {
+    const symbolMappings = await prisma.symbolMapping.findMany({
+      where: {
+        OR: [
+          { oldSymbol: { in: holdingSymbols } },
+          { newSymbol: { in: holdingSymbols } },
+        ],
+      },
+    });
+
+    const expandedSymbols = new Set(holdingSymbols);
+    for (const m of symbolMappings) {
+      if (holdingSymbols.includes(m.oldSymbol)) expandedSymbols.add(m.newSymbol);
+      if (holdingSymbols.includes(m.newSymbol)) expandedSymbols.add(m.oldSymbol);
+    }
+
+    const symbolChunks = chunkArray(Array.from(expandedSymbols));
+    const allMappings = await Promise.all(
+      symbolChunks.map(chunk =>
+        prisma.sectorMapping.findMany({
+          where: { symbol: { in: chunk } },
+          select: { symbol: true, sector: true },
+        })
+      )
+    );
+
+    for (const s of allMappings.flat()) {
+      sectorMap.set(s.symbol, s.sector);
+    }
+
+    for (const m of symbolMappings) {
+      const oldSector = sectorMap.get(m.oldSymbol);
+      const newSector = sectorMap.get(m.newSymbol);
+      if (oldSector && !newSector) {
+        sectorMap.set(m.newSymbol, oldSector);
+      } else if (newSector && !oldSector) {
+        sectorMap.set(m.oldSymbol, newSector);
+      }
+    }
+  } catch (error) {
+    liveActionsLogger.warn('Sector lookup failed:', (error as Error).message);
+  }
+
+  return sectorMap;
+}
+
 export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   try {
-    // 1. Get current holdings
-    const engine = await computePortfolioState(new Date()); // Today's state
-    const holdings = Array.from(engine.holdings.values()).filter(h => h.qty > 0.01);
-    liveActionsLogger.info(`computed ${holdings.length} holdings`);
+    // Phase 1: Parallelize initial checks, active holdings summary, indices, and PnL history
+    const [
+      activeHoldings,
+      isHoliday,
+      isMarketOpen,
+      hasToken,
+      indicesData,
+      pnlHistory,
+    ] = await Promise.all([
+      getActiveHoldingsSummary(),
+      isTradingHoliday(new Date()),
+      isMarketOpenAsync(),
+      hasValidToken(),
+      fetchNseIndices(),
+      getIntradayPnLHistory(),
+    ]);
+
+    const holdings = activeHoldings.map(h => ({
+      symbol: h.symbol,
+      qty: h.quantity,
+      invested: h.invested,
+    }));
+    liveActionsLogger.info(`resolved ${holdings.length} active holdings`);
 
     // Check market status
-    const isHoliday = await isTradingHoliday(new Date());
     const day = istDayOfWeek(new Date());
     const isWeekday = day >= 1 && day <= 5;
     const isTradingDayToday = isWeekday && !isHoliday;
-
-    const isMarketOpen = await isMarketOpenAsync();
     const isPreOpen = isTradingDayToday && isPreOpenSession();
 
     let marketStatus: MarketStatus = 'CLOSED';
@@ -306,21 +381,29 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
         breadthByCategory: emptyBreadth,
         allHoldings: [],
         lastUpdated: new Date().toISOString(),
-        indices: [],
+        indices: indicesData || [],
         sectorAllocations: [],
-        marketStatus
+        marketStatus,
+        pnlHistory: pnlHistory || [],
       };
     }
 
-    // 2. Check if we have a valid Upstox token
-    const hasToken = await hasValidToken();
-    
-    // Fetch indices in parallel (uses Upstox internally now)
-    const indicesPromise = fetchNseIndices();
-
-    // 3. Get instrument keys for all holdings
     const holdingSymbols = holdings.map(h => h.symbol);
-    const instrumentKeyMap = await getInstrumentKeys(holdingSymbols);
+
+    // Phase 2: Fetch instrument keys, historical prices (if needed), AMFI categories, technicals, and sector mappings concurrently
+    const [
+      instrumentKeyMap,
+      historicalPrices,
+      amfiCategories,
+      technicalsMap,
+      sectorMap,
+    ] = await Promise.all([
+      getInstrumentKeys(holdingSymbols),
+      useHistoricalData ? getLastTradingDayPrices(holdingSymbols) : Promise.resolve(null),
+      getAMFICategoriesBatch(holdingSymbols),
+      getStockTechnicalsBatch(holdingSymbols),
+      fetchSectorMapBatch(holdingSymbols),
+    ]);
     
     // Build quote map
     const quoteMap = new Map<string, UpstoxLiveQuoteV3>();
@@ -333,15 +416,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     }>();
     let latestTradeTime: number = 0;
     
-    // Fetch historical prices if we need them (for pre-market display)
-    let historicalPrices: {
-      lastDayPrices: Map<string, { close: number; date: Date }>;
-      previousDayPrices: Map<string, { close: number; date: Date }>;
-      lastTradingDate: Date | null;
-    } | null = null;
-    
-    if (useHistoricalData) {
-      historicalPrices = await getLastTradingDayPrices(holdingSymbols);
+    if (useHistoricalData && historicalPrices) {
       liveActionsLogger.info(`Fetched historical prices for ${historicalPrices.lastDayPrices.size} symbols, last trading date: ${historicalPrices.lastTradingDate?.toISOString().split('T')[0]}`);
     }
     
@@ -418,59 +493,6 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     } else {
       liveActionsLogger.warn("No valid Upstox token - using fallback prices");
     }
-
-  // Fetch AMFI market cap classifications for all holdings
-  const amfiCategories = await getAMFICategoriesBatch(holdingSymbols);
-
-  // Fetch technicals (ATH and 1-month average volume) for all holdings
-  const technicalsMap = await getStockTechnicalsBatch(holdingSymbols);
-
-  // Fetch sector mappings for all holdings (batched to avoid SQLite expression tree limit)
-  // Also fetch symbol mappings to handle renamed/delisted stocks
-  let sectorMap = new Map<string, string>();
-  try {
-    // Get symbol mappings only for current holding symbols
-    const symbolMappings = await prisma.symbolMapping.findMany({
-      where: {
-        OR: [
-          { oldSymbol: { in: holdingSymbols } },
-          { newSymbol: { in: holdingSymbols } }
-        ]
-      }
-    });
-    
-    // Build expanded symbol list (include both old and new symbols)
-    const expandedSymbols = new Set(holdingSymbols);
-    for (const m of symbolMappings) {
-      if (holdingSymbols.includes(m.oldSymbol)) expandedSymbols.add(m.newSymbol);
-      if (holdingSymbols.includes(m.newSymbol)) expandedSymbols.add(m.oldSymbol);
-    }
-    
-    const symbolChunks = chunkArray(Array.from(expandedSymbols));
-    const allMappings = await Promise.all(
-      symbolChunks.map(chunk =>
-        prisma.sectorMapping.findMany({
-          where: { symbol: { in: chunk } },
-          select: { symbol: true, sector: true }
-        })
-      )
-    );
-    sectorMap = new Map(allMappings.flat().map(s => [s.symbol, s.sector]));
-    
-    // Extend sector mappings using symbol mappings (for renamed/delisted stocks)
-    for (const m of symbolMappings) {
-      const oldSector = sectorMap.get(m.oldSymbol);
-      const newSector = sectorMap.get(m.newSymbol);
-      
-      if (oldSector && !newSector) {
-        sectorMap.set(m.newSymbol, oldSector);
-      } else if (newSector && !oldSector) {
-        sectorMap.set(m.oldSymbol, newSector);
-      }
-    }
-  } catch (error) {
-    liveActionsLogger.warn('Sector lookup failed:', (error as Error).message);
-  }
 
   // 4. Match holdings with quotes and calculate metrics
   const liveData: LiveStockData[] = [];
@@ -664,25 +686,16 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     breadthByCategory,
     allHoldings: sortedByPercent,
     lastUpdated: new Date().toISOString(),
-    indices: [],
+    indices: indicesData && indicesData.length > 0 ? indicesData : [],
     sectorAllocations,
     tokenStatus: {
       hasToken,
       message: hasToken ? undefined : 'No valid Upstox token. Please approve the token request on your phone.'
     },
     marketStatus,
-    dataDate
+    dataDate,
+    pnlHistory: pnlHistory || [],
   };
-  
-  // Resolve indices data
-  const indicesData = await indicesPromise;
-  
-  if (indicesData && indicesData.length > 0) {
-    result.indices = indicesData;
-  } else {
-    liveActionsLogger.info("Index fetch failed or empty.");
-    result.indices = [];
-  }
 
     return result;
   } catch (error: any) {
@@ -697,14 +710,6 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
 }
 
 // ----- Intraday P/L History Functions -----
-
-export interface IntradayPnLPoint {
-  time: Date;
-  pnl: number;
-  percent: number;
-  nifty50Percent?: number | null;
-  n500m50Percent?: number | null;
-}
 
 /**
  * Save a P/L snapshot to the database.

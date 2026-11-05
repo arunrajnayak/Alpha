@@ -20,7 +20,8 @@ export { updateIndexHistory } from './index-history';
 export { computePortfolioState, recalculatePortfolioHistory, recalculatePortfolioHistoryInternal } from './recalculation';
 
 // Holdings
-export { getPortfolioHoldings, getStockPriceHistory, getHistoricalPortfolioHoldings, calculatePortfolioXIRR } from './holdings';
+export { getPortfolioHoldings, getActiveHoldingsSummary, getStockPriceHistory, getHistoricalPortfolioHoldings, calculatePortfolioXIRR } from './holdings';
+export type { ActiveHoldingSummary } from './holdings';
 
 // Snapshots & Dashboard
 export { getDashboardHistory, captureWeeklySnapshot, captureMonthlySnapshot, captureHolidaySnapshot, getLatestPortfolioStats, getDashboardStats } from './snapshots';

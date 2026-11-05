@@ -15,6 +15,31 @@ import { getDividendTotalBySymbol } from '../dividends';
 // Feature flag for Upstox migration - set to true to use Upstox as primary data source
 const USE_UPSTOX = process.env.USE_UPSTOX !== 'false'; // Default to true
 
+export interface ActiveHoldingSummary {
+    symbol: string;
+    quantity: number;
+    invested: number;
+}
+
+/**
+ * Cached active holdings summary (symbol, quantity, invested).
+ * Avoids re-processing all historical transactions on every live dashboard render.
+ */
+export const getActiveHoldingsSummary = unstable_cache(
+    async (): Promise<ActiveHoldingSummary[]> => {
+        const engine = await computePortfolioState();
+        const active: ActiveHoldingSummary[] = [];
+        for (const [symbol, data] of engine.holdings) {
+            if (data.qty > 0.01) {
+                active.push({ symbol, quantity: data.qty, invested: data.invested });
+            }
+        }
+        return active;
+    },
+    ['active-holdings-summary'],
+    { tags: ['portfolio-holdings', 'transactions', 'portfolio-data'], revalidate: 300 }
+);
+
 async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean }) {
     const engine = await computePortfolioState();
 

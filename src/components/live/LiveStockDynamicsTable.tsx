@@ -152,26 +152,22 @@ function getAthDistanceChip(distAth: number, ath?: number) {
   );
 }
 
-const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
-  id = 'intraday-dynamics',
-  holdings,
+const formatPrice = (v: number) => formatCurrency(v, 2, 2);
+
+/**
+ * Isolated dynamic "Refreshed Xs ago" counter.
+ * Updating timeAgoStr every second only re-renders this badge,
+ * completely isolating the 50-row dynamics table from 1-second render loops.
+ */
+const LiveRefreshedBadge = memo(function LiveRefreshedBadge({
   lastRefreshed,
-  marketStatus = 'CLOSED',
-  privacyMode = false,
-  isMobile = false,
-  downloading = false,
-  itemVariants,
-}: LiveStockDynamicsTableProps) {
-  const [sortCol, setSortCol] = useState<SortColumn>('dayChangePercent');
-  const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  isMarketOpen,
+}: {
+  lastRefreshed?: Date | null;
+  isMarketOpen: boolean;
+}) {
   const [timeAgoStr, setTimeAgoStr] = useState('just now');
 
-  // Intraday Sparklines cache { [symbol]: pricePoints[] }
-  const [sparklines, setSparklines] = useState<Record<string, number[]>>({});
-
-  const isMarketOpen = marketStatus === 'OPEN' || marketStatus === 'PRE_OPEN';
-
-  // Dynamic "Refreshed Xs ago" counter
   useEffect(() => {
     const updateTime = () => {
       if (!lastRefreshed) {
@@ -193,6 +189,229 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, [lastRefreshed]);
+
+  if (!isMarketOpen) {
+    return (
+      <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800/90 text-gray-400 border border-white/10">
+        Market Closed
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/70 border border-white/10 text-xs text-gray-300">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+      </span>
+      <span className="text-gray-400">Refreshed</span>
+      <span className="font-mono text-emerald-400 font-medium">{timeAgoStr}</span>
+    </div>
+  );
+});
+
+interface DynamicsTableRowProps {
+  stock: LiveStockData;
+  sparkPoints?: number[];
+  downloading?: boolean;
+}
+
+const DynamicsTableRow = memo(function DynamicsTableRow({
+  stock,
+  sparkPoints,
+  downloading,
+}: DynamicsTableRowProps) {
+  const price = stock.currentPrice || 0;
+  const prevClose = stock.previousClose || price;
+  const isDayPositive = stock.dayChangePercent >= 0;
+
+  // Technical percentage metrics
+  const recLow = stock.recoveryFromLowPct ?? 0;
+  const dropHigh = stock.fallFromHighPct ?? 0;
+  const distAth = stock.distAthPct ?? 0;
+  const rvol = stock.rvol ?? 0;
+
+  // Day Range Bar metrics (guarantee low <= price <= high)
+  const low = Math.min(stock.dayLow || price, price);
+  const high = Math.max(stock.dayHigh || price, price);
+  const open = stock.dayOpen || prevClose;
+  const rangeSpan = Math.max(0.01, high - low);
+  const currentPosPct = Math.max(0, Math.min(100, ((price - low) / rangeSpan) * 100));
+
+  // Synthesize sparkPoints with current price tick without requiring secondary state updates in the parent
+  const effectiveSparkPoints = useMemo(() => {
+    if (!sparkPoints || sparkPoints.length === 0) return undefined;
+    if (!price) return sparkPoints;
+    const last = sparkPoints[sparkPoints.length - 1];
+    if (Math.abs(last - price) > 0.01) {
+      return [...sparkPoints.slice(-24), price];
+    }
+    return sparkPoints;
+  }, [sparkPoints, price]);
+
+  const lowPct = prevClose > 0 ? ((low - prevClose) / prevClose) * 100 : 0;
+  const highPct = prevClose > 0 ? ((high - prevClose) / prevClose) * 100 : 0;
+
+  return (
+    <tr
+      data-motion-item
+      className="hover:bg-white/[0.03] transition-colors group"
+    >
+      {/* Sticky Stock Column (Symbol only) */}
+      <td className="py-3 px-4 sticky left-0 z-20 bg-slate-900 group-hover:bg-[#151f32] transition-colors border-r border-white/10 shadow-[2px_0_8px_rgba(0,0,0,0.4)]">
+        <span className="font-bold text-white text-sm tracking-tight">{stock.symbol}</span>
+      </td>
+
+      {/* LTP & Day Change */}
+      <td className="py-3 px-3 text-right">
+        <div className="flex flex-col items-end gap-0.5">
+          <AnimatedNumber
+            value={price}
+            format={formatPrice}
+            downloading={downloading}
+            className="font-bold text-sm text-white"
+          />
+          <div
+            className={`flex items-center gap-1 text-[11px] font-semibold ${
+              isDayPositive ? 'text-emerald-400' : 'text-rose-400'
+            }`}
+          >
+            <FontAwesomeIcon icon={isDayPositive ? faArrowTrendUp : faArrowTrendDown} className="text-[10px]" />
+            <span className="tabular-nums">
+              {isDayPositive ? '+' : ''}{stock.dayChangePercent.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      </td>
+
+      {/* Day Sparkline Column */}
+      <td className="py-3 px-3">
+        <div className="flex items-center justify-center w-full max-w-[100px] mx-auto">
+          <IntradaySparkline
+            data={effectiveSparkPoints}
+            width={88}
+            height={24}
+            trendPositive={isDayPositive}
+            uniqueId={`spark-${stock.symbol}`}
+          />
+        </div>
+      </td>
+
+      {/* Day Range (Filled Bar with LTP Thumb) */}
+      <td className="py-3 px-3">
+        <div
+          className="flex flex-col gap-1 w-full max-w-[140px] mx-auto"
+          title={`LTP: ₹${price.toFixed(1)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(1)} (${Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}) | High: ₹${high.toFixed(1)} (${Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}) | Open: ₹${open.toFixed(1)}`}
+        >
+          {/* % Range: Low % on left, High % on right */}
+          <div className="flex justify-between text-[10px] font-mono px-0.5 leading-none font-medium">
+            <span className={lowPct > 0.005 ? 'text-emerald-400' : lowPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
+              {Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}
+            </span>
+            <span className={highPct > 0.005 ? 'text-emerald-400' : highPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
+              {Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}
+            </span>
+          </div>
+
+          {/* Filled Bar Container */}
+          <div className="w-full h-2 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
+            {/* Filled bar from Low up to current LTP */}
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                isDayPositive
+                  ? 'bg-gradient-to-r from-emerald-600/70 to-emerald-400'
+                  : 'bg-gradient-to-r from-rose-600/70 to-rose-400'
+              }`}
+              style={{ width: `${currentPosPct}%` }}
+            />
+
+            {/* Current Price Thumb Indicator */}
+            <div
+              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full shadow-md z-[1] border border-slate-900 transition-all duration-300 ${
+                isDayPositive
+                  ? 'bg-emerald-400 shadow-emerald-500/50'
+                  : 'bg-rose-400 shadow-rose-500/50'
+              }`}
+              style={{ left: `${currentPosPct}%` }}
+            />
+          </div>
+
+          {/* Labels: Low on left, High on right */}
+          <div className="flex justify-between text-[10px] text-gray-400 font-mono px-0.5">
+            <span>₹{low >= 1000 ? low.toFixed(0) : low.toFixed(1)}</span>
+            <span>₹{high >= 1000 ? high.toFixed(0) : high.toFixed(1)}</span>
+          </div>
+        </div>
+      </td>
+
+      {/* Recovery from Day Low */}
+      <td className="py-3 px-3 text-right">
+        <div className="flex justify-end">
+          {getRecoveryChip(recLow)}
+        </div>
+      </td>
+
+      {/* Fall from Day High */}
+      <td className="py-3 px-3 text-right">
+        <div className="flex justify-end">
+          {getFallFromHighChip(dropHigh)}
+        </div>
+      </td>
+
+      {/* Distance from ATH */}
+      <td className="py-3 px-3 text-right">
+        <div className="flex justify-end">
+          {getAthDistanceChip(distAth, stock.ath)}
+        </div>
+      </td>
+
+      {/* Volume */}
+      <td className="py-3 px-4 text-right">
+        <div
+          className="flex items-center justify-end"
+          title={
+            stock.avgVolume1m
+              ? `${rvol > 0 && rvol < 0.5 ? 'Low Volume (<0.5x) | ' : ''}Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
+              : undefined
+          }
+        >
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono font-bold text-xs tabular-nums ${
+              rvol >= 2.0
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                : rvol >= 1.0
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                : rvol > 0 && rvol < 0.5
+                ? 'bg-slate-800/80 text-amber-300/80 border border-amber-500/20'
+                : 'bg-slate-800/60 text-gray-400 border border-white/5'
+            }`}
+          >
+            {rvol > 0 ? `${rvol.toFixed(1)}x` : '—'}
+            {rvol >= 2.0 && <FontAwesomeIcon icon={faFire} className="text-[10px] text-amber-400" />}
+          </span>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
+  id = 'intraday-dynamics',
+  holdings,
+  lastRefreshed,
+  marketStatus = 'CLOSED',
+  privacyMode = false,
+  isMobile = false,
+  downloading = false,
+  itemVariants,
+}: LiveStockDynamicsTableProps) {
+  const [sortCol, setSortCol] = useState<SortColumn>('dayChangePercent');
+  const [sortDir, setSortDir] = useState<SortDirection>('desc');
+
+  // Intraday Sparklines cache { [symbol]: pricePoints[] }
+  const [sparklines, setSparklines] = useState<Record<string, number[]>>({});
+
+  const isMarketOpen = marketStatus === 'OPEN' || marketStatus === 'PRE_OPEN';
 
   // Fetch intraday sparklines
   const symbolsList = useMemo(() => {
@@ -233,27 +452,6 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
       isMounted = false;
     };
   }, [isMarketOpen, symbolsList, holdings.length]);
-
-  // Update sparklines in-memory with latest price tick
-  useEffect(() => {
-    if (holdings.length === 0) return;
-    setSparklines((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const h of holdings) {
-        if (!h.currentPrice) continue;
-        const pts = next[h.symbol];
-        if (pts && pts.length > 0) {
-          const last = pts[pts.length - 1];
-          if (Math.abs(last - h.currentPrice) > 0.01) {
-            next[h.symbol] = [...pts.slice(-24), h.currentPrice];
-            changed = true;
-          }
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [holdings]);
 
   const handleSort = (col: SortColumn) => {
     if (sortCol === col) {
@@ -302,6 +500,10 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
       id={id}
       variants={itemVariants}
       data-motion-section
+      style={{
+        contentVisibility: downloading ? 'visible' : 'auto',
+        containIntrinsicSize: 'auto 600px',
+      }}
       className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden shadow-2xl flex flex-col"
     >
       {/* Card Header */}
@@ -320,20 +522,7 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
 
         {/* Status Chip / Time Ago */}
         <div className="flex items-center gap-2.5">
-          {!isMarketOpen ? (
-            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-800/90 text-gray-400 border border-white/10">
-              Market Closed
-            </span>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/70 border border-white/10 text-xs text-gray-300">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-gray-400">Refreshed</span>
-              <span className="font-mono text-emerald-400 font-medium">{timeAgoStr}</span>
-            </div>
-          )}
+          <LiveRefreshedBadge lastRefreshed={lastRefreshed} isMarketOpen={isMarketOpen} />
         </div>
       </div>
 
@@ -447,170 +636,14 @@ const LiveStockDynamicsTable = memo(function LiveStockDynamicsTable({
                 </td>
               </tr>
             ) : (
-              sortedHoldings.map((stock) => {
-                const price = stock.currentPrice || 0;
-                const prevClose = stock.previousClose || price;
-                const isDayPositive = stock.dayChangePercent >= 0;
-
-                // Technical percentage metrics
-                const recLow = stock.recoveryFromLowPct ?? 0;
-                const dropHigh = stock.fallFromHighPct ?? 0;
-                const distAth = stock.distAthPct ?? 0;
-                const rvol = stock.rvol ?? 0;
-
-                // Day Range Bar metrics (guarantee low <= price <= high)
-                const low = Math.min(stock.dayLow || price, price);
-                const high = Math.max(stock.dayHigh || price, price);
-                const open = stock.dayOpen || prevClose;
-                const rangeSpan = Math.max(0.01, high - low);
-                const currentPosPct = Math.max(0, Math.min(100, ((price - low) / rangeSpan) * 100));
-                const sparkPoints = sparklines[stock.symbol];
-                const lowPct = prevClose > 0 ? ((low - prevClose) / prevClose) * 100 : 0;
-                const highPct = prevClose > 0 ? ((high - prevClose) / prevClose) * 100 : 0;
-
-                return (
-                  <tr
-                    key={stock.symbol}
-                    data-motion-item
-                    className="hover:bg-white/[0.03] transition-colors group"
-                  >
-                    {/* Sticky Stock Column (Symbol only) */}
-                    <td className="py-3 px-4 sticky left-0 z-20 bg-slate-900 group-hover:bg-[#151f32] transition-colors border-r border-white/10 shadow-[2px_0_8px_rgba(0,0,0,0.4)]">
-                      <span className="font-bold text-white text-sm tracking-tight">{stock.symbol}</span>
-                    </td>
-
-                    {/* LTP & Day Change */}
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex flex-col items-end gap-0.5">
-                        <AnimatedNumber
-                          value={price}
-                          format={(v) => formatCurrency(v, 2, 2)}
-                          downloading={downloading}
-                          className="font-bold text-sm text-white"
-                        />
-                        <div
-                          className={`flex items-center gap-1 text-[11px] font-semibold ${
-                            isDayPositive ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          <FontAwesomeIcon icon={isDayPositive ? faArrowTrendUp : faArrowTrendDown} className="text-[10px]" />
-                          <span className="tabular-nums">
-                            {isDayPositive ? '+' : ''}{stock.dayChangePercent.toFixed(2)}%
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Day Sparkline Column */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center justify-center w-full max-w-[100px] mx-auto">
-                        <IntradaySparkline
-                          data={sparkPoints}
-                          width={88}
-                          height={24}
-                          trendPositive={isDayPositive}
-                          uniqueId={`spark-${stock.symbol}`}
-                        />
-                      </div>
-                    </td>
-
-                    {/* Day Range (Filled Bar with LTP Thumb) */}
-                    <td className="py-3 px-3">
-                      <div
-                        className="flex flex-col gap-1 w-full max-w-[140px] mx-auto"
-                        title={`LTP: ₹${price.toFixed(1)} (${currentPosPct.toFixed(0)}% of range) | Low: ₹${low.toFixed(1)} (${Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}) | High: ₹${high.toFixed(1)} (${Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}) | Open: ₹${open.toFixed(1)}`}
-                      >
-                        {/* % Range: Low % on left, High % on right */}
-                        <div className="flex justify-between text-[10px] font-mono px-0.5 leading-none font-medium">
-                          <span className={lowPct > 0.005 ? 'text-emerald-400' : lowPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
-                            {Math.abs(lowPct) < 0.005 ? '0.00%' : `${lowPct > 0 ? '+' : ''}${lowPct.toFixed(2)}%`}
-                          </span>
-                          <span className={highPct > 0.005 ? 'text-emerald-400' : highPct < -0.005 ? 'text-rose-400' : 'text-gray-400'}>
-                            {Math.abs(highPct) < 0.005 ? '0.00%' : `${highPct > 0 ? '+' : ''}${highPct.toFixed(2)}%`}
-                          </span>
-                        </div>
-
-                        {/* Filled Bar Container */}
-                        <div className="w-full h-2 bg-slate-800/90 rounded-full relative overflow-visible border border-white/5">
-                          {/* Filled bar from Low up to current LTP */}
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isDayPositive
-                                ? 'bg-gradient-to-r from-emerald-600/70 to-emerald-400'
-                                : 'bg-gradient-to-r from-rose-600/70 to-rose-400'
-                            }`}
-                            style={{ width: `${currentPosPct}%` }}
-                          />
-
-                          {/* Current Price Thumb Indicator */}
-                          <div
-                            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full shadow-md z-[1] border border-slate-900 transition-all duration-300 ${
-                              isDayPositive
-                                ? 'bg-emerald-400 shadow-emerald-500/50'
-                                : 'bg-rose-400 shadow-rose-500/50'
-                            }`}
-                            style={{ left: `${currentPosPct}%` }}
-                          />
-                        </div>
-
-                        {/* Labels: Low on left, High on right */}
-                        <div className="flex justify-between text-[10px] text-gray-400 font-mono px-0.5">
-                          <span>₹{low >= 1000 ? low.toFixed(0) : low.toFixed(1)}</span>
-                          <span>₹{high >= 1000 ? high.toFixed(0) : high.toFixed(1)}</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Recovery from Day Low */}
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex justify-end">
-                        {getRecoveryChip(recLow)}
-                      </div>
-                    </td>
-
-                    {/* Fall from Day High */}
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex justify-end">
-                        {getFallFromHighChip(dropHigh)}
-                      </div>
-                    </td>
-
-                    {/* Distance from ATH */}
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex justify-end">
-                        {getAthDistanceChip(distAth, stock.ath)}
-                      </div>
-                    </td>
-
-                    {/* Volume */}
-                    <td className="py-3 px-4 text-right">
-                      <div
-                        className="flex items-center justify-end"
-                        title={
-                          stock.avgVolume1m
-                            ? `${rvol > 0 && rvol < 0.5 ? 'Low Volume (<0.5x) | ' : ''}Today: ${formatVolume(stock.todayVolume)} | 30D Avg: ${formatVolume(stock.avgVolume1m)}`
-                            : undefined
-                        }
-                      >
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-mono font-bold text-xs tabular-nums ${
-                            rvol >= 2.0
-                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                              : rvol >= 1.0
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                              : rvol > 0 && rvol < 0.5
-                              ? 'bg-slate-800/80 text-amber-300/80 border border-amber-500/20'
-                              : 'bg-slate-800/60 text-gray-400 border border-white/5'
-                          }`}
-                        >
-                          {rvol > 0 ? `${rvol.toFixed(1)}x` : '—'}
-                          {rvol >= 2.0 && <FontAwesomeIcon icon={faFire} className="text-[10px] text-amber-400" />}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+              sortedHoldings.map((stock) => (
+                <DynamicsTableRow
+                  key={stock.symbol}
+                  stock={stock}
+                  sparkPoints={sparklines[stock.symbol]}
+                  downloading={downloading}
+                />
+              ))
             )}
           </tbody>
         </table>

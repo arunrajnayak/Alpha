@@ -45,6 +45,19 @@ export default function LivePageClient({ initialData = null }: LivePageClientPro
   const data = liveContextData || initialData || null;
   const loading = liveContextLoading && !data;
 
+  // Memoize heatmap data structure so that PortfolioHeatmap memoization
+  // is not invalidated by new object references on every render
+  const holdingsList = data?.allHoldings;
+  const heatmapData = useMemo(() => {
+    if (!holdingsList || holdingsList.length === 0) return { allHoldings: [] };
+    return {
+      allHoldings: holdingsList.map((h) => ({
+        ...h,
+        formattedValue: formatNumber(h.currentValue, 0, 0),
+      })),
+    };
+  }, [holdingsList]);
+
   useEffect(() => {
     initialize({ bootstrapData: initialData });
   }, [initialize, initialData]);
@@ -306,7 +319,7 @@ export default function LivePageClient({ initialData = null }: LivePageClientPro
             data-motion-section
           >
             <PortfolioHeatmap 
-                data={{ allHoldings: data.allHoldings.map(h => ({ ...h, formattedValue: formatNumber(h.currentValue, 0, 0) })) }} 
+                data={heatmapData} 
                 isMobile={isMobile} 
                 privacyMode={privacyMode} 
                 downloading={downloading}
@@ -337,6 +350,10 @@ export default function LivePageClient({ initialData = null }: LivePageClientPro
           viewport={viewportConfig}
           animate={downloading ? "visible" : undefined}
           data-motion-section
+          style={{
+            contentVisibility: downloading ? 'visible' : 'auto',
+            containIntrinsicSize: 'auto 360px',
+          }}
         >
             <LiveMovers
                 topGainers={data.topGainers}
