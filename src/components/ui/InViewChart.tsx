@@ -55,9 +55,15 @@ export default function InViewChart({
     };
   }, []);
 
+  const heightStr = height 
+    ? (typeof height === 'number' ? `${height}px` : height)
+    : (typeof minHeight === 'number' ? `${minHeight}px` : minHeight);
+
   const style: React.CSSProperties = {
     minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight,
     ...(height ? { height: typeof height === 'number' ? `${height}px` : height } : {}),
+    contentVisibility: 'auto',
+    containIntrinsicSize: `auto none auto ${heightStr}`,
   };
 
   return (

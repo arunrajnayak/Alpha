@@ -23,7 +23,7 @@ type ViewMode = 'returns' | 'alpha-nifty' | 'alpha-momentum';
 
 interface MonthlyReturnsHeatmapProps {
   data: SnapshotDataPoint[];
-  monthlySnapshots?: MonthlyPortfolioSnapshot[];
+  monthlySnapshots?: { date: Date | string; monthlyReturn?: number | null }[];
   chartData?: ChartDataPoint[];
 }
 

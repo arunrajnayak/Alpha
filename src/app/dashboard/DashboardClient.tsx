@@ -17,13 +17,22 @@ import { APP_CONFIG } from '@/lib/client-config';
 import { ChartErrorBoundary } from '@/components/ui/ErrorBoundary';
 import dynamic from 'next/dynamic';
 import InViewChart from '@/components/ui/InViewChart';
-
-import SectorAllocationWrapper from '@/components/portfolio/SectorAllocationWrapper';
-import MarketCapAreaChart from '@/components/portfolio/MarketCapAreaChartWrapper';
-import SectorHistoryChart from '@/components/portfolio/SectorHistoryChartWrapper';
 import DashboardLoading from './loading';
 import { motion, type Variants } from 'framer-motion';
 import type { fetchDashboardData } from '@/app/actions/queries';
+
+const SectorAllocationChart = dynamic(() => import('@/components/portfolio/SectorAllocationChart'), {
+  loading: () => <div className="h-full min-h-[300px] bg-slate-800/50 rounded-2xl animate-pulse" />,
+  ssr: false,
+});
+const MarketCapAreaChart = dynamic(() => import('@/components/portfolio/MarketCapAreaChart'), {
+  loading: () => <div className="h-[500px] glass-card animate-pulse" />,
+  ssr: false,
+});
+const SectorHistoryChart = dynamic(() => import('@/components/portfolio/SectorHistoryChart'), {
+  loading: () => <div className="h-[400px] glass-card animate-pulse" />,
+  ssr: false,
+});
 
 type DashboardData = Awaited<ReturnType<typeof fetchDashboardData>>;
 
@@ -110,8 +119,8 @@ export default function DashboardClient({ initialData = null }: DashboardClientP
   const { privacyMode } = useLiveData();
 
   const drawdownData = useMemo(
-    () => (data?.dashboardHistory || []).map(d => ({ date: d.date, drawdown: d.drawdown })),
-    [data?.dashboardHistory]
+    () => (data?.chartData || []).map(d => ({ date: String(d.date), drawdown: d.drawdown ?? 0 })),
+    [data?.chartData]
   );
 
   if (isLoading && !data) {
@@ -126,7 +135,6 @@ export default function DashboardClient({ initialData = null }: DashboardClientP
     portfolioStats,
     dashboardStats,
     chartData,
-    dashboardHistory,
     weeklySnapshots,
     monthlySnapshots,
     exits,
@@ -191,7 +199,7 @@ export default function DashboardClient({ initialData = null }: DashboardClientP
            costBasis={costBasis}
            currentNAV={dashboardStats.currentNAV}
            currentDD={dashboardStats.currentDD}
-           dashboardHistory={dashboardHistory}
+           chartData={chartData}
            privacyMode={privacyMode}
         />
       </motion.div>
@@ -340,7 +348,7 @@ export default function DashboardClient({ initialData = null }: DashboardClientP
                 <div className="flex-1 min-h-[360px]">
                     <ChartErrorBoundary componentName="Sector Allocation">
                       <InViewChart minHeight={360}>
-                        <SectorAllocationWrapper allocations={sectorAllocations} privacyMode={privacyMode} />
+                        <SectorAllocationChart allocations={sectorAllocations} privacyMode={privacyMode} />
                       </InViewChart>
                     </ChartErrorBoundary>
                 </div>

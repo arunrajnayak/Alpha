@@ -40,7 +40,7 @@ export const getActiveHoldingsSummary = unstable_cache(
     { tags: ['portfolio-holdings', 'transactions', 'portfolio-data'], revalidate: 300 }
 );
 
-async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean }) {
+async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean; includeDemergers?: boolean }) {
     const engine = await computePortfolioState();
 
     const activeHoldings: { symbol: string; quantity: number; invested: number }[] = [];
@@ -201,32 +201,34 @@ async function getPortfolioHoldingsInternal(options?: { useLivePrices?: boolean 
         };
     });
 
-    // Enrich with upcoming demerger alerts (next 90 days)
-    try {
-      const now = new Date();
-      const futureDate = new Date(now);
-      futureDate.setDate(futureDate.getDate() + 90);
-      const demergerActions = await fetchNSECorporateActions(now, futureDate, 'DEMERGER');
-      if (demergerActions && demergerActions.length > 0) {
-        const holdingSymbols = new Set(validHoldings.map(h => h.symbol));
-        for (const action of demergerActions) {
-          if (action.series !== 'EQ' || !holdingSymbols.has(action.symbol)) continue;
-          // Parse NSE date "24-Apr-2025"
-          const exDate = parseDateFns(action.exDate, 'dd-MMM-yyyy', new Date());
-          if (isNaN(exDate.getTime())) continue;
-          const daysUntil = differenceInDays(exDate, now);
-          if (daysUntil < 0) continue; // Already past
-          const holding = validHoldings.find(h => h.symbol === action.symbol);
-          if (holding) {
-            (holding as Record<string, unknown>).upcomingDemerger = {
-              exDate: format(exDate, 'dd-MMM-yyyy'),
-              daysUntil,
-            };
+    // Enrich with upcoming demerger alerts (next 90 days) if requested
+    if (options?.includeDemergers) {
+      try {
+        const now = new Date();
+        const futureDate = new Date(now);
+        futureDate.setDate(futureDate.getDate() + 90);
+        const demergerActions = await fetchNSECorporateActions(now, futureDate, 'DEMERGER');
+        if (demergerActions && demergerActions.length > 0) {
+          const holdingSymbols = new Set(validHoldings.map(h => h.symbol));
+          for (const action of demergerActions) {
+            if (action.series !== 'EQ' || !holdingSymbols.has(action.symbol)) continue;
+            // Parse NSE date "24-Apr-2025"
+            const exDate = parseDateFns(action.exDate, 'dd-MMM-yyyy', new Date());
+            if (isNaN(exDate.getTime())) continue;
+            const daysUntil = differenceInDays(exDate, now);
+            if (daysUntil < 0) continue; // Already past
+            const holding = validHoldings.find(h => h.symbol === action.symbol);
+            if (holding) {
+              (holding as Record<string, unknown>).upcomingDemerger = {
+                exDate: format(exDate, 'dd-MMM-yyyy'),
+                daysUntil,
+              };
+            }
           }
         }
+      } catch (err) {
+        financeLogger.warn('[Portfolio] Upcoming demerger check failed:', (err as Error).message);
       }
-    } catch (err) {
-      financeLogger.warn('[Portfolio] Upcoming demerger check failed:', (err as Error).message);
     }
 
     return validHoldings.sort((a, b) => b.currentValue - a.currentValue);
@@ -238,21 +240,23 @@ const getPortfolioHoldingsCached = unstable_cache(
     { tags: ['portfolio-data'], revalidate: 300 }
 );
 
-export async function getPortfolioHoldings() {
+export async function getPortfolioHoldings(options?: { useLivePrices?: boolean; includeDemergers?: boolean }) {
     // Use live prices during market hours when Upstox token is available
     const [hasToken, marketOpen] = await Promise.all([
         hasValidToken(),
         isMarketOpenAsync()
     ]);
 
-    if (USE_UPSTOX && hasToken && marketOpen) {
-        return getPortfolioHoldingsInternal({ useLivePrices: true });
+    const shouldUseLivePrices = options?.useLivePrices ?? (USE_UPSTOX && hasToken && marketOpen);
+
+    if (shouldUseLivePrices) {
+        return getPortfolioHoldingsInternal({ useLivePrices: true, includeDemergers: options?.includeDemergers });
     }
 
     try {
-        return await getPortfolioHoldingsCached();
+        return await getPortfolioHoldingsCached(options);
     } catch {
-        return getPortfolioHoldingsInternal();
+        return getPortfolioHoldingsInternal(options);
     }
 }
 
@@ -381,26 +385,51 @@ export const getHistoricalPortfolioHoldings = unstable_cache(
 );
 
 
-async function calculatePortfolioXIRRInternal(currentValue: number) {
-    const transactions = await prisma.transaction.findMany({});
-    // Flow: -BuyAmount, +SellAmount
-    // And finally +CurrentValuation at today.
+export const getCachedTransactionCashFlows = unstable_cache(
+    async () => {
+        const transactions = await prisma.transaction.findMany({
+            orderBy: { date: 'asc' },
+            select: { type: true, quantity: true, price: true, date: true }
+        });
+        return transactions.map((t) => ({
+            amount: t.type === 'BUY' ? -(t.quantity * t.price) : (t.quantity * t.price),
+            when: t.date
+        }));
+    },
+    ['portfolio-cashflows'],
+    { tags: ['portfolio-data', 'transactions'], revalidate: 3600 }
+);
 
-    if (transactions.length === 0) return 0;
+export async function calculatePortfolioXIRR(currentValue: number) {
+    if (currentValue <= 0) return 0;
 
-    const flows = transactions.map((t) => ({
-        amount: t.type === 'BUY' ? -(t.quantity * t.price) : (t.quantity * t.price),
-        when: t.date
-    }));
+    let flows: { amount: number; when: Date }[];
+    try {
+        flows = await getCachedTransactionCashFlows();
+    } catch {
+        const transactions = await prisma.transaction.findMany({
+            orderBy: { date: 'asc' },
+            select: { type: true, quantity: true, price: true, date: true }
+        });
+        flows = transactions.map((t) => ({
+            amount: t.type === 'BUY' ? -(t.quantity * t.price) : (t.quantity * t.price),
+            when: t.date
+        }));
+    }
+
+    if (flows.length === 0) return 0;
 
     // Add current valuation
-    flows.push({
-        amount: currentValue,
-        when: new Date()
-    });
+    const allFlows = [
+        ...flows,
+        {
+            amount: currentValue,
+            when: new Date()
+        }
+    ];
 
     try {
-        const rate = xirr(flows);
+        const rate = xirr(allFlows);
         return rate * 100; // Convert to percentage
     } catch (e) {
         financeLogger.error("XIRR Calculation failed:", e);
@@ -408,10 +437,16 @@ async function calculatePortfolioXIRRInternal(currentValue: number) {
     }
 }
 
-export const calculatePortfolioXIRR = unstable_cache(
-    calculatePortfolioXIRRInternal,
-    ['portfolio-xirr'],
-    { tags: ['portfolio-data'], revalidate: 3600 }
+export const getPortfolioRealizedStats = unstable_cache(
+    async () => {
+        const engine = await computePortfolioState();
+        return {
+            realizedPnL: engine.realizedPnl,
+            tradeStats: engine.getTradeStats(),
+        };
+    },
+    ['portfolio-realized-stats'],
+    { tags: ['portfolio-data', 'transactions'], revalidate: 3600 }
 );
 
 // Shared helper for market cap segmentation with concurrent fetching

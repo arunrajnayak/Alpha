@@ -1,17 +1,21 @@
 'use server';
 
-import { getPortfolioHoldings, getHistoricalPortfolioHoldings, getLatestPortfolioStats, getDashboardStats, calculatePortfolioXIRR } from '@/lib/finance';
+import { getPortfolioHoldings, getPortfolioRealizedStats, calculatePortfolioXIRR } from '@/lib/finance';
 import { getPortfolioExits } from '@/lib/exits';
 import { calculateNetCapitalGainsTax } from '@/lib/charges';
 import { getTotalDividends } from '@/lib/dividends';
 import { prisma } from '@/lib/db';
 import { getWeeklySnapshots } from '@/app/actions/snapshots';
 import { PortfolioHolding, SectorAllocation } from '@/lib/types';
+import { unstable_cache } from 'next/cache';
+import { istDateParts, istDayOfWeek } from '@/lib/tz';
+import { differenceInDays, subYears } from 'date-fns';
+import { financeLogger } from '@/lib/logger';
 
 // ============== Portfolio Queries ==============
 
 export async function fetchPortfolioHoldings() {
-  const currentHoldings = await getPortfolioHoldings() as Omit<PortfolioHolding, 'priceHistory'>[];
+  const currentHoldings = await getPortfolioHoldings({ includeDemergers: true }) as Omit<PortfolioHolding, 'priceHistory'>[];
   const holdingsWithCharts: PortfolioHolding[] = currentHoldings.map(h => ({
     ...h,
     priceHistory: [] // Lazy loaded by LazySparkline component
@@ -20,17 +24,16 @@ export async function fetchPortfolioHoldings() {
 }
 
 export async function fetchHistoricalHoldings() {
+  const { getHistoricalPortfolioHoldings } = await import('@/lib/finance');
   return getHistoricalPortfolioHoldings();
 }
 
 // ============== Dashboard Queries ==============
 
-export async function fetchDashboardData() {
+async function getDashboardDataInternal() {
   const [
     holdings,
-    historicalHoldings,
-    portfolioStats,
-    dashboardStats,
+    realizedStats,
     snapshots,
     weeklySnapshots,
     monthlySnapshots,
@@ -38,12 +41,46 @@ export async function fetchDashboardData() {
     totalDividends,
   ] = await Promise.all([
     getPortfolioHoldings(),
-    getHistoricalPortfolioHoldings(),
-    getLatestPortfolioStats(),
-    getDashboardStats(),
-    prisma.dailyPortfolioSnapshot.findMany({ orderBy: { date: 'asc' } }),
-    getWeeklySnapshots(),
-    prisma.monthlyPortfolioSnapshot.findMany({ orderBy: { date: 'asc' } }),
+    getPortfolioRealizedStats(),
+    prisma.dailyPortfolioSnapshot.findMany({
+      orderBy: { date: 'asc' },
+      select: {
+        date: true,
+        portfolioNAV: true,
+        niftyNAV: true,
+        nifty500Momentum50NAV: true,
+        niftyMidcap100NAV: true,
+        niftySmallcap250NAV: true,
+        niftyMicrocap250NAV: true,
+        investedCapital: true,
+        totalEquity: true,
+        dailyPnL: true,
+        dailyReturn: true,
+        drawdown: true,
+        xirr: true,
+        cagr: true,
+      }
+    }),
+    prisma.weeklyPortfolioSnapshot.findMany({
+      orderBy: { date: 'desc' },
+      select: {
+        date: true,
+        largeCapPercent: true,
+        midCapPercent: true,
+        smallCapPercent: true,
+        microCapPercent: true,
+        nanoCapPercent: true,
+        sectorAllocation: true,
+        weeklyReturn: true,
+      }
+    }),
+    prisma.monthlyPortfolioSnapshot.findMany({
+      orderBy: { date: 'desc' },
+      select: {
+        date: true,
+        monthlyReturn: true,
+      }
+    }),
     getPortfolioExits(),
     getTotalDividends().catch(() => 0), // graceful fallback before migration
   ]);
@@ -53,35 +90,59 @@ export async function fetchDashboardData() {
   const latestSnapshot = snapshots[snapshots.length - 1];
   // Net invested capital from latest daily snapshot (matches /snapshots table and chart)
   const totalInvested = latestSnapshot?.investedCapital ?? costBasis;
-  const totalPnL = historicalHoldings.reduce((sum, h) => sum + h.totalPnl, 0);
-  const totalRealizedPnL = historicalHoldings.reduce((sum, h) => sum + h.realizedPnl, 0);
-  const totalUnrealizedPnL = historicalHoldings.reduce((sum, h) => sum + h.unrealizedPnl, 0);
+  const totalRealizedPnL = realizedStats.realizedPnL;
+  const totalUnrealizedPnL = totalCurrentValue - costBasis;
+  const totalPnL = totalRealizedPnL + totalUnrealizedPnL;
   
   const xirrValue = await calculatePortfolioXIRR(totalCurrentValue);
 
-  const chartData = snapshots.map((s) => ({
-    date: s.date,
-    portfolioNAV: s.portfolioNAV,
-    niftyNAV: s.niftyNAV,
-    nifty500Momentum50NAV: s.nifty500Momentum50NAV,
-    niftyMidcap100NAV: s.niftyMidcap100NAV,
-    niftySmallcap250NAV: s.niftySmallcap250NAV,
-    niftyMicrocap250NAV: s.niftyMicrocap250NAV,
-    investedCapital: s.investedCapital,
-    totalEquity: s.totalEquity,
-    dailyPnL: s.dailyPnL,
-    dailyReturn: s.dailyReturn,
-    drawdown: s.drawdown,
-    xirr: s.xirr,
-    cagr: s.cagr,
-  }));
+  const chartData = snapshots;
 
-  const dashboardHistory = chartData.map(d => ({
-    date: typeof d.date === 'string' ? d.date : d.date.toISOString(),
-    drawdown: d.drawdown ?? 0,
-    totalEquity: d.totalEquity,
-    portfolioNAV: d.portfolioNAV
-  }));
+  // In-memory derivation of dashboardStats (avoids 6 separate DB queries)
+  const latestDaily = snapshots[snapshots.length - 1];
+  const latestWeekly = weeklySnapshots[0];
+  const latestMonthly = monthlySnapshots[0];
+
+  const today = new Date();
+  const dayOfWeek = istDayOfWeek(today);
+
+  let weeklySnapshotToUse = latestWeekly;
+  if (weeklySnapshotToUse && dayOfWeek >= 1 && dayOfWeek <= 4) {
+    const snapshotDate = new Date(weeklySnapshotToUse.date);
+    const daysSince = differenceInDays(today, snapshotDate);
+    if (daysSince < 7 && Math.abs(weeklySnapshotToUse.weeklyReturn ?? 0) < 0.0001) {
+      const prevWeek = weeklySnapshots.find(w => new Date(w.date) < snapshotDate);
+      if (prevWeek) {
+        weeklySnapshotToUse = prevWeek;
+      }
+    }
+  }
+
+  // Calculate YTD return: from first daily snapshot of current year (IST)
+  const currentYear = istDateParts().year;
+  const startOfYear = new Date(Date.UTC(currentYear, 0, 1));
+  const firstOfYear = snapshots.find(s => new Date(s.date) >= startOfYear);
+  let yearReturn = 0;
+  if (firstOfYear && latestDaily && firstOfYear.portfolioNAV > 0) {
+    yearReturn = ((latestDaily.portfolioNAV / firstOfYear.portfolioNAV) - 1) * 100;
+  }
+
+  // Calculate 1Y return: from snapshot ~1 year ago
+  const oneYearAgo = subYears(new Date(), 1);
+  const oneYearSnapshot = snapshots.find(s => new Date(s.date) >= oneYearAgo);
+  let oneYearReturn = 0;
+  if (oneYearSnapshot && latestDaily && oneYearSnapshot.portfolioNAV > 0) {
+    oneYearReturn = ((latestDaily.portfolioNAV / oneYearSnapshot.portfolioNAV) - 1) * 100;
+  }
+
+  const dashboardStats = {
+    currentNAV: latestDaily?.portfolioNAV || 0,
+    currentDD: (latestDaily?.drawdown || 0) * 100,
+    weekReturn: (weeklySnapshotToUse?.weeklyReturn || 0) * 100,
+    monthReturn: (latestMonthly?.monthlyReturn || 0) * 100,
+    yearReturn,
+    oneYearReturn
+  };
 
   // Calculate sector allocations
   const sectorMap = new Map<string, { sector: string, value: number, count: number }>();
@@ -136,7 +197,11 @@ export async function fetchDashboardData() {
   const exitLosses = exits.filter(e => e.gainLoss <= 0);
   const totalExits = exits.length;
   const livePortfolioStats = {
-    ...portfolioStats,
+    largeCapPercent: latestWeekly?.largeCapPercent || 0,
+    midCapPercent: latestWeekly?.midCapPercent || 0,
+    smallCapPercent: latestWeekly?.smallCapPercent || 0,
+    microCapPercent: latestWeekly?.microCapPercent || 0,
+    nanoCapPercent: latestWeekly?.nanoCapPercent || 0,
     winPercent: totalExits > 0 ? (exitWins.length / totalExits) * 100 : 0,
     lossPercent: totalExits > 0 ? (exitLosses.length / totalExits) * 100 : 0,
     avgWinnerGain: exitWins.length > 0 ? exitWins.reduce((s, e) => s + e.changePercent, 0) / exitWins.length : 0,
@@ -144,16 +209,76 @@ export async function fetchDashboardData() {
     avgHoldingPeriod: totalExits > 0 ? exits.reduce((s, e) => s + e.timeHeld, 0) / totalExits : 0,
   };
 
+  // Lean weekly snapshots: only what MarketCapAreaChart & SectorHistoryChart need
+  const leanWeeklySnapshots = weeklySnapshots.map(w => {
+    let cleanAllocs: { sector: string; allocation: number }[] = [];
+    if (w.sectorAllocation) {
+      try {
+        const parsed = JSON.parse(w.sectorAllocation);
+        cleanAllocs = parsed.map((a: any) => ({ sector: a.sector, allocation: a.allocation }));
+      } catch {}
+    }
+    return {
+      date: w.date,
+      largeCapPercent: w.largeCapPercent,
+      midCapPercent: w.midCapPercent,
+      smallCapPercent: w.smallCapPercent,
+      microCapPercent: w.microCapPercent,
+      nanoCapPercent: w.nanoCapPercent,
+      sectorAllocation: JSON.stringify(cleanAllocs)
+    };
+  });
+
+  // Lean monthly snapshots: deduplicate and keep date + monthlyReturn
+  const monthlyMap = new Map<string, { date: Date; monthlyReturn: number | null }>();
+  for (const m of monthlySnapshots) {
+    const d = new Date(m.date);
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    if (!monthlyMap.has(key)) {
+      monthlyMap.set(key, { date: m.date, monthlyReturn: m.monthlyReturn });
+    }
+  }
+  const leanMonthlySnapshots = Array.from(monthlyMap.values());
+
+  // Prune exits payload (strip heavy breakdown objects to reduce payload size)
+  const clientExits = exits.map(e => ({
+    id: e.id,
+    symbol: e.symbol,
+    sellDate: e.sellDate,
+    buyDate: e.buyDate,
+    buyPrice: e.buyPrice,
+    sellPrice: e.sellPrice,
+    changePercent: e.changePercent,
+    gainLoss: e.gainLoss,
+    timeHeld: e.timeHeld,
+    marketCapCategory: e.marketCapCategory,
+    netGainLoss: e.netGainLoss,
+    quantity: e.quantity,
+  }));
+
+  // Prune holdings payload for ExitsScatterChart
+  const clientHoldings = holdings.map(h => ({
+    symbol: h.symbol,
+    quantity: h.quantity,
+    invested: h.invested,
+    currentValue: h.currentValue,
+    price: h.price,
+    pnl: h.pnl,
+    pnlPercent: h.pnlPercent,
+    marketCap: h.marketCap,
+    marketCapCategory: h.marketCapCategory,
+    sector: h.sector,
+    holdingPeriodDays: h.holdingPeriodDays,
+  }));
+
   return {
-    holdings,
-    historicalHoldings,
+    holdings: clientHoldings,
     portfolioStats: livePortfolioStats,
     dashboardStats,
     chartData,
-    dashboardHistory,
-    weeklySnapshots,
-    monthlySnapshots,
-    exits,
+    weeklySnapshots: leanWeeklySnapshots,
+    monthlySnapshots: leanMonthlySnapshots,
+    exits: clientExits,
     sectorAllocations,
     totalCurrentValue,
     totalInvested,
@@ -172,6 +297,21 @@ export async function fetchDashboardData() {
     niftySmallcapCagr,
     isWeekPositive: dashboardStats.weekReturn >= 0
   };
+}
+
+const getCachedDashboardData = unstable_cache(
+  getDashboardDataInternal,
+  ['dashboard-data-v2'],
+  { revalidate: 60, tags: ['portfolio-data', 'dashboard-stats'] }
+);
+
+export async function fetchDashboardData() {
+  try {
+    return await getCachedDashboardData();
+  } catch (error) {
+    financeLogger.warn('Failed to get cached dashboard data, falling back to direct fetch:', error);
+    return getDashboardDataInternal();
+  }
 }
 
 // ============== Trades Queries ==============

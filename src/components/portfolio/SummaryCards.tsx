@@ -15,7 +15,6 @@ import {
   faScaleBalanced,
 } from '@fortawesome/free-solid-svg-icons';
 import AnimatedNumber from '../ui/AnimatedNumber';
-import { AreaChart, Area, ResponsiveContainer, YAxis } from 'recharts';
 
 // ============================================================================
 // Types
@@ -27,11 +26,17 @@ interface ChartCardsProps {
     currentDD: number;
     totalInvested: number;
     costBasis?: number;
-    dashboardHistory: {
+    dashboardHistory?: {
         date: string;
-        totalEquity: number;
-        portfolioNAV: number;
-        drawdown: number;
+        totalEquity?: number;
+        portfolioNAV?: number;
+        drawdown?: number | null;
+    }[];
+    chartData?: {
+        date: Date | string;
+        totalEquity?: number;
+        portfolioNAV?: number;
+        drawdown?: number | null;
     }[];
     privacyMode?: boolean;
 }
@@ -87,33 +92,72 @@ interface MetricsComboCardProps {
 // Helpers
 // ============================================================================
 
-// Mini sparkline widget — memoized to prevent re-renders
- 
-const ChartWidget = memo(({ data, dataKey, color, domain }: { data: any[], dataKey: string, color: string, domain?: any }) => (
-  <div className="absolute bottom-0 left-0 right-0 h-[80px] opacity-30 pointer-events-none">
-      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <AreaChart data={data}>
-              <defs>
-                  <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={color} stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor={color} stopOpacity={0}/>
-                  </linearGradient>
-              </defs>
-              <YAxis domain={domain || ['auto', 'auto']} hide />
-              <Area 
-                  type="monotone" 
-                  dataKey={dataKey} 
-                  stroke={color} 
-                  fill={`url(#gradient-${dataKey})`} 
-                  strokeWidth={2}
-                  isAnimationActive={true}
-                  animationDuration={2000}
-              />
-          </AreaChart>
-      </ResponsiveContainer>
-  </div>
-));
-ChartWidget.displayName = 'ChartWidget';
+// Mini pure SVG sparkline widget — zero-bundle-size, instant SSR, no Recharts dependency
+const SvgSparkline = memo(({ data, dataKey, color }: { data?: any[], dataKey: string, color: string }) => {
+  if (!data || data.length < 2) return null;
+
+  // Downsample to at most 50 points for lightweight SVG rendering
+  const step = Math.max(1, Math.floor(data.length / 50));
+  const points: number[] = [];
+  for (let i = 0; i < data.length; i += step) {
+    const val = data[i]?.[dataKey];
+    if (typeof val === 'number' && !isNaN(val)) {
+      points.push(val);
+    }
+  }
+  const lastVal = data[data.length - 1]?.[dataKey];
+  if (typeof lastVal === 'number' && !isNaN(lastVal) && points[points.length - 1] !== lastVal) {
+    points.push(lastVal);
+  }
+
+  if (points.length < 2) return null;
+
+  let min = Math.min(...points);
+  let max = Math.max(...points);
+
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  } else {
+    const pad = (max - min) * 0.05;
+    min -= pad;
+    max += pad;
+  }
+
+  const width = 300;
+  const height = 80;
+  const range = max - min;
+
+  const coords = points.map((val, idx) => {
+    const x = ((idx / (points.length - 1)) * width).toFixed(1);
+    const y = (height - ((val - min) / range) * height).toFixed(1);
+    return `${x},${y}`;
+  });
+
+  const pathD = `M ${coords.join(' L ')}`;
+  const areaD = `${pathD} L ${width},${height} L 0,${height} Z`;
+  const gradId = `spark-grad-${dataKey}`;
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-[80px] opacity-30 pointer-events-none overflow-hidden">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-full"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={color} stopOpacity={0.8} />
+            <stop offset="95%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <path d={areaD} fill={`url(#${gradId})`} />
+        <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+});
+SvgSparkline.displayName = 'SvgSparkline';
 
 // Shared card shell for P/L row items
 const PnLCard = memo(function PnLCard({
@@ -178,8 +222,11 @@ export const MainChartCards = memo(function MainChartCards({
     currentNAV,
     currentDD,
     dashboardHistory,
+    chartData,
     privacyMode = false
 }: ChartCardsProps) {
+  const history = chartData || dashboardHistory || [];
+
   return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
         {/* Current Valuation Card */}
@@ -209,7 +256,7 @@ export const MainChartCards = memo(function MainChartCards({
                 )}
             </div>
           </div>
-          <ChartWidget data={dashboardHistory} dataKey="totalEquity" color="#8b5cf6" domain={['dataMin', 'dataMax']} />
+          <SvgSparkline data={history} dataKey="totalEquity" color="#8b5cf6" />
         </div>
 
         {/* Current NAV Card */}
@@ -226,7 +273,7 @@ export const MainChartCards = memo(function MainChartCards({
             </div>
             <div className="text-sm text-gray-500 z-10 relative font-medium">Portfolio value per unit</div>
            </div>
-           <ChartWidget data={dashboardHistory} dataKey="portfolioNAV" color="#a3e635" domain={['dataMin', 'dataMax']} />
+           <SvgSparkline data={history} dataKey="portfolioNAV" color="#a3e635" />
         </div>
 
         {/* Current Drawdown Card */}
@@ -243,7 +290,7 @@ export const MainChartCards = memo(function MainChartCards({
             </div>
             <div className="text-sm text-gray-500 z-10 relative font-medium">From all-time high</div>
           </div>
-          <ChartWidget data={dashboardHistory} dataKey="drawdown" color="#ef4444" />
+          <SvgSparkline data={history} dataKey="drawdown" color="#ef4444" />
         </div>
       </div>
   );

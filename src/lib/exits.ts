@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { differenceInCalendarDays } from 'date-fns';
+import { unstable_cache } from 'next/cache';
 import type { MarketCapCategory } from './amfi';
 import { getCategoriesBatch, getSymbolResolver, getApplicablePeriod, periodToString } from './amfi';
 import { calculateBrokerageCharges, calculateCapitalGainsTax, ChargesBreakdown, TaxBreakdown } from './charges';
@@ -35,7 +36,7 @@ interface TradeCycle {
     // cumulativeCost stays same (you paid what you paid).
 }
 
-export async function getPortfolioExits(): Promise<ExitRecord[]> {
+async function getPortfolioExitsInternal(): Promise<ExitRecord[]> {
     const transactionsRaw = await prisma.transaction.findMany({
         orderBy: { date: 'asc' }
     });
@@ -163,4 +164,18 @@ export async function getPortfolioExits(): Promise<ExitRecord[]> {
 
     // Sort by Sell Date Descending
     return exits.sort((a, b) => b.sellDate.getTime() - a.sellDate.getTime());
+}
+
+const getPortfolioExitsCached = unstable_cache(
+    getPortfolioExitsInternal,
+    ['portfolio-exits'],
+    { tags: ['portfolio-data', 'transactions'], revalidate: 3600 }
+);
+
+export async function getPortfolioExits(): Promise<ExitRecord[]> {
+    try {
+        return await getPortfolioExitsCached();
+    } catch {
+        return getPortfolioExitsInternal();
+    }
 }
