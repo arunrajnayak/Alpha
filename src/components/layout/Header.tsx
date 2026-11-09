@@ -26,6 +26,7 @@ import {
   faEye,
   faEyeSlash,
   faHeartPulse,
+  faFingerprint,
 } from '@fortawesome/free-solid-svg-icons';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -46,7 +47,7 @@ const menuItems: { text: string; path: string; icon: IconDefinition; hiddenOnMob
 export default function Header() {
   const pathname = usePathname();
   const { isRecomputing } = useRecompute();
-  const { privacyMode, togglePrivacy } = useLiveData();
+  const { privacyMode, togglePrivacy, isBiometricConfigured } = useLiveData();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);
   const [timings, setTimings] = useState<{ start_time: number, end_time: number }[]>([]);
@@ -234,14 +235,28 @@ export default function Header() {
                 haptic('light');
                 togglePrivacy();
               }}
-              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+              className={`relative w-8 h-8 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
                 privacyMode
                   ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
                   : 'bg-white/5 hover:bg-white/10 text-gray-500 border border-transparent'
               }`}
-              title={privacyMode ? 'Show Values (⌘I)' : 'Hide Values (⌘I)'}
+              title={
+                privacyMode
+                  ? isBiometricConfigured
+                    ? 'Show Values (Touch ID / ⌘I)'
+                    : 'Show Values (⌘I)'
+                  : 'Hide Values (⌘I)'
+              }
             >
               <FontAwesomeIcon icon={privacyMode ? faEyeSlash : faEye} className="w-4 h-4" />
+              {privacyMode && isBiometricConfigured && (
+                <span
+                  className="hidden md:flex absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-slate-900 border border-violet-500/50 rounded-full items-center justify-center text-[8px] text-violet-300 shadow-sm"
+                  title="Protected with Touch ID / Fingerprint"
+                >
+                  <FontAwesomeIcon icon={faFingerprint} className="w-2 h-2" />
+                </span>
+              )}
             </button>
           </div>
         </div>

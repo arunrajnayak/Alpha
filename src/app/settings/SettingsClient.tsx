@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { faStore, faBolt, faKey } from '@fortawesome/free-solid-svg-icons';
+import { faStore, faBolt, faKey, faFingerprint, faShieldHalved, faEye } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     Paper, Button, TextField, Snackbar, Alert, CircularProgress, Switch, Chip
@@ -10,6 +10,7 @@ import { SettingsSection } from './SettingsLayout';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SyncIcon from '@mui/icons-material/Sync';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
 
 import { initializeJob, triggerRecalculatePortfolio } from '@/app/actions';
 import { setDataLockDate } from '@/app/actions/settings';
@@ -24,6 +25,16 @@ import type { ZerodhaTokenStatus } from '@/lib/kite-client';
 import { useLiveData } from '@/context/LiveDataContext';
 import DataFreshnessCard from './DataFreshnessCard';
 import type { LastCronRun } from '@/app/actions/screener';
+import {
+    isDesktopDevice,
+    isBiometricSupported,
+    isBiometricEnrolled,
+    isBiometricRequirementEnabled,
+    setBiometricRequirementEnabled,
+    registerBiometric,
+    testBiometric,
+    removeBiometric,
+} from '@/lib/biometrics';
 
 interface FreshnessData {
     latestPriceDate: string | null;
@@ -75,6 +86,26 @@ export default function SettingsClient({
     const [isLoadingZerodha, setIsLoadingZerodha] = useState(true);
     const [isSyncingOrders, setIsSyncingOrders] = useState(false);
     const [isDisconnectingZerodha, setIsDisconnectingZerodha] = useState(false);
+
+    // --- Biometric Authentication State ---
+    const [isDesktop, setIsDesktop] = useState(false);
+    const [bioSupported, setBioSupported] = useState(false);
+    const [bioEnrolled, setBioEnrolled] = useState(false);
+    const [bioRequirementEnabled, setBioRequirementEnabled] = useState(true);
+    const [isRegisteringBio, setIsRegisteringBio] = useState(false);
+    const [isTestingBio, setIsTestingBio] = useState(false);
+
+    useEffect(() => {
+        const desktop = isDesktopDevice();
+        setIsDesktop(desktop);
+        if (desktop) {
+            isBiometricSupported().then(supported => {
+                setBioSupported(supported);
+                setBioEnrolled(isBiometricEnrolled());
+                setBioRequirementEnabled(isBiometricRequirementEnabled());
+            });
+        }
+    }, []);
 
     // Fetch Upstox token status on mount
     const fetchTokenStatus = useCallback(async () => {
@@ -197,6 +228,54 @@ export default function SettingsClient({
         } finally {
             setIsSyncingOrders(false);
         }
+    };
+
+    const handleRegisterBio = async () => {
+        setIsRegisteringBio(true);
+        try {
+            const res = await registerBiometric();
+            if (res.success) {
+                setBioEnrolled(true);
+                setBioRequirementEnabled(true);
+                setSnackbar({ open: true, message: 'Fingerprint registered successfully for this device!', severity: 'success' });
+            } else if (!res.cancelled) {
+                setSnackbar({ open: true, message: res.error || 'Failed to register fingerprint.', severity: 'error' });
+            }
+        } finally {
+            setIsRegisteringBio(false);
+        }
+    };
+
+    const handleTestBio = async () => {
+        setIsTestingBio(true);
+        try {
+            const res = await testBiometric();
+            if (res.success) {
+                setSnackbar({ open: true, message: 'Fingerprint verification succeeded!', severity: 'success' });
+            } else if (!res.cancelled) {
+                setSnackbar({ open: true, message: res.error || 'Verification failed.', severity: 'error' });
+            }
+        } finally {
+            setIsTestingBio(false);
+        }
+    };
+
+    const handleToggleBioRequirement = (enabled: boolean) => {
+        setBiometricRequirementEnabled(enabled);
+        setBioRequirementEnabled(enabled);
+        setSnackbar({
+            open: true,
+            message: enabled
+                ? 'Fingerprint required to turn off Privacy Mode on desktop.'
+                : 'Fingerprint requirement paused.',
+            severity: 'info',
+        });
+    };
+
+    const handleRemoveBio = () => {
+        removeBiometric();
+        setBioEnrolled(false);
+        setSnackbar({ open: true, message: 'Fingerprint removed from this device.', severity: 'info' });
     };
 
     return (
@@ -492,6 +571,179 @@ export default function SettingsClient({
                                     </Button>
                                 )}
                             </div>
+                        </div>
+
+                        {/* Default Privacy Mode Setting */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-900/40 p-3 rounded-xl border border-white/5 gap-3">
+                            <div className="flex-1">
+                                <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                                    <FontAwesomeIcon icon={faShieldHalved} className="text-violet-400 w-3.5 h-3.5" />
+                                    Default Privacy Mode
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    All monetary values and portfolio metrics are automatically masked when a new tab or session opens.
+                                </p>
+                            </div>
+                            <Chip
+                                label="Always ON"
+                                size="small"
+                                sx={{
+                                    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                                    color: '#c4b5fd',
+                                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                                    fontWeight: 600,
+                                    fontSize: '0.7rem',
+                                    height: '24px',
+                                }}
+                            />
+                        </div>
+
+                        {/* Desktop Fingerprint Unlock Setting */}
+                        <div className="flex flex-col bg-slate-900/40 p-3 rounded-xl border border-white/5 gap-3">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex-1">
+                                    <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                                        <FontAwesomeIcon icon={faFingerprint} className="text-violet-400 w-3.5 h-3.5" />
+                                        Desktop Fingerprint Protection
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        {!isDesktop
+                                            ? 'Active on desktop browsers only (Touch ID / Windows Hello).'
+                                            : !bioSupported
+                                            ? 'Hardware biometric sensor (Touch ID / Windows Hello) was not detected on this device.'
+                                            : bioEnrolled
+                                            ? 'Require fingerprint to turn off Privacy Mode on this computer.'
+                                            : 'Touch ID / Windows Hello is available. Register your fingerprint to secure unmasking.'}
+                                    </p>
+                                </div>
+
+                                {isDesktop && bioSupported && bioEnrolled && (
+                                    <Switch
+                                        checked={bioRequirementEnabled}
+                                        onChange={(e) => handleToggleBioRequirement(e.target.checked)}
+                                        size="small"
+                                        sx={{
+                                            '& .MuiSwitch-switchBase.Mui-checked': { color: '#8b5cf6' },
+                                            '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#8b5cf6' },
+                                        }}
+                                    />
+                                )}
+
+                                {!isDesktop && (
+                                    <Chip
+                                        label="Desktop Only"
+                                        size="small"
+                                        sx={{
+                                            backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                                            color: '#94a3b8',
+                                            border: '1px solid rgba(148, 163, 184, 0.2)',
+                                            fontSize: '0.65rem',
+                                            height: '22px',
+                                        }}
+                                    />
+                                )}
+
+                                {isDesktop && !bioSupported && (
+                                    <Chip
+                                        label="Not Supported"
+                                        size="small"
+                                        sx={{
+                                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                            color: '#f87171',
+                                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                                            fontSize: '0.65rem',
+                                            height: '22px',
+                                        }}
+                                    />
+                                )}
+                            </div>
+
+                            {/* Desktop Biometric Actions */}
+                            {isDesktop && bioSupported && (
+                                <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-white/5">
+                                    {bioEnrolled ? (
+                                        <>
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                onClick={handleTestBio}
+                                                disabled={isTestingBio}
+                                                startIcon={isTestingBio ? <CircularProgress size={12} color="inherit" /> : <FingerprintIcon fontSize="small" />}
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    height: '28px',
+                                                    fontSize: '0.75rem',
+                                                    borderColor: 'rgba(139, 92, 246, 0.4)',
+                                                    color: '#c4b5fd',
+                                                    '&:hover': {
+                                                        borderColor: '#8b5cf6',
+                                                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                                    },
+                                                }}
+                                            >
+                                                {isTestingBio ? 'Testing...' : 'Test Fingerprint'}
+                                            </Button>
+
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                onClick={handleRegisterBio}
+                                                disabled={isRegisteringBio}
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    height: '28px',
+                                                    fontSize: '0.75rem',
+                                                    borderColor: 'rgba(255, 255, 255, 0.15)',
+                                                    color: '#cbd5e1',
+                                                    '&:hover': {
+                                                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                                    },
+                                                }}
+                                            >
+                                                {isRegisteringBio ? 'Registering...' : 'Re-register'}
+                                            </Button>
+
+                                            <Button
+                                                variant="text"
+                                                size="small"
+                                                onClick={handleRemoveBio}
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    height: '28px',
+                                                    fontSize: '0.75rem',
+                                                    color: '#f87171',
+                                                    '&:hover': {
+                                                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                                    },
+                                                }}
+                                            >
+                                                Remove
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <Button
+                                            variant="contained"
+                                            size="small"
+                                            onClick={handleRegisterBio}
+                                            disabled={isRegisteringBio}
+                                            startIcon={isRegisteringBio ? <CircularProgress size={12} color="inherit" /> : <FingerprintIcon fontSize="small" />}
+                                            sx={{
+                                                textTransform: 'none',
+                                                height: '28px',
+                                                fontSize: '0.75rem',
+                                                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                                                color: 'white',
+                                                '&:hover': {
+                                                    background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+                                                },
+                                            }}
+                                        >
+                                            {isRegisteringBio ? 'Registering...' : 'Register Fingerprint'}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Recompute Snapshots Setting */}

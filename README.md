@@ -389,10 +389,12 @@ Go to **Settings** → **Corporate Actions** to manage stock splits, bonuses, an
 
 ## 🕶️ Privacy Mode
 
-Click the **eye icon** in the live dashboard header to toggle privacy mode:
-- **On**: All monetary values (portfolio value, P&L, stock values) are masked with `****` on desktop
-- **Off**: All values are visible
-- **Mobile**: Values are always shown regardless of privacy setting (since you are on your personal device)
+Privacy mode protects your portfolio values from shoulder surfing and screen sharing:
+- **Always ON by Default**: Every new tab or browser session opens with privacy mode ON by default (`****`).
+- **Desktop Fingerprint Protection**: On desktop devices (macOS Touch ID / Windows Hello), turning off privacy mode requires fingerprint authentication.
+- **Tab Session Scoping**: Within the same browser tab, refreshing (`Cmd+R` / `F5`) preserves your unmasked session without prompting for fingerprint again.
+- **Mobile**: Privacy mode toggles directly without biometric prompts.
+- **Toggle**: Click the **eye icon** in the header or use the **⌘I** (Mac) / **Ctrl+I** (Windows/Linux) keyboard shortcut.
 - The setting persists across sessions via `localStorage`
 
 ---

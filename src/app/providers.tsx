@@ -9,6 +9,8 @@ import { ImportProvider } from '@/context/ImportContext';
 import { LiveDataProvider } from '@/context/LiveDataContext';
 import { QueryProvider } from '@/providers/QueryProvider';
 import ConnectionErrorToast from '@/components/ui/ConnectionErrorToast';
+import BiometricSetupModal from '@/components/ui/BiometricSetupModal';
+import BiometricToast from '@/components/ui/BiometricToast';
 import theme from '@/lib/theme';
 import isPropValid from '@emotion/is-prop-valid';
 import { MotionConfig } from 'framer-motion';
@@ -28,6 +30,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     <Suspense fallback={null}>
                       <ConnectionErrorToast />
                     </Suspense>
+                    <BiometricSetupModal />
+                    <BiometricToast />
                   </ImportProvider>
                 </LiveDataProvider>
               </RecomputeProvider>

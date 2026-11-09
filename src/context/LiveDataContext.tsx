@@ -5,6 +5,19 @@ import { getLiveDashboardData, LiveDashboardData, LiveStockData, BreadthByCatego
 import { useUpstoxStream, PriceUpdate, StreamStatus } from '@/hooks/useUpstoxStream';
 import { isMarketOpen, isPreOpenSession } from '@/lib/market-status-utils';
 import { logger } from '@/lib/logger';
+import {
+  isDesktopDevice,
+  isBiometricSupported,
+  isBiometricEnrolled,
+  isBiometricRequirementEnabled,
+  isTabSessionVerified,
+  setTabSessionVerified,
+  getStoredTabPrivacyMode,
+  setStoredTabPrivacyMode,
+  registerBiometric,
+  verifyBiometric,
+  type BiometricResult,
+} from '@/lib/biometrics';
 
 const liveLogger = logger.scope('LiveData');
 
@@ -36,9 +49,17 @@ interface LiveDataContextType {
   isStreaming: boolean;
   streamingEnabled: boolean;
   setStreamingEnabled: (val: boolean) => void;
-  // Privacy mode
+  // Privacy mode & Biometrics
   privacyMode: boolean;
-  togglePrivacy: () => void;
+  togglePrivacy: () => Promise<void> | void;
+  biometricModalOpen: boolean;
+  closeBiometricModal: () => void;
+  handleRegisterBiometric: () => Promise<BiometricResult>;
+  handleUnlockWithoutBiometric: () => void;
+  isBiometricAvailable: boolean;
+  isBiometricConfigured: boolean;
+  biometricToast: { open: boolean; message: string; severity: 'success' | 'error' | 'info' };
+  closeBiometricToast: () => void;
   // Error handling
   connectionError: ConnectionError | null;
   clearConnectionError: () => void;
@@ -59,9 +80,21 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [hasAnimatedInitial, setHasAnimatedInitial] = useState(false);
   const [showDynamicTitle, setShowDynamicTitleState] = useState(true);
   const [streamingEnabled, setStreamingEnabledState] = useState(true);
-  const [privacyMode, setPrivacyModeState] = useState(false);
+  const [privacyMode, setPrivacyModeState] = useState(true);
+  const [biometricModalOpen, setBiometricModalOpen] = useState(false);
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
+  const [isBiometricConfigured, setIsBiometricConfigured] = useState(false);
+  const [biometricToast, setBiometricToast] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
 
-  // Hydrate preferences from localStorage after mount to avoid SSR/client mismatch (React #418)
+  // Hydrate preferences from storage after mount to avoid SSR/client mismatch (React #418)
   useEffect(() => {
     try {
       const stored = localStorage.getItem('showDynamicTitle');
@@ -71,10 +104,25 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem('streamingEnabled');
       if (stored !== null) setStreamingEnabledState(JSON.parse(stored));
     } catch {}
-    try {
-      const stored = localStorage.getItem('privacyMode');
-      if (stored !== null) setPrivacyModeState(JSON.parse(stored));
-    } catch {}
+
+    // Tab-scoped Privacy Mode:
+    // When refreshing the same tab, restore tab's prior privacy state from sessionStorage.
+    // When opening in a new tab / fresh session, sessionStorage is empty -> always starts in privacyMode = true.
+    const tabPrivacy = getStoredTabPrivacyMode();
+    if (tabPrivacy !== null) {
+      setPrivacyModeState(tabPrivacy);
+    } else {
+      setPrivacyModeState(true);
+      setStoredTabPrivacyMode(true);
+    }
+
+    // Check platform biometric support on desktop devices
+    if (isDesktopDevice()) {
+      isBiometricSupported().then(supported => {
+        setIsBiometricAvailable(supported);
+        setIsBiometricConfigured(isBiometricEnrolled());
+      });
+    }
   }, []);
 
   const [connectionError, setConnectionError] = useState<ConnectionError | null>(null);
@@ -167,13 +215,96 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('streamingEnabled', JSON.stringify(val));
   }, []);
 
-  const togglePrivacy = useCallback(() => {
-    setPrivacyModeState((prev: boolean) => {
-      const next = !prev;
-      localStorage.setItem('privacyMode', JSON.stringify(next));
-      return next;
-    });
+  const closeBiometricModal = useCallback(() => {
+    setBiometricModalOpen(false);
   }, []);
+
+  const handleRegisterBiometric = useCallback(async (): Promise<BiometricResult> => {
+    const result = await registerBiometric();
+    if (result.success) {
+      setIsBiometricConfigured(true);
+      setBiometricModalOpen(false);
+      setPrivacyModeState(false);
+      setStoredTabPrivacyMode(false);
+      setBiometricToast({
+        open: true,
+        message: 'Fingerprint registered. Privacy mode turned off.',
+        severity: 'success',
+      });
+    }
+    return result;
+  }, []);
+
+  const handleUnlockWithoutBiometric = useCallback(() => {
+    setTabSessionVerified(true);
+    setBiometricModalOpen(false);
+    setPrivacyModeState(false);
+    setStoredTabPrivacyMode(false);
+  }, []);
+
+  const closeBiometricToast = useCallback(() => {
+    setBiometricToast(prev => ({ ...prev, open: false }));
+  }, []);
+
+  const togglePrivacy = useCallback(async () => {
+    // If currently OFF (false), turning ON (true) is always instant (no auth required)
+    if (!privacyMode) {
+      setPrivacyModeState(true);
+      setStoredTabPrivacyMode(true);
+      return;
+    }
+
+    // If currently ON (true), turning OFF (false):
+    // 1. Mobile devices: direct toggle
+    if (!isDesktopDevice()) {
+      setPrivacyModeState(false);
+      setStoredTabPrivacyMode(false);
+      return;
+    }
+
+    // 2. Desktop: If this tab session was already verified, do not ask for fingerprint again
+    if (isTabSessionVerified()) {
+      setPrivacyModeState(false);
+      setStoredTabPrivacyMode(false);
+      return;
+    }
+
+    // 3. Desktop: If biometric is registered and required
+    const enrolled = isBiometricEnrolled();
+    const requirementEnabled = isBiometricRequirementEnabled();
+
+    if (enrolled && requirementEnabled) {
+      const result = await verifyBiometric();
+      if (result.success) {
+        setPrivacyModeState(false);
+        setStoredTabPrivacyMode(false);
+        setBiometricToast({
+          open: true,
+          message: 'Fingerprint verified. Privacy mode turned off.',
+          severity: 'success',
+        });
+      } else if (!result.cancelled) {
+        setBiometricToast({
+          open: true,
+          message: result.error || 'Fingerprint verification failed.',
+          severity: 'error',
+        });
+      }
+      return;
+    }
+
+    // 4. Desktop: Biometric hardware supported but not yet enrolled
+    const supported = await isBiometricSupported();
+    if (supported && !enrolled) {
+      setBiometricModalOpen(true);
+      return;
+    }
+
+    // 5. Desktop without biometric hardware or biometric requirement disabled: direct unlock
+    setTabSessionVerified(true);
+    setPrivacyModeState(false);
+    setStoredTabPrivacyMode(false);
+  }, [privacyMode]);
 
   // Global keyboard shortcut: Cmd+I (Mac) / Ctrl+I (Windows/Linux) to toggle privacy mode
   useEffect(() => {
@@ -756,6 +887,14 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       setStreamingEnabled,
       privacyMode,
       togglePrivacy,
+      biometricModalOpen,
+      closeBiometricModal,
+      handleRegisterBiometric,
+      handleUnlockWithoutBiometric,
+      isBiometricAvailable,
+      isBiometricConfigured,
+      biometricToast,
+      closeBiometricToast,
       connectionError,
       clearConnectionError,
       pnlHistory,
