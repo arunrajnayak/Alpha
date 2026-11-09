@@ -57,7 +57,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [hasAnimatedInitial, setHasAnimatedInitial] = useState(false);
-  const [showDynamicTitle, setShowDynamicTitleState] = useState(false);
+  const [showDynamicTitle, setShowDynamicTitleState] = useState(true);
   const [streamingEnabled, setStreamingEnabledState] = useState(true);
   const [privacyMode, setPrivacyModeState] = useState(false);
 
@@ -395,12 +395,13 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Expensive: sort holdings + recompute movers + sectors — throttled to every 30s
+      // Only execute if tab is visible to preserve CPU and battery in background
       let allHoldings = currentData.allHoldings;
       let topGainers = currentData.topGainers;
       let topLosers = currentData.topLosers;
       let sectorAllocations = currentData.sectorAllocations;
 
-      if (runExpensive) {
+      if (runExpensive && isVisibleRef.current) {
         const sortedByPercent = [...updatedHoldings].sort((a, b) => b.dayChangePercent - a.dayChangePercent);
         allHoldings = sortedByPercent;
         topGainers = sortedByPercent.slice(0, 6);
@@ -549,10 +550,10 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     isVisibleRef.current = isVisible;
   }, [isVisible]);
 
-  // Use Upstox stream hook for direct WebSocket connection
+  // Use Upstox stream hook for direct WebSocket connection (kept active in background tabs for live title updates)
   const hasToken = hasTokenOverride !== null ? hasTokenOverride : !!data?.tokenStatus?.hasToken;
   const { status: streamStatus, subscribeToInstruments } = useUpstoxStream({
-    enabled: isVisible && streamingEnabled && isMarketHours && hasToken,
+    enabled: streamingEnabled && isMarketHours && hasToken,
     onPriceUpdate: handlePriceUpdate,
     onStatusChange: handleStreamStatusChange,
     onError: handleStreamError,
@@ -671,23 +672,23 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
       const msUntilNext = getMsUntilNextSync();
 
       timeoutId = setTimeout(() => {
-        // If streaming is connected, do less frequent full refreshes (every 5 minutes)
-        // If not streaming, poll every 10 seconds (for real-time live pulse)
-        const pollInterval = isStreaming ? 300000 : 10000; // 5 min vs 10 sec
-
-        if (isMarketCurrentlyActive() && isVisibleRef.current) {
-          if (!isStreaming) {
+        let lastPollTime = 0;
+        const checkAndPoll = () => {
+          if (!isMarketCurrentlyActive() || isStreaming) return;
+          const now = Date.now();
+          // Visible tabs poll every ~10s; hidden tabs poll every 30s
+          const minGap = isVisibleRef.current ? 9500 : 30000;
+          if (now - lastPollTime >= minGap) {
+            lastPollTime = now;
             refresh();
           }
-        }
+        };
+
+        checkAndPoll();
 
         intervalId = setInterval(() => {
-          if (isMarketCurrentlyActive() && isVisibleRef.current) {
-            if (!isStreaming) {
-              refresh();
-            }
-          }
-        }, pollInterval);
+          checkAndPoll();
+        }, 10000);
       }, msUntilNext);
     };
 
@@ -697,7 +698,7 @@ export function LiveDataProvider({ children }: { children: React.ReactNode }) {
     let indicesIntervalId: NodeJS.Timeout | null = null;
     if (isStreaming) {
       indicesIntervalId = setInterval(() => {
-        if (isMarketCurrentlyActive() && isVisibleRef.current) {
+        if (isMarketCurrentlyActive()) {
           refresh();
         }
       }, 300000); // Every 5 minutes

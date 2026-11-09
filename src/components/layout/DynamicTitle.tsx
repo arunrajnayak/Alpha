@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { useLiveData } from '@/context/LiveDataContext';
-import { formatNumber } from '@/lib/format';
+import { formatCurrency, formatNumber } from '@/lib/format';
 
 const DEFAULT_TITLE = 'A🏃lpha';
 const ROTATION_INTERVAL = 4000; // 4 seconds
@@ -31,7 +31,11 @@ export default function DynamicTitle() {
 
     // 1. Day's P/L — show only % in privacy mode
     const plSign = data.dayGain >= 0 ? '+' : '';
-    items.push(`${plSign}${data.dayGainPercent.toFixed(2)}%`);
+    if (privacyMode) {
+      items.push(`${plSign}${data.dayGainPercent.toFixed(2)}%`);
+    } else {
+      items.push(`${plSign}${formatCurrency(data.dayGain, 0, 0)} (${plSign}${data.dayGainPercent.toFixed(2)}%)`);
+    }
     
 
     // 2. Nifty 50
