@@ -1,10 +1,12 @@
 import { prisma } from '@/lib/db';
 import { addDays, format, subDays } from 'date-fns';
-import { getHistoricalCandles } from '../upstox-client';
+import { getHistoricalCandles, hasValidToken } from '../upstox-client';
+import { getFullQuotes } from '@/lib/upstox/client';
 import { getInstrumentKey } from '../instrument-service';
 import { fetchNSEIndexHistory } from '../nse-api';
 import { parseNSEDateToUTC } from '@/lib/format';
 import { financeLogger } from '@/lib/logger';
+import { todayUTCMidnightForISTDay } from '@/lib/tz';
 
 // Fetch Nifty History
 export async function updateIndexHistory(startDate: Date) {
@@ -86,6 +88,29 @@ export async function updateIndexHistory(startDate: Date) {
                 }
             }
 
+            // FALLBACK 2: Check Upstox full quote for recent session / today if missing from candle history
+            try {
+                const indexKey = await getInstrumentKey(displayName);
+                if (indexKey && (await hasValidToken())) {
+                    const quotes = await getFullQuotes([indexKey]);
+                    const q = quotes.get(indexKey);
+                    if (q?.ohlc?.close && q.ohlc.ts) {
+                        const quoteDate = new Date(q.ohlc.ts);
+                        const dateStr = format(quoteDate, 'yyyy-MM-dd');
+                        const hasThisDate = dataPoints.some(dp => format(dp.date, 'yyyy-MM-dd') === dateStr);
+                        if (!hasThisDate) {
+                            dataPoints.push({
+                                date: new Date(dateStr + 'T00:00:00.000Z'),
+                                close: q.ohlc.close
+                            });
+                            financeLogger.debug(`[Index] Injected quote close ${q.ohlc.close} for ${symbol} on ${dateStr}`);
+                        }
+                    }
+                }
+            } catch (quoteErr) {
+                financeLogger.debug(`[Index] Live quote injection fallback failed for ${symbol}:`, quoteErr);
+            }
+
             // 2. Gap Filling (Weekend Propagation)
             // Ensure continuous series by filling weekends with last known price
             const fullSeries: { date: Date, close: number, symbol: string }[] = [];
@@ -102,12 +127,13 @@ export async function updateIndexHistory(startDate: Date) {
             dataPoints.forEach(d => fetchedMap.set(format(d.date, 'yyyy-MM-dd'), d.close));
 
             // Iterate from fetchStart to today
-            let cursor = new Date(fetchStart);
+            let cursor = todayUTCMidnightForISTDay(fetchStart);
+            const endDay = todayUTCMidnightForISTDay(today);
             // Safety: Limit loop to avoid infinite loops if dates are weird
             const SAFETY_LIMIT = 365 * 2;
             let loopCount = 0;
 
-            while (cursor <= today && loopCount < SAFETY_LIMIT) {
+            while (cursor <= endDay && loopCount < SAFETY_LIMIT) {
                 const dKey = format(cursor, 'yyyy-MM-dd');
 
                 if (fetchedMap.has(dKey)) {

@@ -40,17 +40,19 @@ export function isMarketHours(): boolean {
 
 /**
  * The effective trading day for pipeline scoring (sync, weekend-aware only).
- * During market hours, returns the previous weekday (last complete close).
+ * Before market close on a weekday (includes pre-market and market hours), returns the previous weekday (last complete close).
  * After market close on a weekday, returns today.
  * On weekends, rolls back to the last weekday (Friday).
  *
- * NOTE: Does not check exchange holidays (async). Use resolveLastTradingDay()
- * in the pipeline for holiday-aware resolution.
+ * NOTE: Does not check exchange holidays or special weekend sessions (async).
+ * Use resolveLastTradingDay() in the pipeline for holiday- and special-session-aware resolution.
  */
 export function effectiveTradingDay(): string {
   const now = new Date();
   const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
-  if (isMarketHours()) {
+  const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  // Before market close on a weekday (includes pre-market and market hours), roll back to previous weekday
+  if (!isWeekend(ist) && mins < 16 * 60) {
     return toDateStr(previousTradingDay(ist));
   }
   // On weekends, roll back to the last weekday
@@ -80,42 +82,60 @@ export function previousTradingDay(d: Date): Date {
 }
 
 /**
- * Async holiday-aware resolution of the last actual trading day.
- * Starts from the sync effectiveTradingDay() result, then checks
- * the Upstox holiday API and rolls back if necessary.
- * If the API fails (e.g. token expired), falls back to weekday-only
- * and relies on the pipeline's price freshness guard (count < 100)
- * to catch holidays.
+ * Async holiday- and special-trading-session-aware resolution of the last actual trading day.
+ * Accounts for:
+ * 1. Special weekend trading sessions (e.g. Muhurat trading or Budget Day).
+ * 2. Pre-market, active market hours, and post-market session completion.
+ * 3. Mid-week exchange trading holidays.
  */
 export async function resolveLastTradingDay(): Promise<string> {
-  // Lazy import to avoid circular dependency
+  // Lazy imports to avoid circular dependencies
   const { isMarketHoliday } = await import('@/lib/upstox-client');
+  const { getSpecialTradingDays } = await import('@/lib/upstox/market-info');
 
-  let candidate = effectiveTradingDay();
-  let attempts = 0;
+  const now = new Date();
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  const currentYear = ist.getUTCFullYear();
+  const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
 
-  // Check up to 5 days back for holidays (covers long weekends)
-  while (attempts < 5) {
-    try {
-      const isHoliday = await isMarketHoliday(candidate);
-      if (!isHoliday) return candidate;
-    } catch {
-      // Upstox API unavailable — trust weekday-only result.
-      // The pipeline's price freshness guard will catch holidays
-      // (OHLC batch returns 0 new prices on holidays → count < 100 → abort).
-      return candidate;
-    }
-    // Roll back one more day, skipping weekends
-    const d = fromDateStr(candidate);
-    d.setUTCDate(d.getUTCDate() - 1);
-    while (isWeekend(d)) {
-      d.setUTCDate(d.getUTCDate() - 1);
-    }
-    candidate = toDateStr(d);
-    attempts++;
+  let specialDays = new Set<string>();
+  try {
+    specialDays = await getSpecialTradingDays(currentYear);
+  } catch {
+    // Upstox API unavailable — ignore and proceed with holiday checks
   }
 
-  return candidate;
+  const candidateDate = new Date(ist);
+  const todayStr = toDateStr(candidateDate);
+
+  // If today is a special trading day, check if special session has completed (e.g. after 20:00)
+  // Otherwise on normal weekdays it must be after 16:00 (CAS complete).
+  const isSpecialToday = specialDays.has(todayStr);
+  const isMarketClosedToday = isSpecialToday ? mins >= 20 * 60 : (!isWeekend(candidateDate) && mins >= 16 * 60);
+
+  if (!isMarketClosedToday) {
+    // Today has not finished trading yet, start looking from yesterday
+    candidateDate.setUTCDate(candidateDate.getUTCDate() - 1);
+  }
+
+  // Walk backwards up to 7 days to find the last valid trading day
+  for (let i = 0; i < 7; i++) {
+    const dStr = toDateStr(candidateDate);
+    if (specialDays.has(dStr)) {
+      return dStr;
+    }
+    if (!isWeekend(candidateDate)) {
+      try {
+        const isHoliday = await isMarketHoliday(dStr);
+        if (!isHoliday) return dStr;
+      } catch {
+        return dStr;
+      }
+    }
+    candidateDate.setUTCDate(candidateDate.getUTCDate() - 1);
+  }
+
+  return toDateStr(candidateDate);
 }
 
 /** Get date N calendar days ago as YYYY-MM-DD (anchored to IST when no `from` is given) */

@@ -9,9 +9,10 @@ import { getInstrumentKeys } from '@/lib/instrument-service';
 import { getAMFICategoriesBatch } from '@/lib/amfi';
 import { isMarketOpenAsync } from '@/lib/marketHours';
 import { isTradingHoliday } from '@/lib/market-holidays-cache';
+import { getSpecialTradingDays } from '@/lib/upstox/market-info';
 import { subDays } from 'date-fns';
 import { logger } from '@/lib/logger';
-import { istDayOfWeek, todayUTCMidnightForISTDay } from '@/lib/tz';
+import { istDayOfWeek, todayUTCMidnightForISTDay, todayISTYmd, istDateParts } from '@/lib/tz';
 import { getFullQuotes } from '@/lib/upstox/client';
 import { isPreOpenSession, isPreMarketClosed } from '@/lib/market-status-utils';
 
@@ -311,6 +312,8 @@ async function fetchSectorMapBatch(holdingSymbols: string[]): Promise<Map<string
 export async function getLiveDashboardData(): Promise<LiveDashboardData> {
   try {
     // Phase 1: Parallelize initial checks, active holdings summary, indices, and PnL history
+    const now = new Date();
+    const currentYear = istDateParts(now).year;
     const [
       activeHoldings,
       isHoliday,
@@ -318,13 +321,15 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
       hasToken,
       indicesData,
       pnlHistory,
+      specialDays,
     ] = await Promise.all([
       getActiveHoldingsSummary(),
-      isTradingHoliday(new Date()),
+      isTradingHoliday(now),
       isMarketOpenAsync(),
       hasValidToken(),
       fetchNseIndices(),
       getIntradayPnLHistory(),
+      getSpecialTradingDays(currentYear).catch(() => new Set<string>()),
     ]);
 
     const holdings = activeHoldings.map(h => ({
@@ -335,9 +340,11 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     liveActionsLogger.info(`resolved ${holdings.length} active holdings`);
 
     // Check market status
-    const day = istDayOfWeek(new Date());
+    const todayYmd = todayISTYmd(now);
+    const day = istDayOfWeek(now);
     const isWeekday = day >= 1 && day <= 5;
-    const isTradingDayToday = isWeekday && !isHoliday;
+    const isSpecialTradingDay = specialDays.has(todayYmd);
+    const isTradingDayToday = isSpecialTradingDay || (isWeekday && !isHoliday);
     const isPreOpen = isTradingDayToday && isPreOpenSession();
 
     let marketStatus: MarketStatus = 'CLOSED';
@@ -348,7 +355,7 @@ export async function getLiveDashboardData(): Promise<LiveDashboardData> {
     }
   
     // Check if we should use historical data:
-    // Only when market is closed AND before 09:00 AM (pre-market closed) or on weekend/holiday.
+    // Only when market is closed AND before 09:00 AM (pre-market closed) or on weekend/holiday without special trading session.
     // In pre-open (09:00-09:15) or regular open or post-market, use real Upstox quote data!
     const useHistoricalData = !isMarketOpen && !isPreOpen && (!isTradingDayToday || isPreMarketClosed());
     

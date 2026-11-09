@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { prisma, chunkArray } from '@/lib/db';
-import { addDays, isSameDay, startOfDay, format, differenceInDays, max as dateMax, subDays, isWeekend } from 'date-fns';
+import { addDays, isSameDay, startOfDay, format, differenceInDays, max as dateMax, subDays, isWeekend, isAfter } from 'date-fns';
 import { revalidateTag } from 'next/cache';
 import { PortfolioEngine } from '../portfolio-engine';
 import { getDataLockDate } from '../config';
@@ -88,11 +88,13 @@ export async function recalculatePortfolioHistoryInternal(
     const startDate = startOfDay(txStart);
     let today = startOfDay(new Date());
 
-    // If market is currently open (trading day, within market hours), exclude today
-    // from the simulation to avoid creating snapshots with incomplete/stale intraday data.
+    // If market has not closed today (pre-market or during market hours), exclude today
+    // from snapshot generation to avoid creating premature snapshots with incomplete data.
     const marketStatus = await getMarketStatus();
-    if (marketStatus.isOpen) {
-        financeLogger.info(`[Recalc] Market is currently open — excluding today from snapshot generation.`);
+    const isPreMarket = marketStatus.nextOpen ? !isAfter(new Date(), marketStatus.nextOpen) : false;
+    const isMarketActive = marketStatus.isOpen || (marketStatus.closeTime ? !isAfter(new Date(), marketStatus.closeTime) : false);
+    if (isPreMarket || isMarketActive) {
+        financeLogger.info(`[Recalc] Market has not closed today (${isPreMarket ? 'Pre-Market' : 'Open'}) — excluding today from snapshot generation.`);
         today = startOfDay(subDays(new Date(), 1));
     }
 
@@ -142,7 +144,9 @@ export async function recalculatePortfolioHistoryInternal(
     const specialTradingDays = new Set<string>();
     try {
         const holidays = await getMarketHolidays();
-        marketHolidays = new Set(holidays.map(h => format(new Date(h.date), 'yyyy-MM-dd')));
+        marketHolidays = new Set(
+            holidays.filter(h => h.holiday_type === 'TRADING_HOLIDAY').map(h => format(new Date(h.date), 'yyyy-MM-dd'))
+        );
 
         // Also fetch special sessions (e.g. Budget Day Sunday) for relevant years
         // We broadly check the simulation range years

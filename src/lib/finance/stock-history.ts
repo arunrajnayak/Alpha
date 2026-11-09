@@ -5,9 +5,9 @@ import { getHistoricalCandles, hasValidToken, getLiveQuotes, UpstoxCandle } from
 import { getInstrumentKey, getInstrumentKeys } from '../instrument-service';
 import { fetchNSEHistory } from '../nse-api';
 import { getMarketStatus } from '../market-holidays-cache';
-import { getMarketHolidays } from '../upstox/market-info';
+import { getMarketHolidays, getSpecialTradingDays } from '../upstox/market-info';
 import { financeLogger } from '@/lib/logger';
-import { istTimeParts, istDayOfWeek, todayISTYmd, utcMidnightOfISTDate } from '@/lib/tz';
+import { istTimeParts, istDayOfWeek, todayISTYmd, utcMidnightOfISTDate, istDateParts, todayUTCMidnightForISTDay } from '@/lib/tz';
 import { StockQuote, StockHistoryResult, SplitEvent, RequestCache } from './types';
 
 // Feature flag for Upstox migration - set to true to use Upstox as primary data source
@@ -158,13 +158,19 @@ export async function updateStockHistory(
     const today = new Date();
     const lockDate = await getDataLockDate();
 
-    // Fetch market holidays for validation
+    // Fetch market holidays and special trading days for validation
     let marketHolidays = new Set<string>();
+    let specialTradingDays = new Set<string>();
+    const currentYear = istDateParts(today).year;
     try {
-        const holidays = await getMarketHolidays();
+        const [holidays, special] = await Promise.all([
+            getMarketHolidays(),
+            getSpecialTradingDays(currentYear),
+        ]);
         marketHolidays = new Set(
             holidays.filter(h => h.holiday_type === 'TRADING_HOLIDAY').map(h => h.date)
         );
+        specialTradingDays = special;
     } catch (e) {
         financeLogger.warn('[UpdateStockHistory] Failed to load market holidays:', e);
     }
@@ -174,12 +180,14 @@ export async function updateStockHistory(
     const todayYmd = todayISTYmd(today);
     const day = istDayOfWeek(today);
     const isWeekendDay = day === 0 || day === 6;
-    const isHoliday = status.reason?.includes('Holiday') || status.reason?.includes('Weekend') || marketHolidays.has(todayYmd);
+    const isSpecialTradingDay = specialTradingDays.has(todayYmd);
+    const isHoliday = !isSpecialTradingDay && (status.reason?.includes('Holiday') || marketHolidays.has(todayYmd));
+    const isTradingDay = (!isWeekendDay && !isHoliday) || isSpecialTradingDay;
 
-    // It is EOD only if today is a regular trading day AND the session has closed:
+    // It is EOD only if today is a regular or special trading day AND the session has closed:
     let isEOD = false;
 
-    if (!isWeekendDay && !isHoliday) {
+    if (isTradingDay) {
         if (status.closeTime) {
              // Use API-provided close time
              isEOD = !status.isOpen || new Date() >= status.closeTime;
@@ -358,7 +366,7 @@ export async function updateStockHistory(
                       // Chart missing today entirely, but we have a live quote for today
                       financeLogger.debug(`[UpdateStockHistory] Injecting missing today price for ${symbol}: ${livePrice} (Live)`);
                       quotes.push({
-                          date: today,
+                          date: todayUTCMidnightForISTDay(today),
                           close: livePrice,
                           adjClose: livePrice,
                           volume: upstoxLive?.volume ?? 0,
@@ -467,8 +475,8 @@ export async function updateStockHistory(
                 const utcDate = new Date(Date.UTC(yDate.getUTCFullYear(), yDate.getUTCMonth(), yDate.getUTCDate()));
                 const dStr = format(utcDate, 'yyyy-MM-dd');
 
-                // Never insert price data on weekends or trading holidays
-                if (isWeekend(utcDate) || marketHolidays.has(dStr)) {
+                // Never insert price data on weekends or trading holidays (unless confirmed special trading session)
+                if ((isWeekend(utcDate) || marketHolidays.has(dStr)) && !specialTradingDays.has(dStr)) {
                     continue;
                 }
 

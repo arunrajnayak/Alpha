@@ -4,7 +4,8 @@ import { after } from 'next/server';
 import { recalculatePortfolioHistory, captureWeeklySnapshot, captureMonthlySnapshot, captureHolidaySnapshot } from '@/lib/finance';
 import { getMarketStatus } from '@/lib/market-holidays-cache';
 import { addMinutes, isAfter } from 'date-fns';
-import { todayUTCMidnightForISTDay } from '@/lib/tz';
+import { todayUTCMidnightForISTDay, todayISTYmd, istDateParts } from '@/lib/tz';
+import { getSpecialTradingDays } from '@/lib/upstox/market-info';
 import { prisma } from '@/lib/db';
 import { verifyCronSecret } from '@/lib/cron-auth';
 import { apiLogger } from '@/lib/logger';
@@ -55,6 +56,14 @@ export async function GET(request: Request) {
         // SMART TRIGGER LOGIC — do the cheap checks synchronously before responding
         const status = await getMarketStatus();
 
+        if (status.nextOpen && !isAfter(new Date(), status.nextOpen)) {
+            return NextResponse.json({
+                message: 'Skipped: Market has not opened yet today',
+                marketStatus: 'Pre-Market',
+                nextOpen: status.nextOpen.toISOString()
+            });
+        }
+
         if (status.closeTime) {
             const triggerTime = addMinutes(status.closeTime, 15);
 
@@ -95,18 +104,22 @@ export async function GET(request: Request) {
 
         // FALLBACK: no closeTime from market status API
         const todayStart = todayUTCMidnightForISTDay();
+        const currentYear = istDateParts().year;
+        const specialDays = await getSpecialTradingDays(currentYear).catch(() => new Set<string>());
+        const isSpecialToday = specialDays.has(todayISTYmd());
+
         const todayPriceExists = await prisma.stockHistory.findFirst({
             where: { date: { gte: todayStart } },
             select: { id: true }
         });
 
-        if (todayPriceExists) {
-            apiLogger.info('DB fallback: Found stock prices for today, treating as trading day');
+        if (todayPriceExists || isSpecialToday) {
+            apiLogger.info('DB fallback / Special session: Found prices or special trading session today');
             const defaultCloseTime = todayUTCMidnightForISTDay();
             defaultCloseTime.setUTCHours(10, 10, 0, 0); // 3:40 PM IST = 10:10 UTC (includes Closing Auction)
             const triggerTime = addMinutes(defaultCloseTime, 15);
 
-            if (!isAfter(new Date(), triggerTime)) {
+            if (!isSpecialToday && !isAfter(new Date(), triggerTime)) {
                 return NextResponse.json({
                     message: 'Skipped: Within 15m buffer (DB fallback)',
                     marketStatus: 'Buffer',
@@ -121,7 +134,7 @@ export async function GET(request: Request) {
             });
             if (existingSnapshot) {
                 return NextResponse.json({
-                    message: 'Skipped: Snapshot already exists for today (DB fallback)',
+                    message: 'Skipped: Snapshot already exists for today',
                     date: existingSnapshot.date.toISOString()
                 });
             }
@@ -129,13 +142,13 @@ export async function GET(request: Request) {
             after(async () => {
                 try {
                     await recalculatePortfolioHistory();
-                    apiLogger.info('after(): DB fallback daily recalculation complete');
-                } catch (e) { apiLogger.error('after(): DB fallback recalculation failed', e); }
+                    apiLogger.info('after(): recalculation complete');
+                } catch (e) { apiLogger.error('after(): recalculation failed', e); }
             });
             return NextResponse.json({
-                message: 'Daily recalculation accepted (DB fallback) — processing in background',
+                message: 'Daily recalculation accepted — processing in background',
                 marketStatus: 'Closed',
-                note: 'API returned no timings but stock prices exist'
+                note: isSpecialToday ? 'Special trading session' : 'Stock prices exist'
             });
         }
 

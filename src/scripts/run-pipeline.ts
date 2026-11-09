@@ -1,3 +1,7 @@
+// Force UTC timezone so local execution matches production Vercel server environment exactly
+process.env.TZ = 'UTC';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -25,9 +29,10 @@ Module._load = function(req: string, parent: any, isMain: boolean) {
 async function main() {
   const { runScreenerPipeline } = await import('../lib/screener/pipeline');
   const { prisma } = await import('../lib/db');
-  console.log('Starting screener pipeline to recalculate rankings...');
+  const targetDate = process.argv[2];
+  console.log(`Starting screener pipeline${targetDate ? ` for target date: ${targetDate}` : ''}...`);
   const t0 = Date.now();
-  const res = await runScreenerPipeline();
+  const res = await runScreenerPipeline(undefined, undefined, targetDate);
   console.log('Result:', JSON.stringify(res, null, 2));
   console.log(`Pipeline finished in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   await prisma.$disconnect();

@@ -20,7 +20,7 @@ import { detectAndFlushAnomalies } from './corporate-actions';
 import { updateATHFromPrices, loadATHMap } from './ath';
 import { detectAndAdjustDemergers } from './demerger';
 import { scoreStock, PARAMS, isETFWhitelisted, computeBetaFromCloses } from './scoring';
-import { resolveLastTradingDay, isMarketHours, daysAgo } from './dates';
+import { resolveLastTradingDay, isMarketHours, daysAgo, todayIST } from './dates';
 import { withConcurrency } from './utils';
 import { logger } from '@/lib/logger';
 import { updateJob } from '@/lib/jobs';
@@ -63,11 +63,11 @@ type ScoredStock = {
   passesFilters: boolean; // true = in filtered set, false = all-universe only
 };
 
-export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set<string>): Promise<PipelineResult> {
+export async function runScreenerPipeline(jobId?: string, portfolioSymbols?: Set<string>, targetDate?: string): Promise<PipelineResult> {
   const start = Date.now();
   const TIMEOUT_MS = 270_000;
-  const duringMarket = isMarketHours();
-  const today = await resolveLastTradingDay();
+  const today = targetDate ?? (await resolveLastTradingDay());
+  const duringMarket = today === todayIST() && isMarketHours();
   const errors: string[] = [];
 
   // Ensure active portfolio symbols are loaded so held BE / narrow-circuit stocks are retained
